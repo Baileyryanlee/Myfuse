@@ -2,7 +2,6 @@
 #include "vt.h"
 #include "overlays/effects/ovl_Effect_Ss_HitMark/z_eff_ss_hitmark.h"
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
-#include "soh/Enhancements/Fuse/Hooks/FuseHooks_Objects.h"
 #include <assert.h>
 
 typedef s32 (*ColChkResetFunc)(PlayState*, Collider*);
@@ -1755,8 +1754,6 @@ s32 CollisionCheck_SetATvsAC(PlayState* play, Collider* at, ColliderInfo* atInfo
         CollisionCheck_HitEffects(play, at, atInfo, ac, acInfo, hitPos);
         atInfo->toucherFlags |= TOUCH_DREW_HITMARK;
     }
-
-    FuseHooks_OnSwordATCollision(play, at, atInfo, ac, acInfo);
     return 1;
 }
 
@@ -3028,9 +3025,6 @@ void CollisionCheck_ApplyDamage(PlayState* play, CollisionCheckContext* colChkCt
     }
     if (!(collider->acFlags & AC_HARD)) {
         collider->actor->colChkInfo.damage += damage;
-        if (damage > 0.0f) {
-            FuseHooks_OnApplyDamage(play, collider->actor, info->acHit, info->acHitInfo);
-        }
     }
 
     if (CVarGetInteger(CVAR_ENHANCEMENT("IvanCoopModeEnabled"), 0)) {
