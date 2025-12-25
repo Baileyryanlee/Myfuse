@@ -139,6 +139,7 @@ static bool SwordHadImpactFlags(Player* player, const char** reasonOut = nullptr
             if (reasonOut) {
                 *reasonOut = "AT_HIT";
             }
+            Fuse::Log("[FuseMVP] Impact flags set quad=%d atFlags=0x%08X branch=AT_HIT\n", i, quad->base.atFlags);
             return true;
         }
 
@@ -147,6 +148,7 @@ static bool SwordHadImpactFlags(Player* player, const char** reasonOut = nullptr
             if (reasonOut) {
                 *reasonOut = "AT_BOUNCED";
             }
+            Fuse::Log("[FuseMVP] Impact flags set quad=%d atFlags=0x%08X branch=AT_BOUNCED\n", i, quad->base.atFlags);
             return true;
         }
 #endif
@@ -182,7 +184,9 @@ static void DrainSwordDurabilityOnImpact(PlayState* play, const char* reason) {
     Fuse::Log("[FuseMVP] Durability drained event=hit amount=1 reason=%s durability=%d->%d%s\n", reason,
               before, after, broke ? " (broke)" : "");
 
-    gLastImpactDrainFrame = curFrame;
+    if (after != before) {
+        gLastImpactDrainFrame = curFrame;
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -267,7 +271,21 @@ void OnPlayerUpdate(PlayState* play) {
     if (!Fuse::IsEnabled())
         return;
 
+    static int sHeartbeatCounter = 0;
+
+    const int curFrame = play ? play->gameplayFrames : -1;
     Player* player = GetPlayerSafe(play);
+
+    if ((sHeartbeatCounter++ % 30) == 0) {
+        const bool playerExists = player != nullptr;
+        const bool swordEquipped = playerExists && player->currentSwordItemId != ITEM_NONE;
+        const bool fused = Fuse::IsSwordFusedWithRock();
+        const int durability = Fuse::GetSwordFuseDurability();
+
+        Fuse::Log("[FuseMVP] PlayerUpdate heartbeat frame=%d player=%d swordEquipped=%d fused=%d durability=%d\n",
+                  curFrame, playerExists ? 1 : 0, swordEquipped ? 1 : 0, fused ? 1 : 0, durability);
+    }
+
     if (!IsPlayerSwingingSword(player))
         return;
 
