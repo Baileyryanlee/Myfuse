@@ -1,5 +1,6 @@
 #include "Fuse.h"
 #include "FuseState.h"
+#include "soh/Enhancements/Fuse/Hooks/FuseHooks_Objects.h"
 
 #include <algorithm>
 #include <cstdarg>
@@ -12,6 +13,7 @@
 extern "C" {
 #include "z64.h"
 #include "variables.h"
+extern PlayState* gPlayState;
 }
 
 // -----------------------------------------------------------------------------
@@ -109,21 +111,43 @@ void Fuse::ClearSwordFuse() {
     gFuseSave.swordFuseMaxDurability = 0;
 }
 
-bool Fuse::DamageSwordFuseDurability(int amount) {
+void Fuse::OnSwordFuseBroken(const char* reason) {
+    const char* tag = reason ? reason : "unspecified";
+    const int frame = gPlayState ? gPlayState->gameplayFrames : -1;
+
+    Log("[FuseMVP] Sword fuse broke handler frame=%d reason=%s\n", frame, tag);
+
+    ClearSwordFuse();
+    SetLastEvent("Sword fuse broke (durability 0)");
+    Log("[FuseMVP] Sword fuse broke (durability 0)\n");
+
+    FuseHooks_OnSwordFuseBroken();
+}
+
+bool Fuse::DamageSwordFuseDurability(int amount, const char* reason) {
     amount = std::max(amount, 0);
 
+    const int frame = gPlayState ? gPlayState->gameplayFrames : -1;
+    const int before = GetSwordFuseDurability();
+    int after = before;
+    const char* tag = reason ? reason : "unspecified";
+
     if (!gFuseSave.swordFusedWithRock) {
+        Log("[FuseMVP] DamageSwordFuseDurability frame=%d amount=%d durability=%d->%d reason=%s (ignored: not fused)\n",
+            frame, amount, before, after, tag);
         return false;
     }
 
-    int cur = GetSwordFuseDurability();
-    cur = std::max(0, cur - amount);
-    SetSwordFuseDurability(cur);
+    after = std::max(0, before - amount);
+    SetSwordFuseDurability(after);
 
-    if (cur == 0) {
-        ClearSwordFuse();
-        SetLastEvent("Sword fuse broke (durability 0)");
-        Log("[FuseMVP] Sword fuse broke (durability 0)\n");
+    const bool broke = (after == 0);
+
+    Log("[FuseMVP] DamageSwordFuseDurability frame=%d amount=%d durability=%d->%d reason=%s%s\n", frame, amount, before,
+        after, tag, broke ? " (broke)" : "");
+
+    if (broke) {
+        OnSwordFuseBroken(reason);
         return true;
     }
 
