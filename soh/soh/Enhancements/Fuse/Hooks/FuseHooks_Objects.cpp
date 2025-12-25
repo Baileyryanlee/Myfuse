@@ -26,9 +26,7 @@ static Actor* gPrevHeldActor = nullptr;
 static bool gPendingThrownRockCheck = false;
 static Actor* gTrackedThrownRock = nullptr;
 static int gFramesUntilThrownRockCheck = 0;
-
-// Durability gating: drain once per “impact pulse”
-static bool gImpactLatched = false;
+static int gLastImpactDrainFrame = -1;
 
 // -----------------------------------------------------------------------------
 // Helpers
@@ -119,7 +117,7 @@ static void ApplyHammerFlagsToSwordHitbox(Player* player) {
 
     const uint32_t flags = (kHammerDmgFlags0 | kHammerDmgFlags1);
 
-    // OR in (don’t replace). Called only when rocks are nearby to preserve enemy damage behavior.
+    // OR in (dont replace). Called only when rocks are nearby to preserve enemy damage behavior.
     for (int i = 0; i < 4; i++) {
         player->meleeWeaponQuads[i].info.toucher.dmgFlags |= flags;
     }
@@ -130,7 +128,7 @@ static void ApplyHammerFlagsToSwordHitbox(Player* player) {
 // In your hook timing, these are often most reliable from the PREVIOUS frame,
 // so durability will drain 1 frame after the impact occurred.
 // -----------------------------------------------------------------------------
-static bool SwordHadImpactFlags(Player* player) {
+static bool SwordHadImpactFlags(Player* player, const char** reasonOut = nullptr) {
     if (!player)
         return false;
 
@@ -138,17 +136,53 @@ static bool SwordHadImpactFlags(Player* player) {
         ColliderQuad* quad = &player->meleeWeaponQuads[i];
 
         if (quad->base.atFlags & AT_HIT) {
+            if (reasonOut) {
+                *reasonOut = "AT_HIT";
+            }
             return true;
         }
 
 #ifdef AT_BOUNCED
         if (quad->base.atFlags & AT_BOUNCED) {
+            if (reasonOut) {
+                *reasonOut = "AT_BOUNCED";
+            }
             return true;
         }
 #endif
     }
 
     return false;
+}
+
+static void DrainSwordDurabilityOnImpact(PlayState* play, const char* reason) {
+    const int curFrame = play ? play->gameplayFrames : -1;
+
+    // Small cooldown: only drain once per frame to avoid multi-collisions in the same frame.
+    if (curFrame == gLastImpactDrainFrame) {
+        Fuse::Log("[FuseMVP] Impact hook fired but skipped (cooldown) event=hit reason=%s frame=%d\n", reason,
+                  curFrame);
+        return;
+    }
+
+    const bool fused = Fuse::IsSwordFusedWithRock();
+    const int before = Fuse::GetSwordFuseDurability();
+
+    Fuse::Log("[FuseMVP] Impact hook fired event=hit amount=1 reason=%s durability=%d fused=%d\n", reason,
+              before, fused ? 1 : 0);
+
+    if (!fused) {
+        // Still confirm the hook is running when no durability exists.
+        return;
+    }
+
+    const bool broke = Fuse::DamageSwordFuseDurability(1);
+    const int after = Fuse::GetSwordFuseDurability();
+
+    Fuse::Log("[FuseMVP] Durability drained event=hit amount=1 reason=%s durability=%d->%d%s\n", reason,
+              before, after, broke ? " (broke)" : "");
+
+    gLastImpactDrainFrame = curFrame;
 }
 
 // -----------------------------------------------------------------------------
@@ -204,7 +238,7 @@ void OnLoadGame_ResetObjects() {
     gPendingThrownRockCheck = false;
     gTrackedThrownRock = nullptr;
     gFramesUntilThrownRockCheck = 0;
-    gImpactLatched = false;
+    gLastImpactDrainFrame = -1;
 }
 
 void OnFrame_Objects_Pre(PlayState* play) {
@@ -214,39 +248,33 @@ void OnFrame_Objects_Pre(PlayState* play) {
     Player* player = GetPlayerSafe(play);
     if (!IsPlayerSafeForInput(player)) {
         gPrevHeldActor = player ? player->heldActor : nullptr;
-        gImpactLatched = false;
         return;
     }
 
     UpdateThrownRockAcquisition(play, player);
 
-    // Durability drain: only when fused + swinging AND we had an actual impact.
-    // NOTE: This reads the collider flags that are often from the previous frame in your timing.
-    if (Fuse::IsSwordFusedWithRock() && IsPlayerSwingingSword(player)) {
-        const bool impact = SwordHadImpactFlags(player);
-
-        if (impact) {
-            if (!gImpactLatched) {
-                gImpactLatched = true;
-                Fuse::DamageSwordFuseDurability(1);
-                // Optional debug:
-                // Fuse::Log("[FuseDBG] durability-- (AT flags)\n");
-            }
-        } else {
-            gImpactLatched = false;
-        }
-
-        // Rock-breaking behavior (works): apply hammer flags only when rocks are nearby
-        if (IsAnyLiftableRockNearPlayer(play, player)) {
-            ApplyHammerFlagsToSwordHitbox(player);
-        }
-    } else {
-        gImpactLatched = false;
+    // Rock-breaking behavior (works): apply hammer flags only when rocks are nearby
+    if (IsPlayerSwingingSword(player) && IsAnyLiftableRockNearPlayer(play, player)) {
+        ApplyHammerFlagsToSwordHitbox(player);
     }
 }
 
 // Keep for compatibility if your FuseSystem calls it; unused now.
 void OnFrame_Objects_Post(PlayState* /*play*/) {
+}
+
+void OnPlayerUpdate(PlayState* play) {
+    if (!Fuse::IsEnabled())
+        return;
+
+    Player* player = GetPlayerSafe(play);
+    if (!IsPlayerSwingingSword(player))
+        return;
+
+    const char* reason = "unknown";
+    if (SwordHadImpactFlags(player, &reason)) {
+        DrainSwordDurabilityOnImpact(play, reason);
+    }
 }
 
 } // namespace FuseHooks
