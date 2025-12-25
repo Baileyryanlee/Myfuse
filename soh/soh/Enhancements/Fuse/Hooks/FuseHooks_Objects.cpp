@@ -31,8 +31,6 @@ static Actor* gTrackedThrownRock = nullptr;
 static int gFramesUntilThrownRockCheck = 0;
 static int gLastCollisionDrainFrame = -1;
 static std::unordered_map<uintptr_t, int> gLastCollisionDrainFrameByActor;
-static bool gHammerFlagsLatched = false;
-static uint32_t gSwordLatchedBaseDmgFlags[4] = {};
 
 static constexpr int kSwordDamageDrainAmount = 1;
 
@@ -145,50 +143,6 @@ static void ResetHammerFlagsToLatchedBase(PlayState* play, Player* player, const
         player->meleeWeaponQuads[i].info.toucher.dmgFlags = gSwordLatchedBaseDmgFlags[i];
         after[i] = player->meleeWeaponQuads[i].info.toucher.dmgFlags;
     }
-
-    const int frame = play ? play->gameplayFrames : -1;
-    const char* tag = reason ? reason : "unspecified";
-
-    Fuse::Log(
-        "[FuseMVP] Reset hammer flags frame=%d reason=%s dmgFlags before=[%08X %08X %08X %08X] restored=[%08X %08X %08X %08X]\n",
-        frame, tag, before[0], before[1], before[2], before[3], after[0], after[1], after[2], after[3]);
-
-    gHammerFlagsLatched = false;
-    for (uint32_t& v : gSwordLatchedBaseDmgFlags) {
-        v = 0;
-    }
-}
-
-static bool ApplyHammerFlagsToSwordHitbox(PlayState* play, Player* player) {
-    if (!player)
-        return false;
-
-    const uint32_t flags = (kHammerDmgFlags0 | kHammerDmgFlags1);
-    const int frame = play ? play->gameplayFrames : -1;
-    const bool previouslyLatched = gHammerFlagsLatched;
-
-    if (!gHammerFlagsLatched) {
-        for (int i = 0; i < 4; i++) {
-            gSwordLatchedBaseDmgFlags[i] = player->meleeWeaponQuads[i].info.toucher.dmgFlags;
-        }
-        gHammerFlagsLatched = true;
-    }
-
-    uint32_t before[4];
-    uint32_t after[4];
-
-    for (int i = 0; i < 4; i++) {
-        before[i] = player->meleeWeaponQuads[i].info.toucher.dmgFlags;
-        player->meleeWeaponQuads[i].info.toucher.dmgFlags |= flags;
-        after[i] = player->meleeWeaponQuads[i].info.toucher.dmgFlags;
-    }
-
-    Fuse::Log(
-        "[FuseMVP] Apply hammer flags frame=%d fused=%d latchedBase=%d dmgFlags before=[%08X %08X %08X %08X] after=[%08X %08X %08X %08X] addFlags=0x%08X\n",
-        frame, Fuse::IsSwordFusedWithRock() ? 1 : 0, previouslyLatched ? 0 : 1, before[0], before[1], before[2],
-        before[3], after[0], after[1], after[2], after[3], flags);
-
-    return true;
 }
 
 // -----------------------------------------------------------------------------
@@ -346,10 +300,6 @@ void OnLoadGame_ResetObjects() {
     gFramesUntilThrownRockCheck = 0;
     gLastCollisionDrainFrame = -1;
     gLastCollisionDrainFrameByActor.clear();
-    gHammerFlagsLatched = false;
-    for (uint32_t& v : gSwordLatchedBaseDmgFlags) {
-        v = 0;
-    }
 }
 
 void OnFrame_Objects_Pre(PlayState* play) {
@@ -420,13 +370,6 @@ void OnSwordATCollision(PlayState* play, Collider* atCollider, ColliderInfo* atI
     DrainSwordDurabilityOnATCollision(play, atCollider, atInfo, acCollider, acInfo);
 }
 
-void OnSwordFuseBroken() {
-    PlayState* play = gPlayState;
-    Player* player = GetPlayerSafe(play);
-
-    ResetHammerFlagsToLatchedBase(play, player, "fuse-broke");
-}
-
 } // namespace FuseHooks
 
 extern "C" void FuseHooks_OnApplyDamage(PlayState* play, Actor* target, Collider* atCollider, ColliderInfo* atInfo) {
@@ -436,8 +379,4 @@ extern "C" void FuseHooks_OnApplyDamage(PlayState* play, Actor* target, Collider
 extern "C" void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollider, ColliderInfo* atInfo,
                                               Collider* acCollider, ColliderInfo* acInfo) {
     FuseHooks::OnSwordATCollision(play, atCollider, atInfo, acCollider, acInfo);
-}
-
-extern "C" void FuseHooks_OnSwordFuseBroken() {
-    FuseHooks::OnSwordFuseBroken();
 }

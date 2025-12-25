@@ -11,7 +11,6 @@ extern "C" {
 void FuseHooks_OnApplyDamage(PlayState* play, Actor* target, Collider* atCollider, ColliderInfo* atInfo);
 void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollider, ColliderInfo* atInfo, Collider* acCollider,
                                   ColliderInfo* acInfo);
-void FuseHooks_OnSwordFuseBroken();
 
 #ifdef __cplusplus
 }

@@ -111,19 +111,6 @@ void Fuse::ClearSwordFuse() {
     gFuseSave.swordFuseMaxDurability = 0;
 }
 
-void Fuse::OnSwordFuseBroken(const char* reason) {
-    const char* tag = reason ? reason : "unspecified";
-    const int frame = gPlayState ? gPlayState->gameplayFrames : -1;
-
-    Log("[FuseMVP] Sword fuse broke handler frame=%d reason=%s\n", frame, tag);
-
-    ClearSwordFuse();
-    SetLastEvent("Sword fuse broke (durability 0)");
-    Log("[FuseMVP] Sword fuse broke (durability 0)\n");
-
-    FuseHooks_OnSwordFuseBroken();
-}
-
 bool Fuse::DamageSwordFuseDurability(int amount, const char* reason) {
     amount = std::max(amount, 0);
 
@@ -147,7 +134,9 @@ bool Fuse::DamageSwordFuseDurability(int amount, const char* reason) {
         after, tag, broke ? " (broke)" : "");
 
     if (broke) {
-        OnSwordFuseBroken(reason);
+        ClearSwordFuse();
+        SetLastEvent("Sword fuse broke (durability 0)");
+        Log("[FuseMVP] Sword fuse broke (durability 0)\n");
         return true;
     }
 
