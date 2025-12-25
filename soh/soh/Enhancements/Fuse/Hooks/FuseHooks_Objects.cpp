@@ -2,11 +2,13 @@
 
 #include <cstdint>
 #include <cmath>
+#include <unordered_map>
 
 extern "C" {
 #include "variables.h"
 #include "z64.h"
 #include "z64actor.h"
+#include "z64collision_check.h"
 #include <functions.h>
 }
 
@@ -27,6 +29,9 @@ static bool gPendingThrownRockCheck = false;
 static Actor* gTrackedThrownRock = nullptr;
 static int gFramesUntilThrownRockCheck = 0;
 static int gLastImpactDrainFrame = -1;
+static std::unordered_map<uintptr_t, int> gLastDamageDrainFrameByActor;
+
+static constexpr int kSwordDamageDrainAmount = 1;
 
 // -----------------------------------------------------------------------------
 // Helpers
@@ -70,6 +75,19 @@ static bool IsPlayerSafeForInput(const Player* player) {
 
 static bool IsPlayerSwingingSword(const Player* player) {
     return player && player->meleeWeaponState != 0;
+}
+
+static bool IsPlayerSwordDamage(Collider* atCollider, ColliderInfo* atInfo) {
+    if (!atCollider || !atInfo) {
+        return false;
+    }
+
+    Actor* attacker = atCollider->actor;
+    if (!attacker || attacker->category != ACTORCAT_PLAYER) {
+        return false;
+    }
+
+    return (atInfo->toucher.dmgFlags & DMG_SWORD) != 0;
 }
 
 static bool IsAnyLiftableRockNearPlayer(PlayState* play, Player* player) {
@@ -189,6 +207,59 @@ static void DrainSwordDurabilityOnImpact(PlayState* play, const char* reason) {
     }
 }
 
+static void CleanupDamageCooldown(int currentFrame) {
+    if (gLastDamageDrainFrameByActor.empty()) {
+        return;
+    }
+
+    // Keep the table small by pruning entries that have not been touched for a while.
+    for (auto it = gLastDamageDrainFrameByActor.begin(); it != gLastDamageDrainFrameByActor.end();) {
+        if (it->second + 120 < currentFrame) {
+            it = gLastDamageDrainFrameByActor.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+static bool UpdateDamageCooldown(PlayState* play, Actor* target) {
+    if (!play || !target) {
+        return false;
+    }
+
+    const int currentFrame = play->gameplayFrames;
+    CleanupDamageCooldown(currentFrame);
+
+    const uintptr_t key = reinterpret_cast<uintptr_t>(target);
+    auto [it, inserted] = gLastDamageDrainFrameByActor.emplace(key, currentFrame);
+
+    if (!inserted) {
+        if (it->second == currentFrame) {
+            return false;
+        }
+
+        it->second = currentFrame;
+    }
+
+    return true;
+}
+
+static void DrainSwordDurabilityOnDamage(PlayState* play, Actor* target, Collider* atCollider, ColliderInfo* atInfo) {
+    if (!Fuse::IsEnabled() || !Fuse::IsSwordFusedWithRock()) {
+        return;
+    }
+
+    if (!IsPlayerSwordDamage(atCollider, atInfo)) {
+        return;
+    }
+
+    if (!UpdateDamageCooldown(play, target)) {
+        return;
+    }
+
+    Fuse::DamageSwordFuseDurability(kSwordDamageDrainAmount);
+}
+
 // -----------------------------------------------------------------------------
 // Thrown rock acquisition logic (unchanged for now)
 // -----------------------------------------------------------------------------
@@ -295,4 +366,16 @@ void OnPlayerUpdate(PlayState* play) {
     }
 }
 
+void OnApplyDamage(PlayState* play, Actor* target, Collider* atCollider, ColliderInfo* atInfo) {
+    if (!play || !target) {
+        return;
+    }
+
+    DrainSwordDurabilityOnDamage(play, target, atCollider, atInfo);
+}
+
 } // namespace FuseHooks
+
+extern "C" void FuseHooks_OnApplyDamage(PlayState* play, Actor* target, Collider* atCollider, ColliderInfo* atInfo) {
+    FuseHooks::OnApplyDamage(play, target, atCollider, atInfo);
+}
