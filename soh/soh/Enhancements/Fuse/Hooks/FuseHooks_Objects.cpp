@@ -2,21 +2,13 @@
 
 #include <cstdint>
 #include <cmath>
-#include <unordered_map>
 
 extern "C" {
 #include "variables.h"
 #include "z64.h"
 #include "z64actor.h"
-#include "z64collision_check.h"
 #include <functions.h>
-extern PlayState* gPlayState;
 }
-
-static bool gHammerFlagsLatched = false;
-static uint32_t gSwordLatchedBaseDmgFlags[ARRAY_COUNT(((Player*)0)->meleeWeaponQuads)] = {};
-
-static void ApplyHammerFlagsToSwordHitbox(Player* player, bool enable);
 
 // Liftable rock actor
 static constexpr int16_t kLiftableRockActorId = ACTOR_EN_ISHI;
@@ -34,10 +26,7 @@ static Actor* gPrevHeldActor = nullptr;
 static bool gPendingThrownRockCheck = false;
 static Actor* gTrackedThrownRock = nullptr;
 static int gFramesUntilThrownRockCheck = 0;
-static int gLastCollisionDrainFrame = -1;
-static std::unordered_map<uintptr_t, int> gLastCollisionDrainFrameByActor;
-
-static constexpr int kSwordDamageDrainAmount = 1;
+static int gLastImpactDrainFrame = -1;
 
 // -----------------------------------------------------------------------------
 // Helpers
@@ -83,19 +72,6 @@ static bool IsPlayerSwingingSword(const Player* player) {
     return player && player->meleeWeaponState != 0;
 }
 
-static bool IsPlayerSwordDamage(Collider* atCollider, ColliderInfo* atInfo) {
-    if (!atCollider || !atInfo) {
-        return false;
-    }
-
-    Actor* attacker = atCollider->actor;
-    if (!attacker || attacker->category != ACTORCAT_PLAYER) {
-        return false;
-    }
-
-    return (atInfo->toucher.dmgFlags & DMG_SWORD) != 0;
-}
-
 static bool IsAnyLiftableRockNearPlayer(PlayState* play, Player* player) {
     if (!play || !player)
         return false;
@@ -135,171 +111,78 @@ static bool IsAnyLiftableRockNearPlayer(PlayState* play, Player* player) {
 static constexpr uint32_t kHammerDmgFlags0 = 0x00000040;
 static constexpr uint32_t kHammerDmgFlags1 = 0x40000000;
 
-static void ApplyHammerFlagsToSwordHitbox(Player* player, bool enable) {
-    const int frame = gPlayState ? gPlayState->gameplayFrames : -1;
-
-    if (!player) {
-        Fuse::Log("[FuseMVP] HammerFlags latch %s skipped frame=%d (no player)\n", enable ? "ON" : "OFF", frame);
+static void ApplyHammerFlagsToSwordHitbox(Player* player) {
+    if (!player)
         return;
+
+    const uint32_t flags = (kHammerDmgFlags0 | kHammerDmgFlags1);
+
+    // OR in (dont replace). Called only when rocks are nearby to preserve enemy damage behavior.
+    for (int i = 0; i < 4; i++) {
+        player->meleeWeaponQuads[i].info.toucher.dmgFlags |= flags;
     }
-
-    if (enable) {
-        if (gHammerFlagsLatched) {
-            Fuse::Log("[FuseMVP] HammerFlags latch ON skipped frame=%d (already latched)\n", frame);
-            return;
-        }
-
-        for (size_t i = 0; i < ARRAY_COUNT(gSwordLatchedBaseDmgFlags); i++) {
-            gSwordLatchedBaseDmgFlags[i] = player->meleeWeaponQuads[i].info.toucher.dmgFlags;
-        }
-
-        for (size_t i = 0; i < ARRAY_COUNT(player->meleeWeaponQuads); i++) {
-            const uint32_t newFlags = (i < 2) ? kHammerDmgFlags0 : kHammerDmgFlags1;
-            player->meleeWeaponQuads[i].info.toucher.dmgFlags = newFlags;
-        }
-
-        gHammerFlagsLatched = true;
-
-        Fuse::Log("[FuseMVP] HammerFlags latch ON frame=%d baseFlags=0x%08X -> newFlags=0x%08X\n", frame,
-                  gSwordLatchedBaseDmgFlags[0], kHammerDmgFlags0);
-        return;
-    }
-
-    if (!gHammerFlagsLatched) {
-        Fuse::Log("[FuseMVP] HammerFlags latch OFF skipped frame=%d (already restored)\n", frame);
-        return;
-    }
-
-    for (size_t i = 0; i < ARRAY_COUNT(player->meleeWeaponQuads); i++) {
-        player->meleeWeaponQuads[i].info.toucher.dmgFlags = gSwordLatchedBaseDmgFlags[i];
-    }
-
-    Fuse::Log("[FuseMVP] HammerFlags latch OFF frame=%d restoreFlags=0x%08X\n", frame, gSwordLatchedBaseDmgFlags[0]);
-
-    gHammerFlagsLatched = false;
-}
-
-static void ResetHammerFlagsToLatchedBase(PlayState* play, Player* player, const char* reason) {
-    if (!player) {
-        return;
-    }
-
-    const int frame = play ? play->gameplayFrames : (gPlayState ? gPlayState->gameplayFrames : -1);
-
-    ApplyHammerFlagsToSwordHitbox(player, false);
-
-    Fuse::Log("[FuseMVP] HammerFlags reset reason=%s frame=%d\n", reason ? reason : "unknown", frame);
 }
 
 // -----------------------------------------------------------------------------
-// Cooldown helpers (per victim actor when available, otherwise once per frame)
+// Impact detection: read the quad AT flags that CollisionCheck_SetATvsAC / SetBounce set.
+// In your hook timing, these are often most reliable from the PREVIOUS frame,
+// so durability will drain 1 frame after the impact occurred.
 // -----------------------------------------------------------------------------
-static void CleanupCollisionCooldown(int currentFrame) {
-    if (gLastCollisionDrainFrameByActor.empty()) {
-        return;
-    }
-
-    // Keep the table small by pruning entries that have not been touched for a while.
-    for (auto it = gLastCollisionDrainFrameByActor.begin(); it != gLastCollisionDrainFrameByActor.end();) {
-        if (it->second + 120 < currentFrame) {
-            it = gLastCollisionDrainFrameByActor.erase(it);
-        } else {
-            ++it;
-        }
-    }
-}
-
-static bool ShouldDrainThisCollision(PlayState* play, Actor* target, const int currentFrame, const char** reasonOut) {
-    if (!play) {
-        if (reasonOut) {
-            *reasonOut = "no-play";
-        }
+static bool SwordHadImpactFlags(Player* player, const char** reasonOut = nullptr) {
+    if (!player)
         return false;
-    }
 
-    CleanupCollisionCooldown(currentFrame);
+    for (int i = 0; i < 4; i++) {
+        ColliderQuad* quad = &player->meleeWeaponQuads[i];
 
-    if (target != nullptr) {
-        const uintptr_t key = reinterpret_cast<uintptr_t>(target);
-        auto [it, inserted] = gLastCollisionDrainFrameByActor.emplace(key, currentFrame);
-
-        if (!inserted) {
-            if (it->second == currentFrame) {
-                if (reasonOut) {
-                    *reasonOut = "victim-cooldown";
-                }
-                return false;
+        if (quad->base.atFlags & AT_HIT) {
+            if (reasonOut) {
+                *reasonOut = "AT_HIT";
             }
-
-            it->second = currentFrame;
+            return true;
         }
 
-        return true;
-    }
-
-    if (gLastCollisionDrainFrame == currentFrame) {
-        if (reasonOut) {
-            *reasonOut = "frame-cooldown";
+#ifdef AT_BOUNCED
+        if (quad->base.atFlags & AT_BOUNCED) {
+            if (reasonOut) {
+                *reasonOut = "AT_BOUNCED";
+            }
+            return true;
         }
-        return false;
+#endif
     }
 
-    gLastCollisionDrainFrame = currentFrame;
-    return true;
+    return false;
 }
 
-static void DrainSwordDurabilityOnATCollision(PlayState* play, Collider* atCollider, ColliderInfo* atInfo,
-                                              Collider* acCollider, ColliderInfo* /*acInfo*/) {
-    if (!Fuse::IsEnabled()) {
+static void DrainSwordDurabilityOnImpact(PlayState* play, const char* reason) {
+    const int curFrame = play ? play->gameplayFrames : -1;
+
+    // Small cooldown: only drain once per frame to avoid multi-collisions in the same frame.
+    if (curFrame == gLastImpactDrainFrame) {
+        Fuse::Log("[FuseMVP] Impact hook fired but skipped (cooldown) event=hit reason=%s frame=%d\n", reason,
+                  curFrame);
         return;
     }
-
-    if (!IsPlayerSwordDamage(atCollider, atInfo)) {
-        return;
-    }
-
-    const int currentFrame = play ? play->gameplayFrames : -1;
-    Actor* attacker = atCollider ? atCollider->actor : nullptr;
-    Actor* victim = acCollider ? acCollider->actor : nullptr;
 
     const bool fused = Fuse::IsSwordFusedWithRock();
     const int before = Fuse::GetSwordFuseDurability();
-    int after = before;
-    const int drainAmount = kSwordDamageDrainAmount;
 
-    const char* skipReason = nullptr;
-    bool shouldDrain = fused;
+    Fuse::Log("[FuseMVP] Impact hook fired event=hit amount=1 reason=%s durability=%d fused=%d\n", reason,
+              before, fused ? 1 : 0);
 
     if (!fused) {
-        skipReason = "fuse-inactive";
+        // Still confirm the hook is running when no durability exists.
+        return;
     }
 
-    if (shouldDrain) {
-        shouldDrain = ShouldDrainThisCollision(play, victim, currentFrame, &skipReason);
-    }
+    const bool broke = Fuse::DamageSwordFuseDurability(1);
+    const int after = Fuse::GetSwordFuseDurability();
 
-    if (shouldDrain) {
-        const bool broke = Fuse::DamageSwordFuseDurability(drainAmount, "AT-collision");
-        after = Fuse::GetSwordFuseDurability();
-        Fuse::Log("[FuseMVP] Sword AT collision frame=%d fused=%d attacker=%p victim=%p amount=%d durability=%d->%d%s\n",
-                  currentFrame, fused ? 1 : 0, (void*)attacker, (void*)victim, drainAmount, before, after,
-                  broke ? " (broke)" : "");
+    Fuse::Log("[FuseMVP] Durability drained event=hit amount=1 reason=%s durability=%d->%d%s\n", reason,
+              before, after, broke ? " (broke)" : "");
 
-        if (broke) {
-            Player* player = nullptr;
-            if (attacker != nullptr && attacker->category == ACTORCAT_PLAYER) {
-                player = reinterpret_cast<Player*>(attacker);
-            } else {
-                player = GetPlayerSafe(play);
-            }
-
-            ApplyHammerFlagsToSwordHitbox(player, false);
-        }
-    } else {
-        Fuse::Log("[FuseMVP] Sword AT collision skipped frame=%d fused=%d attacker=%p victim=%p amount=%d durability=%d->%d reason=%s\n",
-                  currentFrame, fused ? 1 : 0, (void*)attacker, (void*)victim, drainAmount, before, after,
-                  skipReason ? skipReason : "unknown");
-    }
+    gLastImpactDrainFrame = curFrame;
 }
 
 // -----------------------------------------------------------------------------
@@ -355,36 +238,24 @@ void OnLoadGame_ResetObjects() {
     gPendingThrownRockCheck = false;
     gTrackedThrownRock = nullptr;
     gFramesUntilThrownRockCheck = 0;
-    gLastCollisionDrainFrame = -1;
-    gLastCollisionDrainFrameByActor.clear();
+    gLastImpactDrainFrame = -1;
 }
 
 void OnFrame_Objects_Pre(PlayState* play) {
-    Player* player = GetPlayerSafe(play);
-
-    if (!Fuse::IsEnabled()) {
-        ResetHammerFlagsToLatchedBase(play, player, "fuse-disabled");
+    if (!Fuse::IsEnabled())
         return;
-    }
 
+    Player* player = GetPlayerSafe(play);
     if (!IsPlayerSafeForInput(player)) {
         gPrevHeldActor = player ? player->heldActor : nullptr;
-        ResetHammerFlagsToLatchedBase(play, player, "player-unsafe");
         return;
     }
 
     UpdateThrownRockAcquisition(play, player);
 
-    const bool fused = Fuse::IsSwordFusedWithRock();
-    const bool swinging = IsPlayerSwingingSword(player);
-    const bool rocksNearby = IsAnyLiftableRockNearPlayer(play, player);
-
-    // Rock-breaking behavior (works): apply hammer flags only when rocks are nearby and sword is fused
-    if (fused && swinging && rocksNearby) {
-        ApplyHammerFlagsToSwordHitbox(player, true);
-    } else {
-        const char* reason = !fused ? "fuse-inactive" : (!swinging ? "not-swinging" : "no-rock-nearby");
-        ResetHammerFlagsToLatchedBase(play, player, reason);
+    // Rock-breaking behavior (works): apply hammer flags only when rocks are nearby
+    if (IsPlayerSwingingSword(player) && IsAnyLiftableRockNearPlayer(play, player)) {
+        ApplyHammerFlagsToSwordHitbox(player);
     }
 }
 
@@ -396,44 +267,14 @@ void OnPlayerUpdate(PlayState* play) {
     if (!Fuse::IsEnabled())
         return;
 
-    static int sHeartbeatCounter = 0;
-
-    const int curFrame = play ? play->gameplayFrames : -1;
     Player* player = GetPlayerSafe(play);
+    if (!IsPlayerSwingingSword(player))
+        return;
 
-    if ((sHeartbeatCounter++ % 30) == 0) {
-        const bool playerExists = player != nullptr;
-        const bool swordEquipped = playerExists && player->currentSwordItemId != ITEM_NONE;
-        const bool fused = Fuse::IsSwordFusedWithRock();
-        const int durability = Fuse::GetSwordFuseDurability();
-
-        Fuse::Log("[FuseMVP] PlayerUpdate heartbeat frame=%d player=%d swordEquipped=%d fused=%d durability=%d\n",
-                  curFrame, playerExists ? 1 : 0, swordEquipped ? 1 : 0, fused ? 1 : 0, durability);
+    const char* reason = "unknown";
+    if (SwordHadImpactFlags(player, &reason)) {
+        DrainSwordDurabilityOnImpact(play, reason);
     }
-
-    (void)player;
-}
-
-void OnApplyDamage(PlayState* play, Actor* target, Collider* atCollider, ColliderInfo* atInfo) {
-    (void)play;
-    (void)target;
-    (void)atCollider;
-    (void)atInfo;
-}
-
-void OnSwordATCollision(PlayState* play, Collider* atCollider, ColliderInfo* atInfo, Collider* acCollider,
-                        ColliderInfo* acInfo) {
-    (void)acInfo;
-    DrainSwordDurabilityOnATCollision(play, atCollider, atInfo, acCollider, acInfo);
 }
 
 } // namespace FuseHooks
-
-extern "C" void FuseHooks_OnApplyDamage(PlayState* play, Actor* target, Collider* atCollider, ColliderInfo* atInfo) {
-    FuseHooks::OnApplyDamage(play, target, atCollider, atInfo);
-}
-
-extern "C" void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollider, ColliderInfo* atInfo,
-                                              Collider* acCollider, ColliderInfo* acInfo) {
-    FuseHooks::OnSwordATCollision(play, atCollider, atInfo, acCollider, acInfo);
-}
