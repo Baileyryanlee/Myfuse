@@ -13,6 +13,11 @@ extern "C" {
 extern PlayState* gPlayState;
 }
 
+static bool gHammerFlagsLatched = false;
+static uint32_t gSwordLatchedBaseDmgFlags[ARRAY_COUNT(((Player*)0)->meleeWeaponQuads)] = {};
+
+static void ApplyHammerFlagsToSwordHitbox(Player* player, bool enable);
+
 // Liftable rock actor
 static constexpr int16_t kLiftableRockActorId = ACTOR_EN_ISHI;
 
@@ -130,19 +135,60 @@ static bool IsAnyLiftableRockNearPlayer(PlayState* play, Player* player) {
 static constexpr uint32_t kHammerDmgFlags0 = 0x00000040;
 static constexpr uint32_t kHammerDmgFlags1 = 0x40000000;
 
-static void ResetHammerFlagsToLatchedBase(PlayState* play, Player* player, const char* reason) {
-    if (!player || !gHammerFlagsLatched) {
+static void ApplyHammerFlagsToSwordHitbox(Player* player, bool enable) {
+    const int frame = gPlayState ? gPlayState->gameplayFrames : -1;
+
+    if (!player) {
+        Fuse::Log("[FuseMVP] HammerFlags latch %s skipped frame=%d (no player)\n", enable ? "ON" : "OFF", frame);
         return;
     }
 
-    uint32_t before[4];
-    uint32_t after[4];
+    if (enable) {
+        if (gHammerFlagsLatched) {
+            Fuse::Log("[FuseMVP] HammerFlags latch ON skipped frame=%d (already latched)\n", frame);
+            return;
+        }
 
-    for (int i = 0; i < 4; i++) {
-        before[i] = player->meleeWeaponQuads[i].info.toucher.dmgFlags;
-        player->meleeWeaponQuads[i].info.toucher.dmgFlags = gSwordLatchedBaseDmgFlags[i];
-        after[i] = player->meleeWeaponQuads[i].info.toucher.dmgFlags;
+        for (size_t i = 0; i < ARRAY_COUNT(gSwordLatchedBaseDmgFlags); i++) {
+            gSwordLatchedBaseDmgFlags[i] = player->meleeWeaponQuads[i].info.toucher.dmgFlags;
+        }
+
+        for (size_t i = 0; i < ARRAY_COUNT(player->meleeWeaponQuads); i++) {
+            const uint32_t newFlags = (i < 2) ? kHammerDmgFlags0 : kHammerDmgFlags1;
+            player->meleeWeaponQuads[i].info.toucher.dmgFlags = newFlags;
+        }
+
+        gHammerFlagsLatched = true;
+
+        Fuse::Log("[FuseMVP] HammerFlags latch ON frame=%d baseFlags=0x%08X -> newFlags=0x%08X\n", frame,
+                  gSwordLatchedBaseDmgFlags[0], kHammerDmgFlags0);
+        return;
     }
+
+    if (!gHammerFlagsLatched) {
+        Fuse::Log("[FuseMVP] HammerFlags latch OFF skipped frame=%d (already restored)\n", frame);
+        return;
+    }
+
+    for (size_t i = 0; i < ARRAY_COUNT(player->meleeWeaponQuads); i++) {
+        player->meleeWeaponQuads[i].info.toucher.dmgFlags = gSwordLatchedBaseDmgFlags[i];
+    }
+
+    Fuse::Log("[FuseMVP] HammerFlags latch OFF frame=%d restoreFlags=0x%08X\n", frame, gSwordLatchedBaseDmgFlags[0]);
+
+    gHammerFlagsLatched = false;
+}
+
+static void ResetHammerFlagsToLatchedBase(PlayState* play, Player* player, const char* reason) {
+    if (!player) {
+        return;
+    }
+
+    const int frame = play ? play->gameplayFrames : (gPlayState ? gPlayState->gameplayFrames : -1);
+
+    ApplyHammerFlagsToSwordHitbox(player, false);
+
+    Fuse::Log("[FuseMVP] HammerFlags reset reason=%s frame=%d\n", reason ? reason : "unknown", frame);
 }
 
 // -----------------------------------------------------------------------------
@@ -238,6 +284,17 @@ static void DrainSwordDurabilityOnATCollision(PlayState* play, Collider* atColli
         Fuse::Log("[FuseMVP] Sword AT collision frame=%d fused=%d attacker=%p victim=%p amount=%d durability=%d->%d%s\n",
                   currentFrame, fused ? 1 : 0, (void*)attacker, (void*)victim, drainAmount, before, after,
                   broke ? " (broke)" : "");
+
+        if (broke) {
+            Player* player = nullptr;
+            if (attacker != nullptr && attacker->category == ACTORCAT_PLAYER) {
+                player = reinterpret_cast<Player*>(attacker);
+            } else {
+                player = GetPlayerSafe(play);
+            }
+
+            ApplyHammerFlagsToSwordHitbox(player, false);
+        }
     } else {
         Fuse::Log("[FuseMVP] Sword AT collision skipped frame=%d fused=%d attacker=%p victim=%p amount=%d durability=%d->%d reason=%s\n",
                   currentFrame, fused ? 1 : 0, (void*)attacker, (void*)victim, drainAmount, before, after,
@@ -324,7 +381,7 @@ void OnFrame_Objects_Pre(PlayState* play) {
 
     // Rock-breaking behavior (works): apply hammer flags only when rocks are nearby and sword is fused
     if (fused && swinging && rocksNearby) {
-        ApplyHammerFlagsToSwordHitbox(play, player);
+        ApplyHammerFlagsToSwordHitbox(player, true);
     } else {
         const char* reason = !fused ? "fuse-inactive" : (!swinging ? "not-swinging" : "no-rock-nearby");
         ResetHammerFlagsToLatchedBase(play, player, reason);
