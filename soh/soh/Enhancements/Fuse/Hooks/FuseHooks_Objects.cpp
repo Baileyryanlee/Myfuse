@@ -10,6 +10,7 @@ extern "C" {
 #include "z64actor.h"
 #include "z64collision_check.h"
 #include <functions.h>
+extern PlayState* gPlayState;
 }
 
 // Liftable rock actor
@@ -129,15 +130,18 @@ static bool IsAnyLiftableRockNearPlayer(PlayState* play, Player* player) {
 static constexpr uint32_t kHammerDmgFlags0 = 0x00000040;
 static constexpr uint32_t kHammerDmgFlags1 = 0x40000000;
 
-static void ApplyHammerFlagsToSwordHitbox(Player* player) {
-    if (!player)
+static void ResetHammerFlagsToLatchedBase(PlayState* play, Player* player, const char* reason) {
+    if (!player || !gHammerFlagsLatched) {
         return;
+    }
 
-    const uint32_t flags = (kHammerDmgFlags0 | kHammerDmgFlags1);
+    uint32_t before[4];
+    uint32_t after[4];
 
-    // OR in (dont replace). Called only when rocks are nearby to preserve enemy damage behavior.
     for (int i = 0; i < 4; i++) {
-        player->meleeWeaponQuads[i].info.toucher.dmgFlags |= flags;
+        before[i] = player->meleeWeaponQuads[i].info.toucher.dmgFlags;
+        player->meleeWeaponQuads[i].info.toucher.dmgFlags = gSwordLatchedBaseDmgFlags[i];
+        after[i] = player->meleeWeaponQuads[i].info.toucher.dmgFlags;
     }
 }
 
@@ -299,20 +303,31 @@ void OnLoadGame_ResetObjects() {
 }
 
 void OnFrame_Objects_Pre(PlayState* play) {
-    if (!Fuse::IsEnabled())
-        return;
-
     Player* player = GetPlayerSafe(play);
+
+    if (!Fuse::IsEnabled()) {
+        ResetHammerFlagsToLatchedBase(play, player, "fuse-disabled");
+        return;
+    }
+
     if (!IsPlayerSafeForInput(player)) {
         gPrevHeldActor = player ? player->heldActor : nullptr;
+        ResetHammerFlagsToLatchedBase(play, player, "player-unsafe");
         return;
     }
 
     UpdateThrownRockAcquisition(play, player);
 
-    // Rock-breaking behavior (works): apply hammer flags only when rocks are nearby
-    if (IsPlayerSwingingSword(player) && IsAnyLiftableRockNearPlayer(play, player)) {
-        ApplyHammerFlagsToSwordHitbox(player);
+    const bool fused = Fuse::IsSwordFusedWithRock();
+    const bool swinging = IsPlayerSwingingSword(player);
+    const bool rocksNearby = IsAnyLiftableRockNearPlayer(play, player);
+
+    // Rock-breaking behavior (works): apply hammer flags only when rocks are nearby and sword is fused
+    if (fused && swinging && rocksNearby) {
+        ApplyHammerFlagsToSwordHitbox(play, player);
+    } else {
+        const char* reason = !fused ? "fuse-inactive" : (!swinging ? "not-swinging" : "no-rock-nearby");
+        ResetHammerFlagsToLatchedBase(play, player, reason);
     }
 }
 

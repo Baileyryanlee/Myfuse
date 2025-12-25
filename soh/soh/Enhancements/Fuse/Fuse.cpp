@@ -1,5 +1,6 @@
 #include "Fuse.h"
 #include "FuseState.h"
+#include "soh/Enhancements/Fuse/Hooks/FuseHooks_Objects.h"
 
 #include <algorithm>
 #include <cstdarg>

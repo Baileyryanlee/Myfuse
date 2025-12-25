@@ -14,4 +14,8 @@ void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollider, Collide
 
 #ifdef __cplusplus
 }
+
+namespace FuseHooks {
+void OnSwordFuseBroken();
+}
 #endif
