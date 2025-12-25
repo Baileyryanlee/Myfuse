@@ -1755,6 +1755,8 @@ s32 CollisionCheck_SetATvsAC(PlayState* play, Collider* at, ColliderInfo* atInfo
         CollisionCheck_HitEffects(play, at, atInfo, ac, acInfo, hitPos);
         atInfo->toucherFlags |= TOUCH_DREW_HITMARK;
     }
+
+    FuseHooks_OnSwordATCollision(play, at, atInfo, ac, acInfo);
     return 1;
 }
 
