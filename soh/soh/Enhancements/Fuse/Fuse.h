@@ -28,7 +28,7 @@ int GetSwordFuseDurability();
 int GetSwordFuseMaxDurability();
 void SetSwordFuseDurability(int v);
 void SetSwordFuseMaxDurability(int v);
-bool DamageSwordFuseDurability(int amount);
+bool DamageSwordFuseDurability(int amount, const char* reason = nullptr);
 void ClearSwordFuse();
 
 // Debug/testing (safe no-op in shipping later)
