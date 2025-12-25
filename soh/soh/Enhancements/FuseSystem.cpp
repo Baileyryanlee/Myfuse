@@ -17,6 +17,7 @@ namespace FuseHooks {
 void OnLoadGame_ResetObjects();
 void OnFrame_Objects_Pre(PlayState* play);
 void OnFrame_Objects_Post(PlayState* play);
+void OnPlayerUpdate(PlayState* play);
 } // namespace FuseHooks
 
 static std::shared_ptr<FuseMenuWindow> sFuseMenuWindow;
@@ -60,7 +61,7 @@ static void RegisterFuseMod() {
 
         // ... everything else in the frame happens ...
 
-        // Post-collision: drains durability only on real impacts
+        // Post-collision hook kept for compatibility (durability handled in OnPlayerUpdate)
         FuseHooks::OnFrame_Objects_Post(play);
 
         // L + DpadDown toggles menu for now
@@ -79,6 +80,14 @@ static void RegisterFuseMod() {
                 Fuse::SetLastEvent("Fuse Menu closed");
             }
         }
+    });
+
+    COND_HOOK(OnPlayerUpdate, true, []() {
+        if (!IsInGameplay()) {
+            return;
+        }
+
+        FuseHooks::OnPlayerUpdate(gPlayState);
     });
 }
 
