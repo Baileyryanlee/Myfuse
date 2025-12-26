@@ -401,6 +401,12 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
 
     GfxPrint printer;
 
+    gDPPipeSync(OPA++);
+    gDPSetScissor(OPA++, G_SC_NON_INTERLACE, 0, 0, 320, 240);
+    gDPSetPrimColor(OPA++, 0, 0, 0, 0, 0, 200);
+    // Cover bottom strip (tune Y if needed)
+    gDPFillRectangle(OPA++, 0, 200, 319, 239);
+
     Gfx_SetupDL_39Opa(gfxCtx);
 
     gDPPipeSync(OPA++);
