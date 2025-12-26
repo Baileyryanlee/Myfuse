@@ -3535,6 +3535,10 @@ void KaleidoScope_Draw(PlayState* play) {
         KaleidoScope_DrawDebugEditor(play);
     }
 
+    if (pauseCtx->state == 6 && pauseCtx->pageIndex == PAUSE_EQUIP) {
+        FusePause_DrawModal(play, &POLY_OPA_DISP, &POLY_XLU_DISP);
+    }
+
     func_800AAA50(&play->view, 15);
 
     CLOSE_DISPS(play->state.gfxCtx);
