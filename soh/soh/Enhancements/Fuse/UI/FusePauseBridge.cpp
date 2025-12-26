@@ -8,10 +8,9 @@
 
 namespace {
 constexpr s16 kPromptYOffset = 0;
-constexpr s16 kStatusYOffset = -16;
 constexpr s16 kBarHeight = 4;
 constexpr s16 kBarWidth = 48;
-constexpr s16 kPromptPadding = 2;
+constexpr s16 kStatusYOffset = -16;
 
 EquipValueSword HoveredSwordForCursor(const PauseContext* pauseCtx) {
     if (pauseCtx == nullptr) {
@@ -95,23 +94,20 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp) {
     GfxPrint_Open(&printer, DISP);
     GfxPrint_SetColor(&printer, 255, 255, 255, 255);
 
-    const s32 baseX = pauseCtx->infoPanelVtx[16].v.ob[0] + kPromptPadding;
-    const s32 baseY = pauseCtx->infoPanelVtx[20].v.ob[1];
+    s32 baseY = pauseCtx->infoPanelVtx[16].v.ob[1];
+    if (baseY < 80) {
+        baseY = pauseCtx->infoPanelVtx[20].v.ob[1];
+    }
+
+    const s32 toEquipX = pauseCtx->infoPanelVtx[20].v.ob[0];
+    const s32 toEquipW = pauseCtx->infoPanelVtx[21].v.ob[0] - pauseCtx->infoPanelVtx[20].v.ob[0];
+    const s32 baseX = toEquipX + toEquipW + 8;
+
     const s32 xCell = CLAMP(baseX / 8, 0, 39);
 
     const s32 yCellCandidate = CLAMP((baseY + kPromptYOffset) / 8, 0, 29);
-    s32 yCell = (baseY < 50) ? 27 : yCellCandidate;
-    const s32 yCellBeforeBump = yCell;
-    const s32 kRowBump = 2; // try 2 first (≈16px)
-    yCell = CLAMP(yCell + kRowBump, 0, 29);
-
-    const s32 statusYCell = CLAMP(yCell - 1, 0, 29);
-
-    GfxPrint_SetPos(&printer, xCell - 1, yCellBeforeBump);
-    GfxPrint_Printf(&printer, "|");
-
-    GfxPrint_SetPos(&printer, xCell - 1, yCell);
-    GfxPrint_Printf(&printer, "|");
+    s32 yCell = (baseY < 80) ? 28 : yCellCandidate;
+    const s32 statusRow = CLAMP(yCell - 1, 0, 29);
 
     GfxPrint_SetPos(&printer, xCell, yCell);
 
@@ -121,7 +117,7 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp) {
         MaterialId materialId = Fuse::GetSwordMaterial();
         const MaterialDef* def = FuseMaterials::GetMaterialDef(materialId);
         const char* name = (def != nullptr && def->name != nullptr) ? def->name : "Unknown";
-        GfxPrint_SetPos(&printer, xCell, statusYCell);
+        GfxPrint_SetPos(&printer, xCell, statusRow);
         GfxPrint_Printf(&printer, "Fused: %s", name);
 
         GfxPrint_SetPos(&printer, xCell, yCell);
