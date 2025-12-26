@@ -5,9 +5,9 @@ extern "C" {
 #endif
 
 struct PlayState;
-struct Gfx;
+union Gfx;
 
-void FusePause_DrawPrompt(struct PlayState* play, struct Gfx** polyOpaDisp);
+void FusePause_DrawPrompt(struct PlayState* play, union Gfx** polyOpaDisp);
 
 #ifdef __cplusplus
 }
