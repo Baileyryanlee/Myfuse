@@ -23,6 +23,30 @@ static FuseSaveData gFuseSave; // persistent-ready (not serialized yet)
 static FuseRuntimeState gFuseRuntime;
 
 // -----------------------------------------------------------------------------
+// Modifier helpers (module-local)
+// -----------------------------------------------------------------------------
+namespace {
+
+void ApplyFreezeToVictim(PlayState* play, Actor* victim, uint8_t level) {
+    (void)play;
+
+    if (!victim || level == 0) {
+        return;
+    }
+
+    // Placeholder effect: leverage existing freeze timer until a dedicated helper is surfaced.
+    const int16_t desiredDuration = (int16_t)std::clamp<int>(20 * level, 1, 0x7FFF);
+    if (victim->freezeTimer < desiredDuration) {
+        victim->freezeTimer = desiredDuration;
+    }
+
+    Fuse::Log("[FuseMVP] Freeze applied to victim=%p level=%u duration=%d\n", (void*)victim, (unsigned)level,
+              (int)desiredDuration);
+}
+
+} // namespace
+
+// -----------------------------------------------------------------------------
 // Logging
 // -----------------------------------------------------------------------------
 void Fuse::Log(const char* fmt, ...) {
@@ -98,6 +122,8 @@ int Fuse::GetMaterialCount(MaterialId id) {
     switch (id) {
         case MaterialId::Rock:
             return gFuseSave.rockCount;
+        case MaterialId::Ice:
+            return gFuseSave.iceCount;
         default:
             return 0;
     }
@@ -121,6 +147,11 @@ void Fuse::AddMaterial(MaterialId id, int amount) {
             gFuseSave.rockCount = (uint16_t)newCount;
             break;
         }
+        case MaterialId::Ice: {
+            const int newCount = std::clamp<int>(gFuseSave.iceCount + amount, 0, 65535);
+            gFuseSave.iceCount = (uint16_t)newCount;
+            break;
+        }
         default:
             break;
     }
@@ -138,6 +169,9 @@ bool Fuse::ConsumeMaterial(MaterialId id, int amount) {
     switch (id) {
         case MaterialId::Rock:
             gFuseSave.rockCount = (uint16_t)(gFuseSave.rockCount - amount);
+            return true;
+        case MaterialId::Ice:
+            gFuseSave.iceCount = (uint16_t)(gFuseSave.iceCount - amount);
             return true;
         default:
             break;
@@ -298,4 +332,20 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
 
 void Fuse::OnGameFrameUpdate(PlayState* /*play*/) {
     // No per-frame work needed yet
+}
+
+void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim) {
+    if (!Fuse::IsSwordFused() || !victim) {
+        return;
+    }
+
+    const MaterialDef* def = Fuse::GetMaterialDef(Fuse::GetSwordMaterial());
+    if (!def) {
+        return;
+    }
+
+    uint8_t freezeLevel = 0;
+    if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Freeze, &freezeLevel) && freezeLevel > 0) {
+        ApplyFreezeToVictim(play, victim, freezeLevel);
+    }
 }

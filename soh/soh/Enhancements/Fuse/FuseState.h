@@ -10,6 +10,7 @@ struct FuseSaveData {
 
     // v0 material storage: ROCK count (was bool)
     uint16_t rockCount = 0;
+    uint16_t iceCount = 0;
 
     // Per-item fused material ids later.
     MaterialId swordFuseMaterialId = MaterialId::None;
