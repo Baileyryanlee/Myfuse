@@ -1,13 +1,13 @@
 #include "soh/Enhancements/Fuse/UI/FusePauseBridge.h"
 
 #include "soh/Enhancements/Fuse/Fuse.h"
-#include "soh/Enhancements/Fuse/FuseMaterials.h"
 #include <libultraship/libultra/gbi.h>
 #include "global.h"
 #include "functions.h"
 
 namespace {
 constexpr s16 kPromptYOffset = 0;
+constexpr s16 kPromptPadding = 8;
 constexpr s16 kBarHeight = 4;
 constexpr s16 kBarWidth = 48;
 constexpr s16 kStatusYOffset = -16;
@@ -94,35 +94,20 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp) {
     GfxPrint_Open(&printer, DISP);
     GfxPrint_SetColor(&printer, 255, 255, 255, 255);
 
-    s32 baseY = pauseCtx->infoPanelVtx[16].v.ob[1];
-    if (baseY < 80) {
-        baseY = pauseCtx->infoPanelVtx[20].v.ob[1];
-    }
-
+    // TODO: Fine-tune Fuse prompt placement once Fuse modal UI is implemented.
+    // Pause UI is image-based; final alignment may change.
+    const s32 baseY = pauseCtx->infoPanelVtx[16].v.ob[1];
     const s32 toEquipX = pauseCtx->infoPanelVtx[20].v.ob[0];
     const s32 toEquipW = pauseCtx->infoPanelVtx[21].v.ob[0] - pauseCtx->infoPanelVtx[20].v.ob[0];
-    const s32 baseX = toEquipX + toEquipW + 8;
+    const s32 baseX = toEquipX + toEquipW + kPromptPadding;
 
     const s32 xCell = CLAMP(baseX / 8, 0, 39);
 
-    const s32 yCellCandidate = CLAMP((baseY + kPromptYOffset) / 8, 0, 29);
-    s32 yCell = (baseY < 80) ? 28 : yCellCandidate;
-    const s32 statusRow = CLAMP(yCell - 1, 0, 29);
+    const s32 yCell = CLAMP((baseY + kPromptYOffset) / 8, 0, 29);
 
     GfxPrint_SetPos(&printer, xCell, yCell);
 
-    if (!swordFused) {
-        GfxPrint_Printf(&printer, "A: Fuse");
-    } else {
-        MaterialId materialId = Fuse::GetSwordMaterial();
-        const MaterialDef* def = FuseMaterials::GetMaterialDef(materialId);
-        const char* name = (def != nullptr && def->name != nullptr) ? def->name : "Unknown";
-        GfxPrint_SetPos(&printer, xCell, statusRow);
-        GfxPrint_Printf(&printer, "Fused: %s", name);
-
-        GfxPrint_SetPos(&printer, xCell, yCell);
-        GfxPrint_Printf(&printer, "A: Fuse");
-    }
+    GfxPrint_Printf(&printer, "A: Fuse");
 
     DISP = GfxPrint_Close(&printer);
     GfxPrint_Destroy(&printer);
