@@ -380,10 +380,12 @@ void OnFrame_Objects_Pre(PlayState* play) {
 
     UpdateThrownRockAcquisition(play, player);
 
-    const bool swordFused = Fuse::IsSwordFused() && Fuse::GetSwordMaterial() == MaterialId::Rock;
+    const bool swordFused = Fuse::IsSwordFused();
+    const MaterialDef* fuseDef = swordFused ? Fuse::GetMaterialDef(Fuse::GetSwordMaterial()) : nullptr;
 
     // Rock-breaking behavior (works): apply hammer flags only when rocks are nearby and fuse is active
-    if (swordFused && IsPlayerSwingingSword(player) && IsAnyLiftableRockNearPlayer(play, player)) {
+    if (fuseDef && fuseDef->hammerizeSword && IsPlayerSwingingSword(player) &&
+        IsAnyLiftableRockNearPlayer(play, player)) {
         ApplyHammerFlagsToSwordHitbox(player);
         gHammerizeAppliedFrame = play->gameplayFrames;
         Fuse::Log("[FuseMVP] Hammerize applied at frame=%d\n", gHammerizeAppliedFrame);
