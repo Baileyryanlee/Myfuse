@@ -2,6 +2,7 @@
 
 #include "soh/Enhancements/Fuse/Fuse.h"
 #include "soh/Enhancements/Fuse/FuseMaterials.h"
+#include <libultraship/libultra/gbi.h>
 #include "global.h"
 #include "functions.h"
 
