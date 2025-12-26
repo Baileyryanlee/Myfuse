@@ -1,9 +1,9 @@
 #include "soh/Enhancements/Fuse/UI/FusePauseBridge.h"
 
-#include "soh/Enhancements/Fuse/Fuse.h"
-#include <libultraship/libultra/gbi.h>
 #include "global.h"
+#include <libultraship/libultra/gbi.h>
 #include "functions.h"
+#include "soh/Enhancements/Fuse/Fuse.h"
 #include <algorithm>
 #include <cstdio>
 #include <vector>
@@ -151,6 +151,10 @@ FusePromptContext BuildPromptContext(PlayState* play) {
 
     return context;
 }
+
+} // namespace
+
+extern "C" {
 
 void FusePause_UpdateModal(PlayState* play) {
     if (play == nullptr) {
@@ -469,4 +473,4 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     GfxPrint_Destroy(&printer);
 }
 
-} // namespace
+} // extern "C"
