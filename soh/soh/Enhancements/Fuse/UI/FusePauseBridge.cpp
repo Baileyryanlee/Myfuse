@@ -35,6 +35,26 @@ void FusePause_DrawPrompt(PlayState* play) {
 
     PauseContext* pauseCtx = &play->pauseCtx;
 
+    Fuse::Log("[FuseMVP] FusePause_DrawPrompt called\n");
+
+    {
+        GfxPrint dbgPrinter;
+        Gfx* dispRefs[4];
+        GraphicsContext* __gfxCtx = play->state.gfxCtx;
+        Graph_OpenDisps(dispRefs, __gfxCtx, __FILE__, __LINE__);
+
+        GfxPrint_Init(&dbgPrinter);
+        GfxPrint_Open(&dbgPrinter, POLY_OPA_DISP);
+        GfxPrint_SetColor(&dbgPrinter, 255, 255, 255, 255);
+        GfxPrint_SetPosPx(&dbgPrinter, 20, 20);
+        GfxPrint_Printf(&dbgPrinter, "FUSEDBG");
+
+        POLY_OPA_DISP = GfxPrint_Close(&dbgPrinter);
+        GfxPrint_Destroy(&dbgPrinter);
+
+        Graph_CloseDisps(dispRefs, __gfxCtx, __FILE__, __LINE__);
+    }
+
     if ((pauseCtx->state != 6) || !PauseOnEquippedSwordSlot(pauseCtx)) {
         return;
     }
