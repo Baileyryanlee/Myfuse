@@ -26,13 +26,14 @@ EquipValueSword HoveredSwordForSlot(u16 cursorSlot) {
 }
 }
 
-void FusePause_DrawPrompt(PlayState* play) {
-    if (play == nullptr) {
+void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp) {
+    if (play == nullptr || polyOpaDisp == nullptr || *polyOpaDisp == nullptr) {
         return;
     }
 
     PauseContext* pauseCtx = &play->pauseCtx;
     GraphicsContext* gfxCtx = play->state.gfxCtx;
+    Gfx*& DISP = *polyOpaDisp;
 
     const bool isPauseOpen = pauseCtx->state == 6;
     const bool isEquipmentPage = pauseCtx->pageIndex == PAUSE_EQUIP;
@@ -50,7 +51,7 @@ void FusePause_DrawPrompt(PlayState* play) {
         GfxPrint debugPrinter;
 
         GfxPrint_Init(&debugPrinter);
-        GfxPrint_Open(&debugPrinter, POLY_OPA_DISP);
+        GfxPrint_Open(&debugPrinter, DISP);
         GfxPrint_SetColor(&debugPrinter, 255, 255, 0, 255);
         GfxPrint_SetPosPx(&debugPrinter, 20, 20);
         GfxPrint_Printf(&debugPrinter, "page:%d state:%d\n", pauseCtx->pageIndex, pauseCtx->state);
@@ -61,7 +62,7 @@ void FusePause_DrawPrompt(PlayState* play) {
                         isEquipmentPage, isSwordSlotHovered, isSwordAlreadyEquippedSlot);
         GfxPrint_Printf(&debugPrinter, "shouldShow:%d\n", shouldShowFusePrompt);
 
-        POLY_OPA_DISP = GfxPrint_Close(&debugPrinter);
+        DISP = GfxPrint_Close(&debugPrinter);
         GfxPrint_Destroy(&debugPrinter);
     }
 
@@ -77,13 +78,13 @@ void FusePause_DrawPrompt(PlayState* play) {
         Fuse::Log("[FuseMVP] Fuse pressed (stub)\n");
     }
 
-    gDPPipeSync(POLY_OPA_DISP++);
-    gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 255, 255, 255, 255);
+    gDPPipeSync(DISP++);
+    gDPSetPrimColor(DISP++, 0, 0, 255, 255, 255, 255);
 
     GfxPrint printer;
 
     GfxPrint_Init(&printer);
-    GfxPrint_Open(&printer, POLY_OPA_DISP);
+    GfxPrint_Open(&printer, DISP);
     GfxPrint_SetColor(&printer, 255, 255, 255, 255);
 
     const s32 textX = pauseCtx->infoPanelVtx[16].v.ob[0] + kPromptPadding;
@@ -104,7 +105,7 @@ void FusePause_DrawPrompt(PlayState* play) {
         GfxPrint_Printf(&printer, "A: Fuse");
     }
 
-    POLY_OPA_DISP = GfxPrint_Close(&printer);
+    DISP = GfxPrint_Close(&printer);
     GfxPrint_Destroy(&printer);
 
     if (swordFused) {
@@ -117,10 +118,10 @@ void FusePause_DrawPrompt(PlayState* play) {
 
         Gfx_SetupDL_39Opa(gfxCtx);
 
-        gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 30, 30, 30, 255);
-        gDPFillRectangle(POLY_OPA_DISP++, barX, barY, barX + kBarWidth, barY + kBarHeight);
+        gDPSetPrimColor(DISP++, 0, 0, 30, 30, 30, 255);
+        gDPFillRectangle(DISP++, barX, barY, barX + kBarWidth, barY + kBarHeight);
 
-        gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 60, 200, 60, 255);
-        gDPFillRectangle(POLY_OPA_DISP++, barX, barY, barX + filled, barY + kBarHeight);
+        gDPSetPrimColor(DISP++, 0, 0, 60, 200, 60, 255);
+        gDPFillRectangle(DISP++, barX, barY, barX + filled, barY + kBarHeight);
     }
 }
