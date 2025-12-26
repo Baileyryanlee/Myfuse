@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cmath>
+#include <unordered_set>
 
 extern "C" {
 #include "variables.h"
@@ -28,6 +29,8 @@ static bool gPendingThrownRockCheck = false;
 static Actor* gTrackedThrownRock = nullptr;
 static int gFramesUntilThrownRockCheck = 0;
 static int gLastImpactDrainFrame = -1;
+static int gSwordATVictimCooldownFrame = -1;
+static std::unordered_set<void*> gSwordATVictimCooldown;
 static uint32_t gSwordBaseDmgFlags[4];
 static bool gSwordBaseValid = false;
 
@@ -100,6 +103,23 @@ static bool IsAnyLiftableRockNearPlayer(PlayState* play, Player* player) {
             if (distSq <= kRockGateRadiusSq) {
                 return true;
             }
+        }
+    }
+
+    return false;
+}
+
+static bool IsPlayerSwordCollider(Player* player, Collider* collider) {
+    if (!player || !collider)
+        return false;
+
+    if (collider->actor != &player->actor)
+        return false;
+
+    for (int i = 0; i < 4; i++) {
+        Collider* quadCollider = (Collider*)&player->meleeWeaponQuads[i];
+        if (collider == quadCollider || collider == &player->meleeWeaponQuads[i].base) {
+            return true;
         }
     }
 
@@ -182,7 +202,7 @@ static bool SwordHadImpactFlags(Player* player, const char** reasonOut = nullptr
     return false;
 }
 
-static void DrainSwordDurabilityOnImpact(PlayState* play, const char* reason) {
+[[maybe_unused]] static void DrainSwordDurabilityOnImpact(PlayState* play, const char* reason) {
     const int curFrame = play ? play->gameplayFrames : -1;
 
     // Small cooldown: only drain once per frame to avoid multi-collisions in the same frame.
@@ -210,6 +230,57 @@ static void DrainSwordDurabilityOnImpact(PlayState* play, const char* reason) {
               before, after, broke ? " (broke)" : "");
 
     gLastImpactDrainFrame = curFrame;
+}
+
+extern "C" void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollider, ColliderInfo* atInfo,
+                                              Collider* acCollider, ColliderInfo* acInfo) {
+    (void)atInfo;
+
+    if (!Fuse::IsEnabled())
+        return;
+
+    Player* player = GetPlayerSafe(play);
+    if (!IsPlayerSwordCollider(player, atCollider))
+        return;
+
+    const int curFrame = play ? play->gameplayFrames : -1;
+    if (gSwordATVictimCooldownFrame != curFrame) {
+        gSwordATVictimCooldownFrame = curFrame;
+        gSwordATVictimCooldown.clear();
+    }
+
+    void* victimPtr = nullptr;
+    if (acCollider && acCollider->actor) {
+        victimPtr = (void*)acCollider->actor;
+    } else if (acCollider) {
+        victimPtr = (void*)acCollider;
+    } else if (acInfo) {
+        victimPtr = (void*)acInfo;
+    }
+
+    const bool fused = Fuse::IsSwordFusedWithRock();
+    const int before = Fuse::GetSwordFuseDurability();
+
+    if (victimPtr && gSwordATVictimCooldown.count(victimPtr) > 0) {
+        Fuse::Log("[FuseMVP] Sword AT collision DRAIN frame=%d fused=%d victim=%p durability=%d->%d reason=victim-cooldown\n",
+                  curFrame, fused ? 1 : 0, victimPtr, before, before);
+        return;
+    }
+
+    if (!fused) {
+        Fuse::Log("[FuseMVP] Sword AT collision DRAIN frame=%d fused=%d victim=%p durability=%d->%d reason=fuse-inactive\n",
+                  curFrame, 0, victimPtr, before, before);
+        return;
+    }
+
+    const bool broke = Fuse::DamageSwordFuseDurability(1);
+    const int after = Fuse::GetSwordFuseDurability();
+    Fuse::Log("[FuseMVP] Sword AT collision DRAIN frame=%d fused=%d victim=%p durability=%d->%d%s\n", curFrame, 1,
+              victimPtr, before, after, broke ? " (broke)" : "");
+
+    if (victimPtr) {
+        gSwordATVictimCooldown.insert(victimPtr);
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -267,6 +338,8 @@ void OnLoadGame_ResetObjects() {
     gTrackedThrownRock = nullptr;
     gFramesUntilThrownRockCheck = 0;
     gLastImpactDrainFrame = -1;
+    gSwordATVictimCooldownFrame = -1;
+    gSwordATVictimCooldown.clear();
     gSwordBaseValid = false;
 }
 
@@ -312,7 +385,7 @@ void OnPlayerUpdate(PlayState* play) {
 
     const char* reason = "unknown";
     if (SwordHadImpactFlags(player, &reason)) {
-        DrainSwordDurabilityOnImpact(play, reason);
+        Fuse::Log("[FuseMVP] Impact hook observed reason=%s (drain handled in AT collision hook)\n", reason);
     }
 }
 
