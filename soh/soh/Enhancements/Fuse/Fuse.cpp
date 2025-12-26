@@ -1,5 +1,6 @@
 #include "Fuse.h"
 #include "FuseState.h"
+#include "soh/Enhancements/Fuse/Hooks/FuseHooks_Objects.h"
 
 #include <algorithm>
 #include <cstdarg>
@@ -109,7 +110,7 @@ void Fuse::ClearSwordFuse() {
     gFuseSave.swordFuseMaxDurability = 0;
 }
 
-bool Fuse::DamageSwordFuseDurability(int amount) {
+bool Fuse::DamageSwordFuseDurability(PlayState* play, int amount) {
     amount = std::max(amount, 0);
 
     if (!gFuseSave.swordFusedWithRock) {
@@ -122,12 +123,18 @@ bool Fuse::DamageSwordFuseDurability(int amount) {
 
     if (cur == 0) {
         ClearSwordFuse();
-        SetLastEvent("Sword fuse broke (durability 0)");
-        Log("[FuseMVP] Sword fuse broke (durability 0)\n");
+        const int frame = play ? play->gameplayFrames : -1;
+        Log("[FuseMVP] Sword fuse broke at frame=%d; clearing fuse and reverting to vanilla\n", frame);
+        OnSwordFuseBroken(play);
         return true;
     }
 
     return false;
+}
+
+void Fuse::OnSwordFuseBroken(PlayState* play) {
+    SetLastEvent("Sword fuse broke");
+    FuseHooks::RestoreSwordHitboxVanillaNow(play);
 }
 
 // -----------------------------------------------------------------------------

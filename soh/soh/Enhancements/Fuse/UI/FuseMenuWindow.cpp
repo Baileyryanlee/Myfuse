@@ -155,7 +155,7 @@ void FuseMenuWindow::DrawElement() {
         ImGui::Text("Sword Fuse Durability: %d / %d", Fuse::GetSwordFuseDurability(),
                     Fuse::GetSwordFuseMaxDurability());
         if (ImGui::SmallButton("Damage Sword Fuse (-1)")) {
-            Fuse::DamageSwordFuseDurability(1);
+            Fuse::DamageSwordFuseDurability(nullptr, 1);
         }
         ImGui::SameLine();
         if (ImGui::SmallButton("Clear Sword Fuse")) {
