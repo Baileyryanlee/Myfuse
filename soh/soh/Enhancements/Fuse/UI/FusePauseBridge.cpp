@@ -32,6 +32,7 @@ void FusePause_DrawPrompt(PlayState* play) {
     }
 
     PauseContext* pauseCtx = &play->pauseCtx;
+    GraphicsContext* gfxCtx = play->state.gfxCtx;
 
     const bool isPauseOpen = pauseCtx->state == 6;
     const bool isEquipmentPage = pauseCtx->pageIndex == PAUSE_EQUIP;
@@ -47,8 +48,7 @@ void FusePause_DrawPrompt(PlayState* play) {
     static bool sShowDebugOverlay = true;
     if (sShowDebugOverlay && isPauseOpen) {
         GfxPrint debugPrinter;
-        Gfx* debugDisps[4];
-        Graph_OpenDisps(debugDisps, play->state.gfxCtx, __FILE__, __LINE__);
+        OPEN_DISPS(gfxCtx);
 
         GfxPrint_Init(&debugPrinter);
         GfxPrint_Open(&debugPrinter, POLY_OPA_DISP);
@@ -64,7 +64,7 @@ void FusePause_DrawPrompt(PlayState* play) {
 
         POLY_OPA_DISP = GfxPrint_Close(&debugPrinter);
         GfxPrint_Destroy(&debugPrinter);
-        Graph_CloseDisps(debugDisps, play->state.gfxCtx, __FILE__, __LINE__);
+        CLOSE_DISPS(gfxCtx);
     }
 
     Fuse::Log("[FuseMVP] FusePause_DrawPrompt called\n");
@@ -80,9 +80,7 @@ void FusePause_DrawPrompt(PlayState* play) {
     }
 
     GfxPrint printer;
-    Gfx* dispRefs[4];
-    GraphicsContext* __gfxCtx = play->state.gfxCtx;
-    Graph_OpenDisps(dispRefs, __gfxCtx, __FILE__, __LINE__);
+    OPEN_DISPS(gfxCtx);
 
     GfxPrint_Init(&printer);
     GfxPrint_Open(&printer, POLY_OPA_DISP);
@@ -117,7 +115,7 @@ void FusePause_DrawPrompt(PlayState* play) {
         const f32 ratio = (maxDurability > 0) ? CLAMP((f32)curDurability / (f32)maxDurability, 0.0f, 1.0f) : 0.0f;
         const s32 filled = (s32)(ratio * kBarWidth);
 
-        Gfx_SetupDL_39Opa(play->state.gfxCtx);
+        Gfx_SetupDL_39Opa(gfxCtx);
 
         gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 30, 30, 30, 255);
         gDPFillRectangle(POLY_OPA_DISP++, barX, barY, barX + kBarWidth, barY + kBarHeight);
@@ -126,5 +124,5 @@ void FusePause_DrawPrompt(PlayState* play) {
         gDPFillRectangle(POLY_OPA_DISP++, barX, barY, barX + filled, barY + kBarHeight);
     }
 
-    Graph_CloseDisps(dispRefs, __gfxCtx, __FILE__, __LINE__);
+    CLOSE_DISPS(gfxCtx);
 }
