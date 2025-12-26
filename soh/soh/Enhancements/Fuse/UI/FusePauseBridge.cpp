@@ -40,7 +40,9 @@ void FusePause_DrawPrompt(PlayState* play) {
     }
 
     GfxPrint printer;
-    OPEN_DISPS(play->state.gfxCtx);
+    Gfx* dispRefs[4];
+    GraphicsContext* __gfxCtx = play->state.gfxCtx;
+    Graph_OpenDisps(dispRefs, __gfxCtx, __FILE__, __LINE__);
 
     GfxPrint_Init(&printer);
     GfxPrint_Open(&printer, POLY_OPA_DISP);
@@ -84,5 +86,5 @@ void FusePause_DrawPrompt(PlayState* play) {
         gDPFillRectangle(POLY_OPA_DISP++, barX, barY, barX + filled, barY + kBarHeight);
     }
 
-    CLOSE_DISPS(play->state.gfxCtx);
+    Graph_CloseDisps(dispRefs, __gfxCtx, __FILE__, __LINE__);
 }
