@@ -22,6 +22,7 @@ struct FuseModalState {
     int lastEquipSword = 0;
     int lastCursorX = -1;
     int lastCursorY = -1;
+    int justOpenedFrames = 0;
 };
 
 static FuseModalState sModal;
@@ -81,6 +82,12 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp)
     Gfx*& OPA = *polyOpaDisp;
     Gfx*& XLU = *polyXluDisp;
 
+    (void)XLU;
+
+    if (sModal.justOpenedFrames > 0) {
+        sModal.justOpenedFrames--;
+    }
+
     const bool isPauseOpen = pauseCtx->state == 6;
     const bool isEquipmentPage = pauseCtx->pageIndex == PAUSE_EQUIP;
     const u8 cursorX = pauseCtx->cursorX[PAUSE_EQUIP];
@@ -124,19 +131,24 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp)
     if (sModal.open) {
         const bool cursorMoved = (sModal.lastCursorX != cursorX) || (sModal.lastCursorY != cursorY);
         const bool equipChanged = sModal.lastEquipSword != equippedSword;
-        if (!modalGatingPass || cursorMoved || equipChanged) {
-            sModal.open = false;
+        if (sModal.justOpenedFrames == 0) {
+            if (!modalGatingPass || cursorMoved || equipChanged) {
+                sModal.open = false;
+                sModal.justOpenedFrames = 0;
+                Fuse::Log("[FuseUI] Modal closed (reason: gating fail/move)\n");
+            }
         }
     }
 
     if (!sModal.open && modalGatingPass && CHECK_BTN_ALL(input->press.button, BTN_A)) {
         sModal.open = true;
+        sModal.justOpenedFrames = 2;
         sModal.cursor = 0;
         sModal.scroll = 0;
         sModal.lastEquipSword = equippedSword;
         sModal.lastCursorX = cursorX;
         sModal.lastCursorY = cursorY;
-        Fuse::Log("[FuseUI] Open modal\n");
+        Fuse::Log("[FuseUI] Modal opened\n");
         input->press.button &= ~BTN_A;
     }
 
@@ -194,6 +206,8 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp)
 
     if (CHECK_BTN_ALL(input->press.button, BTN_B)) {
         sModal.open = false;
+        sModal.justOpenedFrames = 0;
+        Fuse::Log("[FuseUI] Modal closed (reason: B press)\n");
         input->press.button &= ~BTN_B;
         return;
     }
@@ -237,12 +251,10 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp)
         input->press.button &= ~BTN_A;
     }
 
-    Gfx_SetupDL_25Xlu(gfxCtx);
-    gDPPipeSync(XLU++);
-    gDPSetPrimColor(XLU++, 0, 0, 0, 0, 0, 160);
-    gDPFillRectangle(XLU++, 0, 0, SCREEN_WIDTH - 1, SCREEN_HEIGHT - 1);
-
     Gfx_SetupDL_39Opa(gfxCtx);
+
+    gDPSetPrimColor(OPA++, 0, 0, 0, 0, 0, 160);
+    gDPFillRectangle(OPA++, 0, 0, SCREEN_WIDTH - 1, SCREEN_HEIGHT - 1);
 
     constexpr s32 panelX = 40;
     constexpr s32 panelY = 40;
@@ -277,6 +289,9 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp)
             gDPFillRectangle(OPA++, panelX + 6, y0, panelX + panelW - 6, y1);
         }
     }
+
+    gDPPipeSync(OPA++);
+    gDPSetPrimColor(OPA++, 0, 0, 255, 255, 255, 255);
 
     GfxPrint_Init(&printer);
     GfxPrint_Open(&printer, OPA);
