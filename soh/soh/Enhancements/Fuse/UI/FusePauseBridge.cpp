@@ -12,6 +12,17 @@ constexpr s16 kBarHeight = 4;
 constexpr s16 kBarWidth = 48;
 constexpr s16 kPromptPadding = 2;
 
+#define FUSE_OPEN_DISPS(gfxCtx)                     \
+    {                                              \
+        GraphicsContext* __gfxCtx = gfxCtx;        \
+        Gfx* dispRefs[4];                          \
+        (void)__gfxCtx;                            \
+        Graph_OpenDisps(dispRefs, gfxCtx, __FILE__, __LINE__)
+
+#define FUSE_CLOSE_DISPS(gfxCtx)                    \
+        Graph_CloseDisps(dispRefs, gfxCtx, __FILE__, __LINE__); \
+    }
+
 EquipValueSword HoveredSwordForSlot(u16 cursorSlot) {
     switch (cursorSlot) {
         case 1:
@@ -48,7 +59,7 @@ void FusePause_DrawPrompt(PlayState* play) {
     static bool sShowDebugOverlay = true;
     if (sShowDebugOverlay && isPauseOpen) {
         GfxPrint debugPrinter;
-        OPEN_DISPS(gfxCtx);
+        FUSE_OPEN_DISPS(gfxCtx);
 
         GfxPrint_Init(&debugPrinter);
         GfxPrint_Open(&debugPrinter, POLY_OPA_DISP);
@@ -64,7 +75,7 @@ void FusePause_DrawPrompt(PlayState* play) {
 
         POLY_OPA_DISP = GfxPrint_Close(&debugPrinter);
         GfxPrint_Destroy(&debugPrinter);
-        CLOSE_DISPS(gfxCtx);
+        FUSE_CLOSE_DISPS(gfxCtx);
     }
 
     Fuse::Log("[FuseMVP] FusePause_DrawPrompt called\n");
@@ -80,7 +91,7 @@ void FusePause_DrawPrompt(PlayState* play) {
     }
 
     GfxPrint printer;
-    OPEN_DISPS(gfxCtx);
+    FUSE_OPEN_DISPS(gfxCtx);
 
     GfxPrint_Init(&printer);
     GfxPrint_Open(&printer, POLY_OPA_DISP);
@@ -124,5 +135,5 @@ void FusePause_DrawPrompt(PlayState* play) {
         gDPFillRectangle(POLY_OPA_DISP++, barX, barY, barX + filled, barY + kBarHeight);
     }
 
-    CLOSE_DISPS(gfxCtx);
+    FUSE_CLOSE_DISPS(gfxCtx);
 }
