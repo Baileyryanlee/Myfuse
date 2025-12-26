@@ -236,10 +236,19 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         return;
     }
 
-    if (CHECK_BTN_ALL(input->press.button, BTN_B)) {
+    const u16 pressed = input->press.button;
+
+    if (pressed & BTN_B) {
         sModal.open = false;
+        input->press.button &= (u16)~BTN_B;
         Fuse::Log("[FuseUI] Modal closed (B)\n");
-        input->press.button &= ~BTN_B;
+        return;
+    }
+
+    if (pressed & BTN_START) {
+        sModal.open = false;
+        input->press.button &= (u16)~BTN_START;
+        Fuse::Log("[FuseUI] Modal closed (START)\n");
         return;
     }
 
