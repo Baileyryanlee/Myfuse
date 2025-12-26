@@ -6,26 +6,23 @@
 #include "functions.h"
 
 namespace {
-constexpr s16 kPromptYOffset = -10;
-constexpr s16 kStatusYOffset = -18;
+constexpr s16 kPromptYOffset = -8;
+constexpr s16 kStatusYOffset = -16;
 constexpr s16 kBarHeight = 4;
 constexpr s16 kBarWidth = 48;
+constexpr s16 kPromptPadding = 2;
 
-bool PauseOnEquippedSwordSlot(PauseContext* pauseCtx) {
-    if (pauseCtx->pageIndex != PAUSE_EQUIP) {
-        return false;
+EquipValueSword HoveredSwordForSlot(u16 cursorSlot) {
+    switch (cursorSlot) {
+        case 1:
+            return EQUIP_VALUE_SWORD_KOKIRI;
+        case 2:
+            return EQUIP_VALUE_SWORD_MASTER;
+        case 3:
+            return EQUIP_VALUE_SWORD_BIGGORON;
+        default:
+            return EQUIP_VALUE_SWORD_NONE;
     }
-
-    constexpr u16 kFirstSwordSlot = 1;
-    constexpr u16 kLastSwordSlot = 3;
-
-    const u16 cursorSlot = pauseCtx->cursorSlot[PAUSE_EQUIP];
-    const bool onSwordSlot = cursorSlot >= kFirstSwordSlot && cursorSlot <= kLastSwordSlot;
-    if (!onSwordSlot) {
-        return false;
-    }
-
-    return CUR_EQUIP_VALUE(EQUIP_TYPE_SWORD) != EQUIP_VALUE_SWORD_NONE;
 }
 }
 
@@ -36,10 +33,50 @@ void FusePause_DrawPrompt(PlayState* play) {
 
     PauseContext* pauseCtx = &play->pauseCtx;
 
+    const bool isPauseOpen = pauseCtx->state == 6;
+    const bool isEquipmentPage = pauseCtx->pageIndex == PAUSE_EQUIP;
+    const u16 cursorSlot = pauseCtx->cursorSlot[PAUSE_EQUIP];
+    const bool isSwordSlotHovered = cursorSlot >= 1 && cursorSlot <= 3;
+    const EquipValueSword equippedSword = static_cast<EquipValueSword>(CUR_EQUIP_VALUE(EQUIP_TYPE_SWORD));
+    const EquipValueSword hoveredSword = HoveredSwordForSlot(cursorSlot);
+    const bool isSwordAlreadyEquippedSlot = isSwordSlotHovered && (equippedSword == hoveredSword);
+    const bool shouldShowFusePrompt =
+        isPauseOpen && isEquipmentPage && isSwordSlotHovered && isSwordAlreadyEquippedSlot &&
+        (equippedSword != EQUIP_VALUE_SWORD_NONE);
+
+    static bool sShowDebugOverlay = true;
+    if (sShowDebugOverlay && isPauseOpen) {
+        GfxPrint debugPrinter;
+        Gfx* debugDisps[4];
+        Graph_OpenDisps(debugDisps, play->state.gfxCtx, __FILE__, __LINE__);
+
+        GfxPrint_Init(&debugPrinter);
+        GfxPrint_Open(&debugPrinter, POLY_OPA_DISP);
+        GfxPrint_SetColor(&debugPrinter, 255, 255, 0, 255);
+        GfxPrint_SetPosPx(&debugPrinter, 20, 20);
+        GfxPrint_Printf(&debugPrinter, "page:%d state:%d\n", pauseCtx->pageIndex, pauseCtx->state);
+        GfxPrint_Printf(&debugPrinter, "cursorSlot:%d cursorX:%d cursorY:%d\n", pauseCtx->cursorSlot[PAUSE_EQUIP],
+                        pauseCtx->cursorX[PAUSE_EQUIP], pauseCtx->cursorY[PAUSE_EQUIP]);
+        GfxPrint_Printf(&debugPrinter, "equippedSword:%d hoveredSword:%d\n", equippedSword, hoveredSword);
+        GfxPrint_Printf(&debugPrinter, "isPauseOpen:%d isEquip:%d isSwordSlot:%d isEquippedSlot:%d\n", isPauseOpen,
+                        isEquipmentPage, isSwordSlotHovered, isSwordAlreadyEquippedSlot);
+        GfxPrint_Printf(&debugPrinter, "shouldShow:%d\n", shouldShowFusePrompt);
+
+        POLY_OPA_DISP = GfxPrint_Close(&debugPrinter);
+        GfxPrint_Destroy(&debugPrinter);
+        Graph_CloseDisps(debugDisps, play->state.gfxCtx, __FILE__, __LINE__);
+    }
+
     Fuse::Log("[FuseMVP] FusePause_DrawPrompt called\n");
 
-    if ((pauseCtx->state != 6) || !PauseOnEquippedSwordSlot(pauseCtx)) {
+    if (!shouldShowFusePrompt) {
         return;
+    }
+
+    const bool swordFused = Fuse::IsSwordFused();
+    Input* input = &play->state.input[0];
+    if (!swordFused && CHECK_BTN_ALL(input->press.button, BTN_A)) {
+        Fuse::Log("[FuseMVP] Fuse pressed (stub)\n");
     }
 
     GfxPrint printer;
@@ -51,11 +88,10 @@ void FusePause_DrawPrompt(PlayState* play) {
     GfxPrint_Open(&printer, POLY_OPA_DISP);
     GfxPrint_SetColor(&printer, 255, 255, 255, 255);
 
-    const s32 textX = pauseCtx->infoPanelVtx[20].v.ob[0] + 2;
+    const s32 textX = pauseCtx->infoPanelVtx[16].v.ob[0] + kPromptPadding;
     const s32 textY = pauseCtx->infoPanelVtx[16].v.ob[1] + kPromptYOffset;
     GfxPrint_SetPosPx(&printer, textX, textY);
 
-    const bool swordFused = Fuse::IsSwordFused();
     if (!swordFused) {
         GfxPrint_Printf(&printer, "A: Fuse");
     } else {
@@ -74,7 +110,7 @@ void FusePause_DrawPrompt(PlayState* play) {
     GfxPrint_Destroy(&printer);
 
     if (swordFused) {
-        const s32 barX = pauseCtx->infoPanelVtx[20].v.ob[0];
+        const s32 barX = pauseCtx->infoPanelVtx[16].v.ob[0];
         const s32 barY = pauseCtx->infoPanelVtx[16].v.ob[1] + kStatusYOffset + 2;
         const s32 maxDurability = Fuse::GetSwordFuseMaxDurability();
         const s32 curDurability = Fuse::GetSwordFuseDurability();
