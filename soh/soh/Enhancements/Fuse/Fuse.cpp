@@ -74,14 +74,18 @@ int Fuse::GetRockCount() {
     return (int)gFuseSave.rockCount;
 }
 
-bool Fuse::IsSwordFusedWithRock() {
-    return gFuseSave.swordFusedWithRock;
+bool Fuse::IsSwordFused() {
+    return gFuseSave.swordFuseMaterialId != MaterialId::None && gFuseSave.swordFuseDurability > 0;
+}
+
+MaterialId Fuse::GetSwordMaterial() {
+    return gFuseSave.swordFuseMaterialId;
 }
 
 // -----------------------------------------------------------------------------
 // Durability (v0: only Sword+Rock)
 // -----------------------------------------------------------------------------
-static int GetBaseSwordRockDurability() {
+[[maybe_unused]] static int GetBaseSwordRockDurability() {
     // Placeholder value; tweak later when you finalize balancing.
     return 20;
 }
@@ -105,15 +109,33 @@ void Fuse::SetSwordFuseMaxDurability(int v) {
 }
 
 void Fuse::ClearSwordFuse() {
-    gFuseSave.swordFusedWithRock = false;
+    gFuseSave.swordFuseMaterialId = MaterialId::None;
     gFuseSave.swordFuseDurability = 0;
     gFuseSave.swordFuseMaxDurability = 0;
 }
 
-bool Fuse::DamageSwordFuseDurability(PlayState* play, int amount) {
+void Fuse::FuseSwordWithMaterial(MaterialId id, uint16_t maxDurability) {
+    gFuseSave.swordFuseMaterialId = id;
+    gFuseSave.swordFuseMaxDurability = maxDurability;
+    gFuseSave.swordFuseDurability = maxDurability;
+
+    switch (id) {
+        case MaterialId::Rock:
+            Fuse::SetLastEvent("Sword fused with ROCK");
+            break;
+        default:
+            Fuse::SetLastEvent("Sword fused with material");
+            break;
+    }
+
+    Fuse::Log("[FuseMVP] Sword fused with material=%d (durability %u)\n", static_cast<int>(id),
+              (unsigned int)maxDurability);
+}
+
+bool Fuse::DamageSwordFuseDurability(PlayState* play, int amount, const char* reason) {
     amount = std::max(amount, 0);
 
-    if (!gFuseSave.swordFusedWithRock) {
+    if (!Fuse::IsSwordFused()) {
         return false;
     }
 
@@ -124,7 +146,8 @@ bool Fuse::DamageSwordFuseDurability(PlayState* play, int amount) {
     if (cur == 0) {
         ClearSwordFuse();
         const int frame = play ? play->gameplayFrames : -1;
-        Log("[FuseMVP] Sword fuse broke at frame=%d; clearing fuse and reverting to vanilla\n", frame);
+        Log("[FuseMVP] Sword fuse broke at frame=%d; clearing fuse and reverting to vanilla (reason=%s)\n", frame,
+            reason ? reason : "unknown");
         OnSwordFuseBroken(play);
         return true;
     }
@@ -138,7 +161,7 @@ void Fuse::OnSwordFuseBroken(PlayState* play) {
 }
 
 // -----------------------------------------------------------------------------
-// MVP: Award ROCK and auto-fuse to sword
+// MVP: Award ROCK to inventory
 // -----------------------------------------------------------------------------
 void Fuse::AwardRockMaterial() {
     // Always add one ROCK
@@ -146,19 +169,6 @@ void Fuse::AwardRockMaterial() {
 
     Fuse::SetLastEvent("Acquired ROCK");
     Fuse::Log("[FuseMVP] Acquired material: ROCK (count=%d)\n", (int)gFuseSave.rockCount);
-
-    // Auto-fuse to sword if not already fused
-    if (!gFuseSave.swordFusedWithRock) {
-        gFuseSave.swordFusedWithRock = true;
-
-        // Initialize durability when fuse is created
-        const int base = GetBaseSwordRockDurability();
-        SetSwordFuseMaxDurability(base);
-        SetSwordFuseDurability(base);
-
-        Fuse::SetLastEvent("Sword fused with ROCK");
-        Fuse::Log("[FuseMVP] Sword fused with ROCK (durability %d)\n", base);
-    }
 }
 
 // -----------------------------------------------------------------------------

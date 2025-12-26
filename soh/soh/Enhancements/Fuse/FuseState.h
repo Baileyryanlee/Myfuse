@@ -1,6 +1,8 @@
 #pragma once
 #include <cstdint>
 
+#include "soh/Enhancements/Fuse/FuseMaterials.h"
+
 // Future save-persistent blob (versioned)
 // NOTE: we won't wire this into save serialization yet.
 struct FuseSaveData {
@@ -10,7 +12,7 @@ struct FuseSaveData {
     uint16_t rockCount = 0;
 
     // Per-item fused material ids later.
-    bool swordFusedWithRock = false;
+    MaterialId swordFuseMaterialId = MaterialId::None;
 
     // Durability (v0: only Sword+Rock)
     uint16_t swordFuseDurability = 0;    // current (0 = broken/none)

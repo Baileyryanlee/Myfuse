@@ -212,7 +212,7 @@ static bool SwordHadImpactFlags(Player* player, const char** reasonOut = nullptr
         return;
     }
 
-    const bool fused = Fuse::IsSwordFusedWithRock();
+    const bool fused = Fuse::IsSwordFused();
     const int before = Fuse::GetSwordFuseDurability();
 
     Fuse::Log("[FuseMVP] Impact hook fired event=hit amount=1 reason=%s durability=%d fused=%d\n", reason,
@@ -223,7 +223,7 @@ static bool SwordHadImpactFlags(Player* player, const char** reasonOut = nullptr
         return;
     }
 
-    const bool broke = Fuse::DamageSwordFuseDurability(play, 1);
+    const bool broke = Fuse::DamageSwordFuseDurability(play, 1, reason);
     const int after = Fuse::GetSwordFuseDurability();
 
     Fuse::Log("[FuseMVP] Durability drained event=hit amount=1 reason=%s durability=%d->%d%s\n", reason,
@@ -258,7 +258,7 @@ extern "C" void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollid
         victimPtr = (void*)acInfo;
     }
 
-    const bool fused = Fuse::IsSwordFusedWithRock();
+    const bool fused = Fuse::IsSwordFused();
     const int before = Fuse::GetSwordFuseDurability();
 
     if (victimPtr && gSwordATVictimCooldown.count(victimPtr) > 0) {
@@ -273,7 +273,7 @@ extern "C" void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollid
         return;
     }
 
-    const bool broke = Fuse::DamageSwordFuseDurability(play, 1);
+    const bool broke = Fuse::DamageSwordFuseDurability(play, 1, "AT collision");
     const int after = Fuse::GetSwordFuseDurability();
     Fuse::Log("[FuseMVP] Sword AT collision DRAIN frame=%d fused=%d victim=%p durability=%d->%d%s\n", curFrame, 1,
               victimPtr, before, after, broke ? " (broke)" : "");
@@ -380,7 +380,7 @@ void OnFrame_Objects_Pre(PlayState* play) {
 
     UpdateThrownRockAcquisition(play, player);
 
-    const bool swordFused = Fuse::IsSwordFusedWithRock();
+    const bool swordFused = Fuse::IsSwordFused() && Fuse::GetSwordMaterial() == MaterialId::Rock;
 
     // Rock-breaking behavior (works): apply hammer flags only when rocks are nearby and fuse is active
     if (swordFused && IsPlayerSwingingSword(player) && IsAnyLiftableRockNearPlayer(play, player)) {

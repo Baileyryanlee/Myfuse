@@ -85,7 +85,8 @@ static bool ItemSupportedNow(FuseItem item) {
 // Return currently selected material for an item, based on current backend state (v0).
 static FuseMatUI GetCurrentMatForItem(FuseItem item) {
     if (IsSword(item)) {
-        return Fuse::IsSwordFusedWithRock() ? FuseMatUI::Rock : FuseMatUI::None;
+        return Fuse::IsSwordFused() && Fuse::GetSwordMaterial() == MaterialId::Rock ? FuseMatUI::Rock
+                                                                                    : FuseMatUI::None;
     }
     return FuseMatUI::None;
 }
@@ -98,8 +99,10 @@ static void ApplyMatForItem(FuseItem item, FuseMatUI mat) {
     }
 
     // v0 swords share a single fuse state
+    const bool currentlyFused = Fuse::IsSwordFused();
+
     if (mat == FuseMatUI::None) {
-        if (Fuse::IsSwordFusedWithRock()) {
+        if (currentlyFused) {
             Fuse::ClearSwordFuse();
 
             static std::string s;
@@ -112,11 +115,13 @@ static void ApplyMatForItem(FuseItem item, FuseMatUI mat) {
     }
 
     if (mat == FuseMatUI::Rock) {
-        // Only allow if ROCK is owned (or allow AwardRockMaterial to grant it—your current logic does both)
-        // If you want "only if available", uncomment the guard below.
-        // if (!Fuse::HasRockMaterial()) { Fuse::SetLastEvent("ROCK not available"); return; }
+        if (!Fuse::HasRockMaterial()) {
+            Fuse::SetLastEvent("ROCK not available");
+            return;
+        }
 
-        Fuse::AwardRockMaterial();
+        const uint16_t durability = 20;
+        Fuse::FuseSwordWithMaterial(MaterialId::Rock, durability);
 
         static std::string s;
         s = std::string("Applied ROCK to ") + ItemName(item);
@@ -151,11 +156,14 @@ void FuseMenuWindow::DrawElement() {
     ImGui::Text("Last: %s", Fuse::GetLastEvent());
 
     // v0 durability display (sword only)
-    if (Fuse::IsSwordFusedWithRock()) {
+    const bool swordFused = Fuse::IsSwordFused();
+    const MaterialId swordMat = Fuse::GetSwordMaterial();
+    ImGui::Text("Sword Fuse Material: %s", MatName(swordMat == MaterialId::Rock ? FuseMatUI::Rock : FuseMatUI::None));
+    if (swordFused) {
         ImGui::Text("Sword Fuse Durability: %d / %d", Fuse::GetSwordFuseDurability(),
                     Fuse::GetSwordFuseMaxDurability());
         if (ImGui::SmallButton("Damage Sword Fuse (-1)")) {
-            Fuse::DamageSwordFuseDurability(nullptr, 1);
+            Fuse::DamageSwordFuseDurability(nullptr, 1, "debug");
         }
         ImGui::SameLine();
         if (ImGui::SmallButton("Clear Sword Fuse")) {
