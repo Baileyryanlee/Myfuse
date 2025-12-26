@@ -38,11 +38,21 @@ bool ConsumeDekuNutAmmo(int amount) {
         return true;
     }
 
-    if (GetDekuNutAmmoCount() < amount) {
+    const int cur = GetDekuNutAmmoCount();
+    Fuse::Log("[FuseMVP] Consume DekuNut: cur=%d amount=%d\n", cur, amount);
+
+    if (cur < amount) {
         return false;
     }
 
-    Inventory_ChangeAmmo(ITEM_NUT, -amount);
+    const int newCount = std::max(0, cur - amount);
+    const int delta = newCount - cur;
+
+    if (delta != 0) {
+        Inventory_ChangeAmmo(ITEM_NUT, delta);
+    }
+
+    Fuse::Log("[FuseMVP] Consume DekuNut: new=%d\n", newCount);
     return true;
 }
 
@@ -270,11 +280,19 @@ Fuse::FuseResult Fuse::TryFuseSword(MaterialId id) {
         return FuseResult::InvalidMaterial;
     }
 
+    const int preConsumeCount = (id == MaterialId::DekuNut) ? Fuse::GetMaterialCount(id) : -1;
+
     if (!Fuse::ConsumeMaterial(id, 1)) {
         return FuseResult::NotEnoughMaterial;
     }
 
     Fuse::FuseSwordWithMaterial(id, Fuse::GetMaterialBaseDurability(id));
+
+    if (id == MaterialId::DekuNut) {
+        const int postConsumeCount = Fuse::GetMaterialCount(id);
+        Fuse::Log("[FuseMVP] TryFuseSword(DekuNut): before=%d after=%d\n", preConsumeCount, postConsumeCount);
+    }
+
     return FuseResult::Ok;
 }
 
