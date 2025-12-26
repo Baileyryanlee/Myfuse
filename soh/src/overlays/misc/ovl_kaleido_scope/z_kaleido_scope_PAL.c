@@ -3524,6 +3524,10 @@ void KaleidoScope_Draw(PlayState* play) {
 
         if (!((pauseCtx->state >= 8) && (pauseCtx->state <= 0x11))) {
             KaleidoScope_DrawInfoPanel(play);
+
+            if (pauseCtx->state == 6 && pauseCtx->pageIndex == PAUSE_EQUIP) {
+                FusePause_DrawModal(play, &POLY_OPA_DISP, &POLY_XLU_DISP);
+            }
         }
     }
 
@@ -3533,10 +3537,6 @@ void KaleidoScope_Draw(PlayState* play) {
 
     if ((pauseCtx->debugState == 1) || (pauseCtx->debugState == 2)) {
         KaleidoScope_DrawDebugEditor(play);
-    }
-
-    if (pauseCtx->state == 6 && pauseCtx->pageIndex == PAUSE_EQUIP) {
-        FusePause_DrawModal(play, &POLY_OPA_DISP, &POLY_XLU_DISP);
     }
 
     func_800AAA50(&play->view, 15);
