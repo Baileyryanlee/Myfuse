@@ -353,10 +353,11 @@ void OnFrame_Objects_Pre(PlayState* play) {
         return;
     }
 
-    if (gHammerizeAppliedFrame != -1 && play->gameplayFrames != gHammerizeAppliedFrame) {
+    if (gHammerizeAppliedFrame != -1 && play->gameplayFrames > gHammerizeAppliedFrame) {
         RestoreSwordBaseDmgFlags(player);
+        Fuse::Log("[FuseMVP] Restored sword flags at frame=%d (from appliedFrame=%d)\n", play->gameplayFrames,
+                  gHammerizeAppliedFrame);
         gHammerizeAppliedFrame = -1;
-        Fuse::Log("[FuseMVP] Restored sword flags at frame=%d\n", play->gameplayFrames);
     }
 
     CaptureSwordBaseDmgFlags(play, player);
@@ -367,6 +368,7 @@ void OnFrame_Objects_Pre(PlayState* play) {
     if (IsPlayerSwingingSword(player) && IsAnyLiftableRockNearPlayer(play, player)) {
         ApplyHammerFlagsToSwordHitbox(player);
         gHammerizeAppliedFrame = play->gameplayFrames;
+        Fuse::Log("[FuseMVP] Hammerize applied at frame=%d\n", gHammerizeAppliedFrame);
     } else {
         RestoreSwordBaseDmgFlags(player);
     }
