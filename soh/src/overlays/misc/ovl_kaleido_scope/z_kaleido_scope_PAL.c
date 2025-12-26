@@ -2390,6 +2390,10 @@ void KaleidoScope_DrawInfoPanel(PlayState* play) {
                                                     D_8082ADE8[gSaveContext.language], 16, 4);
                 }
             } else if (pauseCtx->pageIndex == PAUSE_EQUIP) {
+                if (FusePause_IsModalOpen()) {
+                    return;
+                }
+
                 pauseCtx->infoPanelVtx[16].v.ob[0] = pauseCtx->infoPanelVtx[18].v.ob[0] = WREG(64 + languageOffset);
 
                 pauseCtx->infoPanelVtx[17].v.ob[0] = pauseCtx->infoPanelVtx[19].v.ob[0] =
