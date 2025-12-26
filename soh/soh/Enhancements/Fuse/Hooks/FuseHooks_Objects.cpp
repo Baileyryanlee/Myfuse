@@ -27,6 +27,9 @@ static bool gPendingThrownRockCheck = false;
 static Actor* gTrackedThrownRock = nullptr;
 static int gFramesUntilThrownRockCheck = 0;
 static int gLastImpactDrainFrame = -1;
+static int gSwordFlagsFrame = -1;
+static uint32_t gSwordBaseDmgFlags[4];
+static bool gSwordBaseCaptured = false;
 
 // -----------------------------------------------------------------------------
 // Helpers
@@ -111,6 +114,37 @@ static bool IsAnyLiftableRockNearPlayer(PlayState* play, Player* player) {
 static constexpr uint32_t kHammerDmgFlags0 = 0x00000040;
 static constexpr uint32_t kHammerDmgFlags1 = 0x40000000;
 
+static void CaptureSwordBaseDmgFlags(PlayState* play, Player* player) {
+    if (!play || !player)
+        return;
+
+    const int curFrame = play->gameplayFrames;
+    if (curFrame == gSwordFlagsFrame)
+        return;
+
+    gSwordFlagsFrame = curFrame;
+
+    for (int i = 0; i < 4; i++) {
+        gSwordBaseDmgFlags[i] = player->meleeWeaponQuads[i].info.toucher.dmgFlags;
+    }
+
+    gSwordBaseCaptured = true;
+
+    if ((curFrame % 60) == 0) {
+        Fuse::Log("[FuseMVP] Captured sword base dmgFlags frame=%d base0=0x%08X\n", curFrame,
+                  gSwordBaseDmgFlags[0]);
+    }
+}
+
+static void RestoreSwordBaseDmgFlags(Player* player) {
+    if (!player || !gSwordBaseCaptured)
+        return;
+
+    for (int i = 0; i < 4; i++) {
+        player->meleeWeaponQuads[i].info.toucher.dmgFlags = gSwordBaseDmgFlags[i];
+    }
+}
+
 static void ApplyHammerFlagsToSwordHitbox(Player* player) {
     if (!player)
         return;
@@ -119,8 +153,12 @@ static void ApplyHammerFlagsToSwordHitbox(Player* player) {
 
     // OR in (dont replace). Called only when rocks are nearby to preserve enemy damage behavior.
     for (int i = 0; i < 4; i++) {
-        player->meleeWeaponQuads[i].info.toucher.dmgFlags |= flags;
+        const uint32_t baseFlags = gSwordBaseDmgFlags[i];
+        player->meleeWeaponQuads[i].info.toucher.dmgFlags = baseFlags | flags;
     }
+
+    Fuse::Log("[FuseMVP] Hammerize applied base0=0x%08X new0=0x%08X\n", gSwordBaseDmgFlags[0],
+              player->meleeWeaponQuads[0].info.toucher.dmgFlags);
 }
 
 // -----------------------------------------------------------------------------
@@ -239,6 +277,8 @@ void OnLoadGame_ResetObjects() {
     gTrackedThrownRock = nullptr;
     gFramesUntilThrownRockCheck = 0;
     gLastImpactDrainFrame = -1;
+    gSwordFlagsFrame = -1;
+    gSwordBaseCaptured = false;
 }
 
 void OnFrame_Objects_Pre(PlayState* play) {
@@ -251,16 +291,27 @@ void OnFrame_Objects_Pre(PlayState* play) {
         return;
     }
 
+    CaptureSwordBaseDmgFlags(play, player);
+
     UpdateThrownRockAcquisition(play, player);
 
     // Rock-breaking behavior (works): apply hammer flags only when rocks are nearby
     if (IsPlayerSwingingSword(player) && IsAnyLiftableRockNearPlayer(play, player)) {
         ApplyHammerFlagsToSwordHitbox(player);
+    } else {
+        RestoreSwordBaseDmgFlags(player);
     }
 }
 
-// Keep for compatibility if your FuseSystem calls it; unused now.
-void OnFrame_Objects_Post(PlayState* /*play*/) {
+void OnFrame_Objects_Post(PlayState* play) {
+    if (!Fuse::IsEnabled())
+        return;
+
+    Player* player = GetPlayerSafe(play);
+    if (!player)
+        return;
+
+    RestoreSwordBaseDmgFlags(player);
 }
 
 void OnPlayerUpdate(PlayState* play) {
