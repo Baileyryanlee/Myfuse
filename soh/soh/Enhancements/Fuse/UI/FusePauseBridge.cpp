@@ -97,11 +97,14 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp) {
 
     const s32 baseX = pauseCtx->infoPanelVtx[16].v.ob[0];
     const s32 baseY = pauseCtx->infoPanelVtx[16].v.ob[1];
-    s32 xCell = (baseX + kPromptPadding) / 8;
-    s32 yCell = (baseY + kPromptYOffset) / 8;
+    const s32 xCell = CLAMP((baseX + kPromptPadding) / 8, 0, 39);
 
-    xCell = CLAMP(xCell, 0, 39);
-    yCell = CLAMP(yCell, 0, 29);
+    s32 yCell = 26; // Known-good prompt strip row
+    const s32 yCellCandidate = (baseY + kPromptYOffset) / 8;
+    if (yCellCandidate >= 20 && yCellCandidate <= 29) {
+        yCell = yCellCandidate;
+    }
+
     const s32 statusYCell = CLAMP(yCell - 1, 0, 29);
 
     GfxPrint_SetPos(&printer, xCell, yCell);
