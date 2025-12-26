@@ -15,7 +15,6 @@
 #include "vt.h"
 
 #include "soh/frame_interpolation.h"
-#include "soh/Enhancements/Fuse/Fuse.h"
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
 #include "soh/Enhancements/cosmetics/cosmeticsTypes.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
@@ -23,79 +22,6 @@
 #include "soh/ResourceManagerHelpers.h"
 #include "soh/SaveManager.h"
 #include "soh/Enhancements/kaleido.h"
-
-bool KaleidoScope_IsCursorOnEquippedSword(PauseContext* pauseCtx) {
-    return (pauseCtx->pageIndex == PAUSE_EQUIP) && (pauseCtx->cursorSpecialPos == 0) &&
-           (pauseCtx->cursorY[PAUSE_EQUIP] == 0) &&
-           (pauseCtx->cursorX[PAUSE_EQUIP] == CUR_EQUIP_VALUE(EQUIP_TYPE_SWORD));
-}
-
-SwordFuseUiState KaleidoScope_GetSwordFuseUiState(PauseContext* pauseCtx) {
-    SwordFuseUiState state = { 0 };
-
-    state.cursorOnEquippedSword = KaleidoScope_IsCursorOnEquippedSword(pauseCtx);
-
-    if (!state.cursorOnEquippedSword) {
-        return state;
-    }
-
-    state.swordFused = Fuse::IsSwordFused();
-    if (state.swordFused) {
-        MaterialId material = Fuse::GetSwordMaterial();
-        const MaterialDef* def = Fuse::GetMaterialDef(material);
-
-        state.materialName = (def && def->name) ? def->name : "Unknown";
-        state.durability = Fuse::GetSwordFuseDurability();
-        state.maxDurability = Fuse::GetSwordFuseMaxDurability();
-    }
-
-    return state;
-}
-
-void KaleidoScope_DrawSwordFuseStatus(PlayState* play, const SwordFuseUiState* state, s16 textX, s16 textY) {
-    if (!state->cursorOnEquippedSword) {
-        return;
-    }
-
-    GfxPrint printer;
-    GfxPrint_Init(&printer);
-    GfxPrint_Open(&printer, POLY_OPA_DISP);
-
-    s32 printX = (textX + 128) / 8;
-    s32 printY = (textY + 120) / 8;
-    GfxPrint_SetPos(&printer, printX, printY);
-    GfxPrint_SetColor(&printer, 255, 255, 255, 255);
-
-    if (state->swordFused) {
-        GfxPrint_Printf(&printer, "Fused: %s", state->materialName ? state->materialName : "-");
-    } else {
-        GfxPrint_Printf(&printer, "Fuse");
-    }
-
-    POLY_OPA_DISP = GfxPrint_Close(&printer);
-    GfxPrint_Destroy(&printer);
-
-    if (!state->swordFused || (state->maxDurability <= 0)) {
-        return;
-    }
-
-    s16 barLeft = textX;
-    s16 barTop = textY - 8;
-    s16 barWidth = 72;
-    s16 barHeight = 4;
-
-    gDPPipeSync(POLY_OPA_DISP++);
-    gDPSetCombineMode(POLY_OPA_DISP++, G_CC_PRIMITIVE, G_CC_PRIMITIVE);
-    gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 60, 60, 60, 255);
-    gDPFillRectangle(POLY_OPA_DISP++, barLeft, barTop, barLeft + barWidth, barTop + barHeight);
-
-    s16 filledWidth = (state->durability * barWidth) / state->maxDurability;
-    gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 120, 200, 80, 255);
-    gDPFillRectangle(POLY_OPA_DISP++, barLeft, barTop, barLeft + filledWidth, barTop + barHeight);
-
-    gDPPipeSync(POLY_OPA_DISP++);
-    gDPSetCombineMode(POLY_OPA_DISP++, G_CC_MODULATEIA_PRIM, G_CC_MODULATEIA_PRIM);
-}
 
 static void* sEquipmentFRATexs[] = {
     gPauseEquipment00FRATex, gPauseEquipment01Tex, gPauseEquipment02Tex, gPauseEquipment03Tex, gPauseEquipment04Tex,
@@ -2033,7 +1959,6 @@ void KaleidoScope_DrawInfoPanel(PlayState* play) {
     static s16 D_808321A4;
     static s16 D_808321A6;
     PauseContext* pauseCtx = &play->pauseCtx;
-    SwordFuseUiState swordFuseUiState = KaleidoScope_GetSwordFuseUiState(pauseCtx);
     s16 stepR;
     s16 stepG;
     s16 stepB;
@@ -2488,24 +2413,18 @@ void KaleidoScope_DrawInfoPanel(PlayState* play) {
                     return;
                 }
 
-                if (!swordFuseUiState.swordFused || !swordFuseUiState.cursorOnEquippedSword) {
-                    gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, aButtonColor.r, aButtonColor.g, aButtonColor.b, 255);
-                    gDPLoadTextureBlock(POLY_OPA_DISP++, gABtnSymbolTex, G_IM_FMT_IA, G_IM_SIZ_8b, 24, 16, 0,
-                                        G_TX_NOMIRROR | G_TX_CLAMP, G_TX_NOMIRROR | G_TX_CLAMP, 4, 4, G_TX_NOLOD,
-                                        G_TX_NOLOD);
-                    gSP1Quadrangle(POLY_OPA_DISP++, 0, 2, 3, 1, 0);
+                // gSPDisplayList(POLY_OPA_DISP++, gAButtonIconDL);
+                gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, aButtonColor.r, aButtonColor.g, aButtonColor.b, 255);
+                gDPLoadTextureBlock(POLY_OPA_DISP++, gABtnSymbolTex, G_IM_FMT_IA, G_IM_SIZ_8b, 24, 16, 0,
+                                    G_TX_NOMIRROR | G_TX_CLAMP, G_TX_NOMIRROR | G_TX_CLAMP, 4, 4, G_TX_NOLOD,
+                                    G_TX_NOLOD);
+                gSP1Quadrangle(POLY_OPA_DISP++, 0, 2, 3, 1, 0);
 
-                    gDPPipeSync(POLY_OPA_DISP++);
-                    gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 255, 255, 255, 255);
+                gDPPipeSync(POLY_OPA_DISP++);
+                gDPSetPrimColor(POLY_OPA_DISP++, 0, 0, 255, 255, 255, 255);
 
-                    if (!swordFuseUiState.cursorOnEquippedSword) {
-                        POLY_OPA_DISP = KaleidoScope_QuadTextureIA8(POLY_OPA_DISP, sToEquipTextures[gSaveContext.language],
-                                                                    D_8082ADD8[gSaveContext.language], 16, 4);
-                    }
-                }
-
-                KaleidoScope_DrawSwordFuseStatus(play, &swordFuseUiState, pauseCtx->infoPanelVtx[20].v.ob[0],
-                                                 pauseCtx->infoPanelVtx[20].v.ob[1]);
+                POLY_OPA_DISP = KaleidoScope_QuadTextureIA8(POLY_OPA_DISP, sToEquipTextures[gSaveContext.language],
+                                                            D_8082ADD8[gSaveContext.language], 16, 4);
             }
         }
     }
