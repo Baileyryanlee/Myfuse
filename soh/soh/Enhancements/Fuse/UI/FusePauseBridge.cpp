@@ -367,6 +367,11 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
 
     const int currentFrame = play->state.frames;
     if (sLastModalFrame == currentFrame) {
+        // PROOF OVERLAY: if anything draws after this, you will still see it on top.
+        gDPPipeSync(OPA++);
+        gDPSetScissor(OPA++, G_SC_NON_INTERLACE, 0, 0, 320, 240);
+        gDPSetPrimColor(OPA++, 0, 0, 255, 0, 255, 255); // bright magenta
+        gDPFillRectangle(OPA++, 0, 0, 319, 239);
         return;
     }
     sLastModalFrame = currentFrame;
