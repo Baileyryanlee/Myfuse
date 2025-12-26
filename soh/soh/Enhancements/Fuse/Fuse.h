@@ -17,12 +17,24 @@ void OnGameFrameUpdate(PlayState* play);
 bool IsEnabled();
 void SetEnabled(bool enabled);
 
-// MVP material: ROCK
+// Materials registry and helpers
+const MaterialDef* GetMaterialDef(MaterialId id);
+uint16_t GetMaterialBaseDurability(MaterialId id);
+
+// Materials inventory API (v0: ROCK only)
+int GetMaterialCount(MaterialId id);
+bool HasMaterial(MaterialId id, int amount = 1);
+void AddMaterial(MaterialId id, int amount);
+bool ConsumeMaterial(MaterialId id, int amount);
+// Back-compat helpers for the MVP rock-only flow
 bool HasRockMaterial(); // now means rockCount > 0
 int GetRockCount();     // NEW
 bool IsSwordFused();
 MaterialId GetSwordMaterial();
 void FuseSwordWithMaterial(MaterialId id, uint16_t maxDurability);
+enum class FuseResult { Ok, NotEnoughMaterial, InvalidMaterial, AlreadyFused, NotAllowed };
+FuseResult TryFuseSword(MaterialId id);
+FuseResult TryUnfuseSword();
 
 // MVP: award rock and (optionally) auto-fuse to sword (runtime for now)
 void AwardRockMaterial();

@@ -63,15 +63,23 @@ static bool IsSword(FuseItem i) {
     return i == FuseItem::KokiriSword || i == FuseItem::MasterSword || i == FuseItem::BiggoronSword;
 }
 
-// v0 materials in UI
-enum class FuseMatUI : int { None = 0, Rock, COUNT };
+static const char* MatName(MaterialId m) {
+    const MaterialDef* def = Fuse::GetMaterialDef(m);
+    return def ? def->name : "Unknown";
+}
 
-static const char* MatName(FuseMatUI m) {
-    switch (m) {
-        case FuseMatUI::None:
-            return "None";
-        case FuseMatUI::Rock:
-            return "ROCK";
+static const char* ResultName(Fuse::FuseResult r) {
+    switch (r) {
+        case Fuse::FuseResult::Ok:
+            return "Ok";
+        case Fuse::FuseResult::NotEnoughMaterial:
+            return "NotEnoughMaterial";
+        case Fuse::FuseResult::InvalidMaterial:
+            return "InvalidMaterial";
+        case Fuse::FuseResult::AlreadyFused:
+            return "AlreadyFused";
+        case Fuse::FuseResult::NotAllowed:
+            return "NotAllowed";
         default:
             return "Unknown";
     }
@@ -83,51 +91,32 @@ static bool ItemSupportedNow(FuseItem item) {
 }
 
 // Return currently selected material for an item, based on current backend state (v0).
-static FuseMatUI GetCurrentMatForItem(FuseItem item) {
+static MaterialId GetCurrentMatForItem(FuseItem item) {
     if (IsSword(item)) {
-        return Fuse::IsSwordFused() && Fuse::GetSwordMaterial() == MaterialId::Rock ? FuseMatUI::Rock
-                                                                                    : FuseMatUI::None;
+        return Fuse::IsSwordFused() ? Fuse::GetSwordMaterial() : MaterialId::None;
     }
-    return FuseMatUI::None;
+    return MaterialId::None;
 }
 
 // Apply selection for an item (v0 implementation).
-static void ApplyMatForItem(FuseItem item, FuseMatUI mat) {
+static void ApplyMatForItem(FuseItem item, MaterialId mat) {
     if (!ItemSupportedNow(item)) {
         Fuse::SetLastEvent("That item isn't implemented yet");
         return;
     }
 
     // v0 swords share a single fuse state
-    const bool currentlyFused = Fuse::IsSwordFused();
+    Fuse::FuseResult result = Fuse::FuseResult::InvalidMaterial;
 
-    if (mat == FuseMatUI::None) {
-        if (currentlyFused) {
-            Fuse::ClearSwordFuse();
-
-            static std::string s;
-            s = std::string("Cleared fuse on ") + ItemName(item);
-            Fuse::SetLastEvent(s.c_str());
-        } else {
-            Fuse::SetLastEvent("No fuse to clear");
-        }
-        return;
+    if (mat == MaterialId::None) {
+        result = Fuse::TryUnfuseSword();
+    } else {
+        result = Fuse::TryFuseSword(mat);
     }
 
-    if (mat == FuseMatUI::Rock) {
-        if (!Fuse::HasRockMaterial()) {
-            Fuse::SetLastEvent("ROCK not available");
-            return;
-        }
-
-        const uint16_t durability = 20;
-        Fuse::FuseSwordWithMaterial(MaterialId::Rock, durability);
-
-        static std::string s;
-        s = std::string("Applied ROCK to ") + ItemName(item);
-        Fuse::SetLastEvent(s.c_str());
-        return;
-    }
+    static std::string s;
+    s = std::string("Fuse result for ") + ItemName(item) + ": " + ResultName(result);
+    Fuse::SetLastEvent(s.c_str());
 }
 
 void FuseMenuWindow::InitElement() {
@@ -158,7 +147,7 @@ void FuseMenuWindow::DrawElement() {
     // v0 durability display (sword only)
     const bool swordFused = Fuse::IsSwordFused();
     const MaterialId swordMat = Fuse::GetSwordMaterial();
-    ImGui::Text("Sword Fuse Material: %s", MatName(swordMat == MaterialId::Rock ? FuseMatUI::Rock : FuseMatUI::None));
+    ImGui::Text("Sword Fuse Material: %s", MatName(swordFused ? swordMat : MaterialId::None));
     if (swordFused) {
         ImGui::Text("Sword Fuse Durability: %d / %d", Fuse::GetSwordFuseDurability(),
                     Fuse::GetSwordFuseMaxDurability());
@@ -167,7 +156,7 @@ void FuseMenuWindow::DrawElement() {
         }
         ImGui::SameLine();
         if (ImGui::SmallButton("Clear Sword Fuse")) {
-            Fuse::ClearSwordFuse();
+            Fuse::TryUnfuseSword();
             Fuse::SetLastEvent("Sword fuse cleared (debug)");
         }
     } else {
@@ -188,7 +177,7 @@ void FuseMenuWindow::DrawElement() {
         ImGui::TableSetupColumn("Fused Material", ImGuiTableColumnFlags_WidthFixed, 220.0f);
         ImGui::TableHeadersRow();
 
-        const bool rockOwned = Fuse::HasRockMaterial();
+        const bool rockOwned = Fuse::HasMaterial(MaterialId::Rock);
 
         for (int i = 0; i < (int)FuseItem::COUNT; i++) {
             FuseItem item = (FuseItem)i;
@@ -209,7 +198,7 @@ void FuseMenuWindow::DrawElement() {
             }
 
             // Current selection derived from backend (v0: swords share one)
-            FuseMatUI current = GetCurrentMatForItem(item);
+            MaterialId current = GetCurrentMatForItem(item);
 
             // Unique ID per row so combos don't collide
             std::string comboId = std::string("##mat_") + std::to_string(i);
@@ -218,14 +207,14 @@ void FuseMenuWindow::DrawElement() {
             const char* preview = MatName(current);
 
             bool changed = false;
-            FuseMatUI newSelection = current;
+            MaterialId newSelection = current;
 
             if (ImGui::BeginCombo(comboId.c_str(), preview)) {
                 // None option
                 {
-                    bool isSelected = (current == FuseMatUI::None);
-                    if (ImGui::Selectable(MatName(FuseMatUI::None), isSelected)) {
-                        newSelection = FuseMatUI::None;
+                    bool isSelected = (current == MaterialId::None);
+                    if (ImGui::Selectable(MatName(MaterialId::None), isSelected)) {
+                        newSelection = MaterialId::None;
                         changed = true;
                     }
                     if (isSelected)
@@ -234,13 +223,13 @@ void FuseMenuWindow::DrawElement() {
 
                 // Rock option (only selectable if owned)
                 {
-                    bool isSelected = (current == FuseMatUI::Rock);
+                    bool isSelected = (current == MaterialId::Rock);
 
                     if (!rockOwned) {
                         ImGui::BeginDisabled(true);
                     }
-                    if (ImGui::Selectable(MatName(FuseMatUI::Rock), isSelected)) {
-                        newSelection = FuseMatUI::Rock;
+                    if (ImGui::Selectable(MatName(MaterialId::Rock), isSelected)) {
+                        newSelection = MaterialId::Rock;
                         changed = true;
                     }
                     if (!rockOwned) {
@@ -277,7 +266,7 @@ void FuseMenuWindow::DrawElement() {
     ImGui::SeparatorText("Materials");
 
     // v0 is binary; later you'll switch this to a count array.
-    const int rockQty = Fuse::GetRockCount();
+    const int rockQty = Fuse::GetMaterialCount(MaterialId::Rock);
     const bool hasRock = rockQty > 0;
 
     if (ImGui::BeginTable("MaterialsTable", 2, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg)) {

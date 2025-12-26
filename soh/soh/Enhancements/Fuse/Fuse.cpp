@@ -66,12 +66,64 @@ void Fuse::SetEnabled(bool enabled) {
     gFuseRuntime.enabled = enabled;
 }
 
+int Fuse::GetMaterialCount(MaterialId id) {
+    switch (id) {
+        case MaterialId::Rock:
+            return gFuseSave.rockCount;
+        default:
+            return 0;
+    }
+}
+
+bool Fuse::HasMaterial(MaterialId id, int amount) {
+    if (amount <= 0) {
+        return true;
+    }
+    return GetMaterialCount(id) >= amount;
+}
+
+void Fuse::AddMaterial(MaterialId id, int amount) {
+    if (amount <= 0) {
+        return;
+    }
+
+    switch (id) {
+        case MaterialId::Rock: {
+            const int newCount = std::clamp<int>(gFuseSave.rockCount + amount, 0, 65535);
+            gFuseSave.rockCount = (uint16_t)newCount;
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+bool Fuse::ConsumeMaterial(MaterialId id, int amount) {
+    if (amount <= 0) {
+        return true;
+    }
+
+    if (!HasMaterial(id, amount)) {
+        return false;
+    }
+
+    switch (id) {
+        case MaterialId::Rock:
+            gFuseSave.rockCount = (uint16_t)(gFuseSave.rockCount - amount);
+            return true;
+        default:
+            break;
+    }
+
+    return false;
+}
+
 bool Fuse::HasRockMaterial() {
-    return gFuseSave.rockCount > 0;
+    return HasMaterial(MaterialId::Rock);
 }
 
 int Fuse::GetRockCount() {
-    return (int)gFuseSave.rockCount;
+    return GetMaterialCount(MaterialId::Rock);
 }
 
 bool Fuse::IsSwordFused() {
@@ -85,11 +137,6 @@ MaterialId Fuse::GetSwordMaterial() {
 // -----------------------------------------------------------------------------
 // Durability (v0: only Sword+Rock)
 // -----------------------------------------------------------------------------
-[[maybe_unused]] static int GetBaseSwordRockDurability() {
-    // Placeholder value; tweak later when you finalize balancing.
-    return 20;
-}
-
 int Fuse::GetSwordFuseDurability() {
     return (int)gFuseSave.swordFuseDurability;
 }
@@ -119,17 +166,50 @@ void Fuse::FuseSwordWithMaterial(MaterialId id, uint16_t maxDurability) {
     gFuseSave.swordFuseMaxDurability = maxDurability;
     gFuseSave.swordFuseDurability = maxDurability;
 
-    switch (id) {
-        case MaterialId::Rock:
-            Fuse::SetLastEvent("Sword fused with ROCK");
-            break;
-        default:
-            Fuse::SetLastEvent("Sword fused with material");
-            break;
+    const MaterialDef* def = Fuse::GetMaterialDef(id);
+    if (def) {
+        Fuse::SetLastEvent(def->name);
+    } else {
+        Fuse::SetLastEvent("Sword fused with material");
     }
 
     Fuse::Log("[FuseMVP] Sword fused with material=%d (durability %u)\n", static_cast<int>(id),
               (unsigned int)maxDurability);
+}
+
+Fuse::FuseResult Fuse::TryFuseSword(MaterialId id) {
+    if (id == MaterialId::None) {
+        return FuseResult::NotAllowed;
+    }
+
+    if (Fuse::IsSwordFused()) {
+        return FuseResult::AlreadyFused;
+    }
+
+    if (!Fuse::HasMaterial(id, 1)) {
+        return FuseResult::NotEnoughMaterial;
+    }
+
+    const MaterialDef* def = Fuse::GetMaterialDef(id);
+    if (!def) {
+        return FuseResult::InvalidMaterial;
+    }
+
+    if (!Fuse::ConsumeMaterial(id, 1)) {
+        return FuseResult::NotEnoughMaterial;
+    }
+
+    Fuse::FuseSwordWithMaterial(id, Fuse::GetMaterialBaseDurability(id));
+    return FuseResult::Ok;
+}
+
+Fuse::FuseResult Fuse::TryUnfuseSword() {
+    if (!Fuse::IsSwordFused()) {
+        return FuseResult::Ok;
+    }
+
+    Fuse::ClearSwordFuse();
+    return FuseResult::Ok;
 }
 
 bool Fuse::DamageSwordFuseDurability(PlayState* play, int amount, const char* reason) {
@@ -164,11 +244,11 @@ void Fuse::OnSwordFuseBroken(PlayState* play) {
 // MVP: Award ROCK to inventory
 // -----------------------------------------------------------------------------
 void Fuse::AwardRockMaterial() {
-    // Always add one ROCK
-    gFuseSave.rockCount++;
+    Fuse::AddMaterial(MaterialId::Rock, 1);
 
+    const int count = Fuse::GetMaterialCount(MaterialId::Rock);
     Fuse::SetLastEvent("Acquired ROCK");
-    Fuse::Log("[FuseMVP] Acquired material: ROCK (count=%d)\n", (int)gFuseSave.rockCount);
+    Fuse::Log("[FuseMVP] Acquired material: ROCK (count=%d)\n", count);
 }
 
 // -----------------------------------------------------------------------------
