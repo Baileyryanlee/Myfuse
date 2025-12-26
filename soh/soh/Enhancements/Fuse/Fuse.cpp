@@ -72,7 +72,7 @@ void ApplyDekuNutStunVanilla(PlayState* play, Player* player, Actor* victim, uin
         return;
     }
 
-    const Vec3f spawnPos = victim->world.pos;
+    Vec3f spawnPos = victim->world.pos;
     Fuse::Log("[FuseMVP] DekuNut stun: using vanilla nut effect frame=%d victim=%p\n", play->gameplayFrames,
               (void*)victim);
 
