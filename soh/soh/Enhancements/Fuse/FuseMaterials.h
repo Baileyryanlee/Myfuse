@@ -1,6 +1,9 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
+
+#include "soh/Enhancements/Fuse/FuseModifiers.h"
 
 enum class MaterialId : uint16_t {
     None = 0,
@@ -11,8 +14,8 @@ struct MaterialDef {
     MaterialId id;
     const char* name;
     uint16_t baseMaxDurability;
-    // TEMP: data-driven toggle to preserve current hammer behavior.
-    bool hammerizeSword;
+    const ModifierSpec* modifiers;
+    size_t modifierCount;
 };
 
 namespace FuseMaterials {

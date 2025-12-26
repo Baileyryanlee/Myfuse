@@ -154,11 +154,16 @@ static void RestoreSwordBaseDmgFlags(Player* player) {
     }
 }
 
-static void ApplyHammerFlagsToSwordHitbox(Player* player) {
+static uint32_t GetHammerFlagsForLevel(uint8_t level) {
+    (void)level;
+    return (kHammerDmgFlags0 | kHammerDmgFlags1);
+}
+
+static void ApplyHammerFlagsToSwordHitbox(Player* player, uint8_t level) {
     if (!player)
         return;
 
-    const uint32_t flags = (kHammerDmgFlags0 | kHammerDmgFlags1);
+    const uint32_t flags = GetHammerFlagsForLevel(level);
 
     // OR in (dont replace). Called only when rocks are nearby to preserve enemy damage behavior.
     for (int i = 0; i < 4; i++) {
@@ -381,12 +386,13 @@ void OnFrame_Objects_Pre(PlayState* play) {
     UpdateThrownRockAcquisition(play, player);
 
     const bool swordFused = Fuse::IsSwordFused();
-    const MaterialDef* fuseDef = swordFused ? Fuse::GetMaterialDef(Fuse::GetSwordMaterial()) : nullptr;
 
     // Rock-breaking behavior (works): apply hammer flags only when rocks are nearby and fuse is active
-    if (fuseDef && fuseDef->hammerizeSword && IsPlayerSwingingSword(player) &&
+    const uint8_t hammerLevel = Fuse::GetSwordModifierLevel(ModifierId::Hammerize);
+
+    if (hammerLevel > 0 && swordFused && IsPlayerSwingingSword(player) &&
         IsAnyLiftableRockNearPlayer(play, player)) {
-        ApplyHammerFlagsToSwordHitbox(player);
+        ApplyHammerFlagsToSwordHitbox(player, hammerLevel);
         gHammerizeAppliedFrame = play->gameplayFrames;
         Fuse::Log("[FuseMVP] Hammerize applied at frame=%d\n", gHammerizeAppliedFrame);
     } else {
