@@ -15,3 +15,7 @@ struct MaterialDef {
     bool hammerizeSword;
 };
 
+namespace FuseMaterials {
+const MaterialDef* GetMaterialDef(MaterialId id);
+}
+

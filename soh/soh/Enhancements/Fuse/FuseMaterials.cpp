@@ -9,20 +9,12 @@ constexpr MaterialDef kMaterialDefs[] = {
 
 } // namespace
 
-const MaterialDef* Fuse::GetMaterialDef(MaterialId id) {
+const MaterialDef* FuseMaterials::GetMaterialDef(MaterialId id) {
     for (const auto& def : kMaterialDefs) {
         if (def.id == id) {
             return &def;
         }
     }
     return nullptr;
-}
-
-uint16_t Fuse::GetMaterialBaseDurability(MaterialId id) {
-    const MaterialDef* def = GetMaterialDef(id);
-    if (!def) {
-        return 0;
-    }
-    return def->baseMaxDurability;
 }
 

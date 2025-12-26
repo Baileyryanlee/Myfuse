@@ -1,4 +1,5 @@
 #include "Fuse.h"
+#include "FuseMaterials.h"
 #include "FuseState.h"
 #include "soh/Enhancements/Fuse/Hooks/FuseHooks_Objects.h"
 
@@ -64,6 +65,15 @@ bool Fuse::IsEnabled() {
 
 void Fuse::SetEnabled(bool enabled) {
     gFuseRuntime.enabled = enabled;
+}
+
+const MaterialDef* Fuse::GetMaterialDef(MaterialId id) {
+    return FuseMaterials::GetMaterialDef(id);
+}
+
+uint16_t Fuse::GetMaterialBaseDurability(MaterialId id) {
+    const MaterialDef* def = Fuse::GetMaterialDef(id);
+    return def ? def->baseMaxDurability : 0;
 }
 
 int Fuse::GetMaterialCount(MaterialId id) {
