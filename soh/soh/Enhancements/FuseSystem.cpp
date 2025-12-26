@@ -61,7 +61,7 @@ static void RegisterFuseMod() {
 
         // ... everything else in the frame happens ...
 
-        // Post-collision hook kept for compatibility (durability handled in OnPlayerUpdate)
+        // Post-collision hook kept for compatibility (durability handled in AT collision hook)
         FuseHooks::OnFrame_Objects_Post(play);
 
         // L + DpadDown toggles menu for now
