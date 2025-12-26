@@ -7,7 +7,6 @@ extern "C" {
 struct PlayState;
 
 void FusePause_DrawPrompt(struct PlayState* play);
-void FusePause_OnSwordFusePressed();
 
 #ifdef __cplusplus
 }

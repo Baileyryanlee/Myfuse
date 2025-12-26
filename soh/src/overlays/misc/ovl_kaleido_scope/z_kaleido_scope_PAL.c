@@ -14,7 +14,6 @@
 #include "textures/map_48x85_static/map_48x85_static.h"
 #include "vt.h"
 
-#include "soh/frame_interpolation.h"
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
 #include "soh/Enhancements/cosmetics/cosmeticsTypes.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
@@ -1453,7 +1452,6 @@ void KaleidoScope_DrawPages(PlayState* play, GraphicsContext* gfxCtx) {
     s16 stepG;
     s16 stepB;
 
-    FrameInterpolation_RecordOpenChild(NULL, pauseCtx->state + pauseCtx->pageIndex * 100);
     OPEN_DISPS(gfxCtx);
 
     if ((pauseCtx->state < 8) || (pauseCtx->state > 0x11)) {
@@ -1878,7 +1876,6 @@ void KaleidoScope_DrawPages(PlayState* play, GraphicsContext* gfxCtx) {
     }
 
     CLOSE_DISPS(gfxCtx);
-    FrameInterpolation_RecordCloseChild();
 }
 
 void KaleidoScope_DrawInfoPanel(PlayState* play) {

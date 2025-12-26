@@ -86,8 +86,3 @@ void FusePause_DrawPrompt(PlayState* play) {
 
     CLOSE_DISPS(play->state.gfxCtx);
 }
-
-void FusePause_OnSwordFusePressed() {
-    Fuse::Log("[FuseMVP] PauseMenu Fuse pressed on sword (stub)");
-}
-
