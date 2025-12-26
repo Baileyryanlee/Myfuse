@@ -56,21 +56,35 @@ bool ConsumeDekuNutAmmo(int amount) {
     return true;
 }
 
-void ApplyStunToVictim(PlayState* play, Actor* victim, uint8_t level) {
-    (void)play;
+Actor* SpawnDekuNutFlash(PlayState* play, const Vec3f& pos) {
+    if (!play) {
+        return nullptr;
+    }
 
-    if (!victim || level == 0) {
+    iREG(50) = -1;
+    return Actor_Spawn(&play->actorCtx, play, ACTOR_EN_M_FIRE1, pos.x, pos.y, pos.z, 0, 0, 0, 0, true);
+}
+
+void ApplyDekuNutStunVanilla(PlayState* play, Player* player, Actor* victim, uint8_t level) {
+    (void)player;
+
+    if (!play || !victim || level == 0) {
         return;
     }
 
-    // Placeholder effect: leverage existing freeze timer until a dedicated helper is surfaced.
-    const int16_t desiredDuration = (int16_t)std::clamp<int>(20 * level, 1, 0x7FFF);
-    if (victim->freezeTimer < desiredDuration) {
-        victim->freezeTimer = desiredDuration;
-    }
+    const Vec3f spawnPos = victim->world.pos;
+    Fuse::Log("[FuseMVP] DekuNut stun: using vanilla nut effect frame=%d victim=%p\n", play->gameplayFrames,
+              (void*)victim);
 
-    Fuse::Log("[FuseMVP] Stun applied to victim=%p level=%u duration=%d\n", (void*)victim, (unsigned)level,
-              (int)desiredDuration);
+    Actor* flashActor = SpawnDekuNutFlash(play, spawnPos);
+
+    if (flashActor) {
+        Fuse::Log("[FuseMVP] DekuNut stun: spawned actor id=0x%04X ptr=%p\n", flashActor->id, (void*)flashActor);
+        SoundSource_PlaySfxAtFixedWorldPos(play, &spawnPos, 20, NA_SE_IT_DEKU);
+        EffectSsStone1_Spawn(play, &spawnPos, 0);
+    } else {
+        Fuse::Log("[FuseMVP] DekuNut stun: spawn failed\n");
+    }
 }
 
 } // namespace
@@ -377,6 +391,6 @@ void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim) {
 
     uint8_t stunLevel = 0;
     if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Stun, &stunLevel) && stunLevel > 0) {
-        ApplyStunToVictim(play, victim, stunLevel);
+        ApplyDekuNutStunVanilla(play, GET_PLAYER(play), victim, stunLevel);
     }
 }
