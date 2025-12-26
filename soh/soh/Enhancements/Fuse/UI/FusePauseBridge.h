@@ -8,6 +8,7 @@ struct PlayState;
 union Gfx;
 
 void FusePause_DrawPrompt(struct PlayState* play, union Gfx** polyOpaDisp, union Gfx** polyXluDisp);
+void FusePause_DrawModal(struct PlayState* play, union Gfx** polyOpaDisp, union Gfx** polyXluDisp);
 
 #ifdef __cplusplus
 }
