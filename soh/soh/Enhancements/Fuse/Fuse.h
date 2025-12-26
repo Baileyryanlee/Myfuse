@@ -13,6 +13,7 @@ namespace Fuse {
 // Call once on load / init and every frame.
 void OnLoadGame(int32_t fileNum);
 void OnGameFrameUpdate(PlayState* play);
+void OnSwordMeleeHit(PlayState* play, Actor* victim);
 
 // Core state
 bool IsEnabled();

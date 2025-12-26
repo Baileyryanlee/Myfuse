@@ -3,6 +3,7 @@
 #include "soh/Enhancements/Fuse/Fuse.h"
 
 #include <imgui.h>
+#include <algorithm>
 #include <string>
 
 // ----------------------------------------------------------------------------
@@ -178,6 +179,7 @@ void FuseMenuWindow::DrawElement() {
         ImGui::TableHeadersRow();
 
         const bool rockOwned = Fuse::HasMaterial(MaterialId::Rock);
+        const bool iceOwned = Fuse::HasMaterial(MaterialId::Ice);
 
         for (int i = 0; i < (int)FuseItem::COUNT; i++) {
             FuseItem item = (FuseItem)i;
@@ -237,6 +239,22 @@ void FuseMenuWindow::DrawElement() {
                     }
                 }
 
+                // Ice option (only selectable if owned)
+                {
+                    bool isSelected = (current == MaterialId::Ice);
+
+                    if (!iceOwned) {
+                        ImGui::BeginDisabled(true);
+                    }
+                    if (ImGui::Selectable(MatName(MaterialId::Ice), isSelected)) {
+                        newSelection = MaterialId::Ice;
+                        changed = true;
+                    }
+                    if (!iceOwned) {
+                        ImGui::EndDisabled();
+                    }
+                }
+
                 ImGui::EndCombo();
             }
 
@@ -267,7 +285,7 @@ void FuseMenuWindow::DrawElement() {
 
     // v0 is binary; later you'll switch this to a count array.
     const int rockQty = Fuse::GetMaterialCount(MaterialId::Rock);
-    const bool hasRock = rockQty > 0;
+    const int iceQty = Fuse::GetMaterialCount(MaterialId::Ice);
 
     if (ImGui::BeginTable("MaterialsTable", 2, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg)) {
         ImGui::TableSetupColumn("Material", ImGuiTableColumnFlags_WidthStretch);
@@ -280,7 +298,26 @@ void FuseMenuWindow::DrawElement() {
         ImGui::TableSetColumnIndex(1);
         ImGui::Text("%d", rockQty);
 
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextUnformatted("Ice");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::Text("%d", iceQty);
+
         ImGui::EndTable();
+    }
+
+    static int rockDelta = 1;
+    ImGui::InputInt("Rock delta", &rockDelta);
+    if (ImGui::Button("Add Rock")) {
+        Fuse::AddMaterial(MaterialId::Rock, std::max(rockDelta, 0));
+    }
+
+    ImGui::SameLine();
+    static int iceDelta = 1;
+    ImGui::InputInt("Ice delta", &iceDelta);
+    if (ImGui::Button("Add Ice")) {
+        Fuse::AddMaterial(MaterialId::Ice, std::max(iceDelta, 0));
     }
 
     ImGui::End();

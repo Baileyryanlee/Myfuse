@@ -255,8 +255,10 @@ extern "C" void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollid
     }
 
     void* victimPtr = nullptr;
+    Actor* victimActor = nullptr;
     if (acCollider && acCollider->actor) {
         victimPtr = (void*)acCollider->actor;
+        victimActor = acCollider->actor;
     } else if (acCollider) {
         victimPtr = (void*)acCollider;
     } else if (acInfo) {
@@ -285,6 +287,10 @@ extern "C" void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollid
 
     if (victimPtr) {
         gSwordATVictimCooldown.insert(victimPtr);
+    }
+
+    if (victimActor) {
+        Fuse::OnSwordMeleeHit(play, victimActor);
     }
 }
 
