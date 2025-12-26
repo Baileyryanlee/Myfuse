@@ -1,9 +1,9 @@
 #include "z_kaleido_scope.h"
 #include "textures/icon_item_static/icon_item_static.h"
 #include "textures/parameter_static/parameter_static.h"
-#include "soh/Enhancements/Fuse/Fuse.h"
 #include "soh/Enhancements/cosmetics/cosmeticsTypes.h"
 #include "soh/Enhancements/enhancementTypes.h"
+#include "soh/Enhancements/Fuse/UI/FusePauseBridge.h"
 
 static u8 sChildUpgrades[] = { UPG_BULLET_BAG, UPG_BOMB_BAG, UPG_STRENGTH, UPG_SCALE };
 static u8 sAdultUpgrades[] = { UPG_QUIVER, UPG_BOMB_BAG, UPG_STRENGTH, UPG_SCALE };
@@ -550,7 +550,7 @@ void KaleidoScope_DrawEquipment(PlayState* play) {
                 if (CHECK_BTN_ALL(input->press.button, BTN_A)) {
 
                     if (swordFuseUiState.cursorOnEquippedSword && !swordFuseUiState.swordFused) {
-                        Fuse::Log("[FuseMVP] PauseMenu Fuse pressed on sword (stub)");
+                        FusePause_OnSwordFusePressed();
                     }
 
                     // #Region SoH [Enhancements]
