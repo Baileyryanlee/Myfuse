@@ -29,6 +29,7 @@ struct FuseModalState {
     bool open = false;
     int cursor = 0;
     int scroll = 0;
+    bool pendingSelect = false;
 };
 
 static FuseModalState sModal;
@@ -79,6 +80,22 @@ int MoveCursor(int delta, const std::vector<MaterialEntry>& materials) {
     }
 
     return newCursor;
+}
+
+void UpdateModalBounds(const std::vector<MaterialEntry>& materials) {
+    const int entryCount = static_cast<int>(materials.size());
+    const int maxCursor = (entryCount > 0) ? (entryCount - 1) : 0;
+    sModal.cursor = std::clamp(sModal.cursor, 0, maxCursor);
+
+    if (sModal.cursor < sModal.scroll) {
+        sModal.scroll = sModal.cursor;
+    }
+    if (sModal.cursor >= sModal.scroll + kVisibleRows) {
+        sModal.scroll = sModal.cursor - kVisibleRows + 1;
+    }
+
+    const int maxScroll = std::max(0, entryCount - kVisibleRows);
+    sModal.scroll = std::clamp(sModal.scroll, 0, maxScroll);
 }
 
 EquipValueSword HoveredSwordForCursor(const PauseContext* pauseCtx) {
@@ -134,6 +151,69 @@ FusePromptContext BuildPromptContext(PlayState* play) {
 
     return context;
 }
+
+void FusePause_UpdateModal(PlayState* play) {
+    if (play == nullptr) {
+        return;
+    }
+
+    PauseContext* pauseCtx = &play->pauseCtx;
+
+    if (pauseCtx->state != 6) {
+        sModal.open = false;
+        sModal.pendingSelect = false;
+        return;
+    }
+
+    if (!sModal.open) {
+        return;
+    }
+
+    if (pauseCtx->pageIndex != PAUSE_EQUIP) {
+        sModal.open = false;
+        sModal.pendingSelect = false;
+        return;
+    }
+
+    Input* input = &play->state.input[0];
+    const u16 pressed = input->press.button;
+
+    if (pressed & (BTN_B | BTN_START)) {
+        sModal.open = false;
+        sModal.pendingSelect = false;
+        input->press.button = 0;
+        input->cur.button &= (u16)~(BTN_B | BTN_START);
+        input->press.stick_x = 0;
+        input->press.stick_y = 0;
+        input->rel.stick_x = 0;
+        input->rel.stick_y = 0;
+        return;
+    }
+
+    std::vector<MaterialEntry> materials = BuildMaterialList();
+    const int entryCount = static_cast<int>(materials.size());
+
+    if (entryCount > 0 && (pressed & BTN_DUP || input->rel.stick_y > 30)) {
+        sModal.cursor = MoveCursor(-1, materials);
+    }
+
+    if (entryCount > 0 && (pressed & BTN_DDOWN || input->rel.stick_y < -30)) {
+        sModal.cursor = MoveCursor(1, materials);
+    }
+
+    UpdateModalBounds(materials);
+
+    if (pressed & BTN_A) {
+        sModal.pendingSelect = true;
+    }
+
+    input->press.button = 0;
+    input->press.stick_x = 0;
+    input->press.stick_y = 0;
+    input->rel.stick_x = 0;
+    input->rel.stick_y = 0;
+    input->cur.button &= (u16)~(BTN_DUP | BTN_DDOWN | BTN_DLEFT | BTN_DRIGHT | BTN_L | BTN_R | BTN_Z | BTN_CUP |
+                                BTN_CDOWN | BTN_CLEFT | BTN_CRIGHT);
 }
 
 void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) {
@@ -251,6 +331,7 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
 
     if (!isPauseOpen) {
         sModal.open = false;
+        sModal.pendingSelect = false;
         return;
     }
 
@@ -259,6 +340,7 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         sModal.open = true;
         sModal.cursor = 0;
         sModal.scroll = 0;
+        sModal.pendingSelect = false;
         input->press.button &= ~BTN_A;
         Fuse::Log("[FuseUI] Modal opened\n");
     }
@@ -267,24 +349,15 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         return;
     }
 
-    const u16 pressed = input->press.button;
-
-    if (pressed & BTN_B) {
+    if (pauseCtx->state != 6) {
         sModal.open = false;
-        input->press.button &= (u16)~BTN_B;
-        Fuse::Log("[FuseUI] Modal closed (B)\n");
-        return;
-    }
-
-    if (pressed & BTN_START) {
-        sModal.open = false;
-        input->press.button &= (u16)~BTN_START;
-        Fuse::Log("[FuseUI] Modal closed (START)\n");
+        sModal.pendingSelect = false;
         return;
     }
 
     if (!isEquipmentPage) {
         sModal.open = false;
+        sModal.pendingSelect = false;
         return;
     }
 
@@ -294,42 +367,16 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     }
     sLastModalFrame = currentFrame;
 
-    if (pauseCtx->state != 6) {
-        sModal.open = false;
-        return;
-    }
-
     static int sModalDrawCount = 0;
     if ((sModalDrawCount++ % 30) == 0) {
         Fuse::Log("[FuseUI] modal open, drawing\n");
     }
 
     std::vector<MaterialEntry> materials = BuildMaterialList();
+    UpdateModalBounds(materials);
     const int entryCount = static_cast<int>(materials.size());
 
-    const int maxCursor = (entryCount > 0) ? (entryCount - 1) : 0;
-    sModal.cursor = std::clamp(sModal.cursor, 0, maxCursor);
-
-    if (entryCount > 0 && (CHECK_BTN_ALL(input->press.button, BTN_DUP) || input->rel.stick_y > 30)) {
-        sModal.cursor = MoveCursor(-1, materials);
-        input->press.button &= ~BTN_DUP;
-    }
-
-    if (entryCount > 0 && (CHECK_BTN_ALL(input->press.button, BTN_DDOWN) || input->rel.stick_y < -30)) {
-        sModal.cursor = MoveCursor(1, materials);
-        input->press.button &= ~BTN_DDOWN;
-    }
-
-    if (sModal.cursor < sModal.scroll) {
-        sModal.scroll = sModal.cursor;
-    }
-    if (sModal.cursor >= sModal.scroll + kVisibleRows) {
-        sModal.scroll = sModal.cursor - kVisibleRows + 1;
-    }
-    const int maxScroll = std::max(0, entryCount - kVisibleRows);
-    sModal.scroll = std::clamp(sModal.scroll, 0, maxScroll);
-
-    if (CHECK_BTN_ALL(input->press.button, BTN_A)) {
+    if (sModal.pendingSelect) {
         if (entryCount > 0) {
             const MaterialEntry& entry = materials[sModal.cursor];
             if (!entry.enabled) {
@@ -345,24 +392,15 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         } else {
             Fuse::Log("[FuseUI] Selected material: <none available>\n");
         }
-        input->press.button &= ~BTN_A;
-    }
-
-    input->press.button &=
-        (u16)~(BTN_L | BTN_R | BTN_Z | BTN_CUP | BTN_CDOWN | BTN_CLEFT | BTN_CRIGHT | BTN_DUP | BTN_DDOWN);
-    input->press.button = 0;
-    input->press.stick_x = 0;
-    input->press.stick_y = 0;
-    input->rel.stick_x = 0;
-    input->rel.stick_y = 0;
-
-    if (!sModal.open) {
-        return;
+        sModal.pendingSelect = false;
     }
 
     GfxPrint printer;
 
     Gfx_SetupDL_39Opa(gfxCtx);
+
+    gDPPipeSync(OPA++);
+    gDPSetScissor(OPA++, G_SC_NON_INTERLACE, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
     gDPSetPrimColor(OPA++, 0, 0, 0, 0, 0, 160);
     gDPFillRectangle(OPA++, 0, 0, SCREEN_WIDTH - 1, SCREEN_HEIGHT - 1);
@@ -387,7 +425,7 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         if (entryIndex == sModal.cursor) {
             const s32 rowY = kListY + (i * kRowH);
             Gfx_SetupDL_39Opa(gfxCtx);
-            gDPSetPrimColor(OPA++, 0, 0, 40, 40, 80, 255);
+            gDPSetPrimColor(OPA++, 0, 0, 60, 80, 200, 255);
             gDPFillRectangle(OPA++, kPanelX + 8, rowY - 2, kPanelX + kPanelW - 8, rowY + kRowH - 2);
         }
     }
