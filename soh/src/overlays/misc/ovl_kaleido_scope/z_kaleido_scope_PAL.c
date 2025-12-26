@@ -18,6 +18,7 @@
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
 #include "soh/Enhancements/cosmetics/cosmeticsTypes.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
+#include "soh/Enhancements/Fuse/UI/FusePauseBridge.h"
 #include "soh/OTRGlobals.h"
 #include "soh/ResourceManagerHelpers.h"
 #include "soh/SaveManager.h"
@@ -2425,6 +2426,8 @@ void KaleidoScope_DrawInfoPanel(PlayState* play) {
 
                 POLY_OPA_DISP = KaleidoScope_QuadTextureIA8(POLY_OPA_DISP, sToEquipTextures[gSaveContext.language],
                                                             D_8082ADD8[gSaveContext.language], 16, 4);
+
+                FusePause_DrawPrompt(play);
             }
         }
     }
