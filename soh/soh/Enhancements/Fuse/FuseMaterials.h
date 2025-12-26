@@ -8,7 +8,7 @@
 enum class MaterialId : uint16_t {
     None = 0,
     Rock = 1,
-    Ice = 2,
+    DekuNut = 2,
 };
 
 struct MaterialDef {

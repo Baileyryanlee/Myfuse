@@ -179,7 +179,7 @@ void FuseMenuWindow::DrawElement() {
         ImGui::TableHeadersRow();
 
         const bool rockOwned = Fuse::HasMaterial(MaterialId::Rock);
-        const bool iceOwned = Fuse::HasMaterial(MaterialId::Ice);
+        const bool dekuNutOwned = Fuse::HasMaterial(MaterialId::DekuNut);
 
         for (int i = 0; i < (int)FuseItem::COUNT; i++) {
             FuseItem item = (FuseItem)i;
@@ -239,18 +239,18 @@ void FuseMenuWindow::DrawElement() {
                     }
                 }
 
-                // Ice option (only selectable if owned)
+                // Deku Nut option (only selectable if owned)
                 {
-                    bool isSelected = (current == MaterialId::Ice);
+                    bool isSelected = (current == MaterialId::DekuNut);
 
-                    if (!iceOwned) {
+                    if (!dekuNutOwned) {
                         ImGui::BeginDisabled(true);
                     }
-                    if (ImGui::Selectable(MatName(MaterialId::Ice), isSelected)) {
-                        newSelection = MaterialId::Ice;
+                    if (ImGui::Selectable(MatName(MaterialId::DekuNut), isSelected)) {
+                        newSelection = MaterialId::DekuNut;
                         changed = true;
                     }
-                    if (!iceOwned) {
+                    if (!dekuNutOwned) {
                         ImGui::EndDisabled();
                     }
                 }
@@ -279,13 +279,13 @@ void FuseMenuWindow::DrawElement() {
     ImGui::Separator();
 
     // ------------------------------------------------------------------------
-    // Materials inventory (v0: Rock only)
+    // Materials inventory (v0: Rock plus Deku Nut adapter)
     // ------------------------------------------------------------------------
     ImGui::SeparatorText("Materials");
 
     // v0 is binary; later you'll switch this to a count array.
     const int rockQty = Fuse::GetMaterialCount(MaterialId::Rock);
-    const int iceQty = Fuse::GetMaterialCount(MaterialId::Ice);
+    const int dekuNutQty = Fuse::GetMaterialCount(MaterialId::DekuNut);
 
     if (ImGui::BeginTable("MaterialsTable", 2, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg)) {
         ImGui::TableSetupColumn("Material", ImGuiTableColumnFlags_WidthStretch);
@@ -300,9 +300,9 @@ void FuseMenuWindow::DrawElement() {
 
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
-        ImGui::TextUnformatted("Ice");
+        ImGui::TextUnformatted("Deku Nut");
         ImGui::TableSetColumnIndex(1);
-        ImGui::Text("%d", iceQty);
+        ImGui::Text("%d", dekuNutQty);
 
         ImGui::EndTable();
     }
@@ -311,13 +311,6 @@ void FuseMenuWindow::DrawElement() {
     ImGui::InputInt("Rock delta", &rockDelta);
     if (ImGui::Button("Add Rock")) {
         Fuse::AddMaterial(MaterialId::Rock, std::max(rockDelta, 0));
-    }
-
-    ImGui::SameLine();
-    static int iceDelta = 1;
-    ImGui::InputInt("Ice delta", &iceDelta);
-    if (ImGui::Button("Add Ice")) {
-        Fuse::AddMaterial(MaterialId::Ice, std::max(iceDelta, 0));
     }
 
     ImGui::End();

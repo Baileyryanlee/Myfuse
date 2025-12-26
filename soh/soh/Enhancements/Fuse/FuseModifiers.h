@@ -5,7 +5,7 @@
 
 enum class ModifierId : uint16_t {
     Hammerize = 1,
-    Freeze = 2,
+    Stun = 2,
     // future: Range, Freeze, Explode, Stun, Seek, etc.
 };
 

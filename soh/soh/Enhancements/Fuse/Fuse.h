@@ -25,7 +25,7 @@ uint16_t GetMaterialBaseDurability(MaterialId id);
 uint8_t GetSwordModifierLevel(ModifierId id);
 bool SwordHasModifier(ModifierId id);
 
-// Materials inventory API (v0: ROCK only)
+// Materials inventory API (v0: ROCK + Deku Nut adapter)
 int GetMaterialCount(MaterialId id);
 bool HasMaterial(MaterialId id, int amount = 1);
 void AddMaterial(MaterialId id, int amount);

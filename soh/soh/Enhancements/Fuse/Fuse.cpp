@@ -14,6 +14,8 @@
 extern "C" {
 #include "z64.h"
 #include "variables.h"
+#include "macros.h"
+#include "functions.h"
 }
 
 // -----------------------------------------------------------------------------
@@ -27,7 +29,24 @@ static FuseRuntimeState gFuseRuntime;
 // -----------------------------------------------------------------------------
 namespace {
 
-void ApplyFreezeToVictim(PlayState* play, Actor* victim, uint8_t level) {
+int GetDekuNutAmmoCount() {
+    return AMMO(ITEM_NUT);
+}
+
+bool ConsumeDekuNutAmmo(int amount) {
+    if (amount <= 0) {
+        return true;
+    }
+
+    if (GetDekuNutAmmoCount() < amount) {
+        return false;
+    }
+
+    Inventory_ChangeAmmo(ITEM_NUT, -amount);
+    return true;
+}
+
+void ApplyStunToVictim(PlayState* play, Actor* victim, uint8_t level) {
     (void)play;
 
     if (!victim || level == 0) {
@@ -40,7 +59,7 @@ void ApplyFreezeToVictim(PlayState* play, Actor* victim, uint8_t level) {
         victim->freezeTimer = desiredDuration;
     }
 
-    Fuse::Log("[FuseMVP] Freeze applied to victim=%p level=%u duration=%d\n", (void*)victim, (unsigned)level,
+    Fuse::Log("[FuseMVP] Stun applied to victim=%p level=%u duration=%d\n", (void*)victim, (unsigned)level,
               (int)desiredDuration);
 }
 
@@ -122,8 +141,8 @@ int Fuse::GetMaterialCount(MaterialId id) {
     switch (id) {
         case MaterialId::Rock:
             return gFuseSave.rockCount;
-        case MaterialId::Ice:
-            return gFuseSave.iceCount;
+        case MaterialId::DekuNut:
+            return GetDekuNutAmmoCount();
         default:
             return 0;
     }
@@ -147,11 +166,6 @@ void Fuse::AddMaterial(MaterialId id, int amount) {
             gFuseSave.rockCount = (uint16_t)newCount;
             break;
         }
-        case MaterialId::Ice: {
-            const int newCount = std::clamp<int>(gFuseSave.iceCount + amount, 0, 65535);
-            gFuseSave.iceCount = (uint16_t)newCount;
-            break;
-        }
         default:
             break;
     }
@@ -170,9 +184,8 @@ bool Fuse::ConsumeMaterial(MaterialId id, int amount) {
         case MaterialId::Rock:
             gFuseSave.rockCount = (uint16_t)(gFuseSave.rockCount - amount);
             return true;
-        case MaterialId::Ice:
-            gFuseSave.iceCount = (uint16_t)(gFuseSave.iceCount - amount);
-            return true;
+        case MaterialId::DekuNut:
+            return ConsumeDekuNutAmmo(amount);
         default:
             break;
     }
@@ -344,8 +357,8 @@ void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim) {
         return;
     }
 
-    uint8_t freezeLevel = 0;
-    if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Freeze, &freezeLevel) && freezeLevel > 0) {
-        ApplyFreezeToVictim(play, victim, freezeLevel);
+    uint8_t stunLevel = 0;
+    if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Stun, &stunLevel) && stunLevel > 0) {
+        ApplyStunToVictim(play, victim, stunLevel);
     }
 }
