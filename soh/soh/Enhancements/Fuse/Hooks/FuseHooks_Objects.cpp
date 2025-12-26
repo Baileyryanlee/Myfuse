@@ -22,14 +22,14 @@ static constexpr float kRockGateRadiusSq = kRockGateRadius * kRockGateRadius;
 static constexpr float kRockGateMaxYDiff = 90.0f;
 
 // Local state
+static int gHammerizeAppliedFrame = -1;
 static Actor* gPrevHeldActor = nullptr;
 static bool gPendingThrownRockCheck = false;
 static Actor* gTrackedThrownRock = nullptr;
 static int gFramesUntilThrownRockCheck = 0;
 static int gLastImpactDrainFrame = -1;
-static int gSwordFlagsFrame = -1;
 static uint32_t gSwordBaseDmgFlags[4];
-static bool gSwordBaseCaptured = false;
+static bool gSwordBaseValid = false;
 
 // -----------------------------------------------------------------------------
 // Helpers
@@ -118,26 +118,15 @@ static void CaptureSwordBaseDmgFlags(PlayState* play, Player* player) {
     if (!play || !player)
         return;
 
-    const int curFrame = play->gameplayFrames;
-    if (curFrame == gSwordFlagsFrame)
-        return;
-
-    gSwordFlagsFrame = curFrame;
-
     for (int i = 0; i < 4; i++) {
         gSwordBaseDmgFlags[i] = player->meleeWeaponQuads[i].info.toucher.dmgFlags;
     }
 
-    gSwordBaseCaptured = true;
-
-    if ((curFrame % 60) == 0) {
-        Fuse::Log("[FuseMVP] Captured sword base dmgFlags frame=%d base0=0x%08X\n", curFrame,
-                  gSwordBaseDmgFlags[0]);
-    }
+    gSwordBaseValid = true;
 }
 
 static void RestoreSwordBaseDmgFlags(Player* player) {
-    if (!player || !gSwordBaseCaptured)
+    if (!player || !gSwordBaseValid)
         return;
 
     for (int i = 0; i < 4; i++) {
@@ -272,13 +261,13 @@ static void UpdateThrownRockAcquisition(PlayState* play, Player* player) {
 namespace FuseHooks {
 
 void OnLoadGame_ResetObjects() {
+    gHammerizeAppliedFrame = -1;
     gPrevHeldActor = nullptr;
     gPendingThrownRockCheck = false;
     gTrackedThrownRock = nullptr;
     gFramesUntilThrownRockCheck = 0;
     gLastImpactDrainFrame = -1;
-    gSwordFlagsFrame = -1;
-    gSwordBaseCaptured = false;
+    gSwordBaseValid = false;
 }
 
 void OnFrame_Objects_Pre(PlayState* play) {
@@ -291,6 +280,12 @@ void OnFrame_Objects_Pre(PlayState* play) {
         return;
     }
 
+    if (gHammerizeAppliedFrame != -1 && play->gameplayFrames != gHammerizeAppliedFrame) {
+        RestoreSwordBaseDmgFlags(player);
+        gHammerizeAppliedFrame = -1;
+        Fuse::Log("[FuseMVP] Restored sword flags at frame=%d\n", play->gameplayFrames);
+    }
+
     CaptureSwordBaseDmgFlags(play, player);
 
     UpdateThrownRockAcquisition(play, player);
@@ -298,20 +293,13 @@ void OnFrame_Objects_Pre(PlayState* play) {
     // Rock-breaking behavior (works): apply hammer flags only when rocks are nearby
     if (IsPlayerSwingingSword(player) && IsAnyLiftableRockNearPlayer(play, player)) {
         ApplyHammerFlagsToSwordHitbox(player);
+        gHammerizeAppliedFrame = play->gameplayFrames;
     } else {
         RestoreSwordBaseDmgFlags(player);
     }
 }
 
 void OnFrame_Objects_Post(PlayState* play) {
-    if (!Fuse::IsEnabled())
-        return;
-
-    Player* player = GetPlayerSafe(play);
-    if (!player)
-        return;
-
-    RestoreSwordBaseDmgFlags(player);
 }
 
 void OnPlayerUpdate(PlayState* play) {
