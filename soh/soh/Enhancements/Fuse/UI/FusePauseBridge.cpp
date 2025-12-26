@@ -19,10 +19,6 @@ struct FuseModalState {
     bool open = false;
     int cursor = 0;
     int scroll = 0;
-    int lastEquipSword = 0;
-    int lastCursorX = -1;
-    int lastCursorY = -1;
-    int justOpenedFrames = 0;
 };
 
 static FuseModalState sModal;
@@ -84,10 +80,6 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp)
 
     (void)XLU;
 
-    if (sModal.justOpenedFrames > 0) {
-        sModal.justOpenedFrames--;
-    }
-
     const bool isPauseOpen = pauseCtx->state == 6;
     const bool isEquipmentPage = pauseCtx->pageIndex == PAUSE_EQUIP;
     const u8 cursorX = pauseCtx->cursorX[PAUSE_EQUIP];
@@ -126,62 +118,51 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp)
 
     const bool swordFused = Fuse::IsSwordFused();
     Input* input = &play->state.input[0];
-    const bool modalGatingPass = shouldShowFusePrompt && !swordFused;
-
-    if (sModal.open) {
-        const bool cursorMoved = (sModal.lastCursorX != cursorX) || (sModal.lastCursorY != cursorY);
-        const bool equipChanged = sModal.lastEquipSword != equippedSword;
-        if (sModal.justOpenedFrames == 0) {
-            if (!modalGatingPass || cursorMoved || equipChanged) {
-                sModal.open = false;
-                sModal.justOpenedFrames = 0;
-                Fuse::Log("[FuseUI] Modal closed (reason: gating fail/move)\n");
-            }
-        }
+    if (sModal.open && (!isPauseOpen || !isEquipmentPage)) {
+        sModal.open = false;
+        Fuse::Log("[FuseUI] Modal closed (pause/page)\n");
     }
 
-    if (!sModal.open && modalGatingPass && CHECK_BTN_ALL(input->press.button, BTN_A)) {
+    if (!sModal.open && shouldShowFusePrompt && !swordFused && CHECK_BTN_ALL(input->press.button, BTN_A)) {
         sModal.open = true;
-        sModal.justOpenedFrames = 2;
         sModal.cursor = 0;
         sModal.scroll = 0;
-        sModal.lastEquipSword = equippedSword;
-        sModal.lastCursorX = cursorX;
-        sModal.lastCursorY = cursorY;
-        Fuse::Log("[FuseUI] Modal opened\n");
         input->press.button &= ~BTN_A;
+        Fuse::Log("[FuseUI] Modal opened\n");
     }
 
     if (!shouldShowFusePrompt && !sModal.open) {
         return;
     }
 
-    gDPPipeSync(OPA++);
-    gDPSetPrimColor(OPA++, 0, 0, 255, 255, 255, 255);
-
     GfxPrint printer;
 
-    GfxPrint_Init(&printer);
-    GfxPrint_Open(&printer, OPA);
-    GfxPrint_SetColor(&printer, 255, 255, 255, 255);
+    if (shouldShowFusePrompt && !sModal.open) {
+        gDPPipeSync(OPA++);
+        gDPSetPrimColor(OPA++, 0, 0, 255, 255, 255, 255);
 
-    // TODO: Fine-tune Fuse prompt placement once Fuse modal UI is implemented.
-    // Pause UI is image-based; final alignment may change.
-    const s32 baseY = pauseCtx->infoPanelVtx[16].v.ob[1];
-    const s32 toEquipX = pauseCtx->infoPanelVtx[20].v.ob[0];
-    const s32 toEquipW = pauseCtx->infoPanelVtx[21].v.ob[0] - pauseCtx->infoPanelVtx[20].v.ob[0];
-    const s32 baseX = toEquipX + toEquipW + kPromptPadding;
+        GfxPrint_Init(&printer);
+        GfxPrint_Open(&printer, OPA);
+        GfxPrint_SetColor(&printer, 255, 255, 255, 255);
 
-    const s32 xCell = CLAMP(baseX / 8, 0, 39);
+        // TODO: Fine-tune Fuse prompt placement once Fuse modal UI is implemented.
+        // Pause UI is image-based; final alignment may change.
+        const s32 baseY = pauseCtx->infoPanelVtx[16].v.ob[1];
+        const s32 toEquipX = pauseCtx->infoPanelVtx[20].v.ob[0];
+        const s32 toEquipW = pauseCtx->infoPanelVtx[21].v.ob[0] - pauseCtx->infoPanelVtx[20].v.ob[0];
+        const s32 baseX = toEquipX + toEquipW + kPromptPadding;
 
-    const s32 yCell = CLAMP((baseY + kPromptYOffset) / 8, 0, 29);
+        const s32 xCell = CLAMP(baseX / 8, 0, 39);
 
-    GfxPrint_SetPos(&printer, xCell, yCell);
+        const s32 yCell = CLAMP((baseY + kPromptYOffset) / 8, 0, 29);
 
-    GfxPrint_Printf(&printer, "A: Fuse");
+        GfxPrint_SetPos(&printer, xCell, yCell);
 
-    OPA = GfxPrint_Close(&printer);
-    GfxPrint_Destroy(&printer);
+        GfxPrint_Printf(&printer, "A: Fuse");
+
+        OPA = GfxPrint_Close(&printer);
+        GfxPrint_Destroy(&printer);
+    }
 
     if (swordFused) {
         const s32 barX = pauseCtx->infoPanelVtx[16].v.ob[0];
@@ -206,8 +187,7 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp)
 
     if (CHECK_BTN_ALL(input->press.button, BTN_B)) {
         sModal.open = false;
-        sModal.justOpenedFrames = 0;
-        Fuse::Log("[FuseUI] Modal closed (reason: B press)\n");
+        Fuse::Log("[FuseUI] Modal closed (B)\n");
         input->press.button &= ~BTN_B;
         return;
     }
