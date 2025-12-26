@@ -1,6 +1,7 @@
 #include "z_kaleido_scope.h"
 #include "textures/icon_item_static/icon_item_static.h"
 #include "textures/parameter_static/parameter_static.h"
+#include "soh/Enhancements/Fuse/Fuse.h"
 #include "soh/Enhancements/cosmetics/cosmeticsTypes.h"
 #include "soh/Enhancements/enhancementTypes.h"
 
@@ -519,6 +520,8 @@ void KaleidoScope_DrawEquipment(PlayState* play) {
 
         KaleidoScope_SetCursorVtx(pauseCtx, cursorSlot * 4, pauseCtx->equipVtx);
 
+        SwordFuseUiState swordFuseUiState = KaleidoScope_GetSwordFuseUiState(pauseCtx);
+
         // Allow Toggling of Strength when Pressing A on Strength Upgrade Slot
         if ((pauseCtx->cursorSpecialPos == 0) && (pauseCtx->state == 6) && (pauseCtx->unk_1E4 == 0) &&
             CHECK_BTN_ALL(input->press.button, BTN_A) && (pauseCtx->cursorX[PAUSE_EQUIP] == 0) &&
@@ -545,6 +548,10 @@ void KaleidoScope_DrawEquipment(PlayState* play) {
 
             if (CHECK_AGE_REQ_EQUIP(pauseCtx->cursorY[PAUSE_EQUIP], pauseCtx->cursorX[PAUSE_EQUIP])) {
                 if (CHECK_BTN_ALL(input->press.button, BTN_A)) {
+
+                    if (swordFuseUiState.cursorOnEquippedSword && !swordFuseUiState.swordFused) {
+                        Fuse::Log("[FuseMVP] PauseMenu Fuse pressed on sword (stub)");
+                    }
 
                     // #Region SoH [Enhancements]
                     // Allow Link to remove his equipment from the equipment subscreen by toggling on/off
