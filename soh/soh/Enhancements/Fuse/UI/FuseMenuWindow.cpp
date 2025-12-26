@@ -4,6 +4,7 @@
 
 #include <imgui.h>
 #include <algorithm>
+#include <cstdio>
 #include <string>
 
 // ----------------------------------------------------------------------------
@@ -67,6 +68,15 @@ static bool IsSword(FuseItem i) {
 static const char* MatName(MaterialId m) {
     const MaterialDef* def = Fuse::GetMaterialDef(m);
     return def ? def->name : "Unknown";
+}
+
+static std::string MatNameWithCount(MaterialId m) {
+    const char* baseName = MatName(m);
+    const int count = Fuse::GetMaterialCount(m);
+
+    char buf[64];
+    std::snprintf(buf, sizeof(buf), "%s (x%d)", baseName ? baseName : "Unknown", count);
+    return std::string(buf);
 }
 
 static const char* ResultName(Fuse::FuseResult r) {
@@ -206,7 +216,9 @@ void FuseMenuWindow::DrawElement() {
             std::string comboId = std::string("##mat_") + std::to_string(i);
 
             // We’ll build combo options: None always selectable.
-            const char* preview = MatName(current);
+            std::string previewLabel =
+                (current == MaterialId::None) ? std::string(MatName(current)) : MatNameWithCount(current);
+            const char* preview = previewLabel.c_str();
 
             bool changed = false;
             MaterialId newSelection = current;
@@ -226,11 +238,12 @@ void FuseMenuWindow::DrawElement() {
                 // Rock option (only selectable if owned)
                 {
                     bool isSelected = (current == MaterialId::Rock);
+                    const std::string rockLabel = MatNameWithCount(MaterialId::Rock);
 
                     if (!rockOwned) {
                         ImGui::BeginDisabled(true);
                     }
-                    if (ImGui::Selectable(MatName(MaterialId::Rock), isSelected)) {
+                    if (ImGui::Selectable(rockLabel.c_str(), isSelected)) {
                         newSelection = MaterialId::Rock;
                         changed = true;
                     }
@@ -242,11 +255,12 @@ void FuseMenuWindow::DrawElement() {
                 // Deku Nut option (only selectable if owned)
                 {
                     bool isSelected = (current == MaterialId::DekuNut);
+                    const std::string dekuNutLabel = MatNameWithCount(MaterialId::DekuNut);
 
                     if (!dekuNutOwned) {
                         ImGui::BeginDisabled(true);
                     }
-                    if (ImGui::Selectable(MatName(MaterialId::DekuNut), isSelected)) {
+                    if (ImGui::Selectable(dekuNutLabel.c_str(), isSelected)) {
                         newSelection = MaterialId::DekuNut;
                         changed = true;
                     }
@@ -294,13 +308,15 @@ void FuseMenuWindow::DrawElement() {
 
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
-        ImGui::TextUnformatted("ROCK");
+        const std::string rockLabel = MatNameWithCount(MaterialId::Rock);
+        ImGui::TextUnformatted(rockLabel.c_str());
         ImGui::TableSetColumnIndex(1);
         ImGui::Text("%d", rockQty);
 
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
-        ImGui::TextUnformatted("Deku Nut");
+        const std::string dekuNutLabel = MatNameWithCount(MaterialId::DekuNut);
+        ImGui::TextUnformatted(dekuNutLabel.c_str());
         ImGui::TableSetColumnIndex(1);
         ImGui::Text("%d", dekuNutQty);
 
