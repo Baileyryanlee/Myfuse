@@ -223,7 +223,7 @@ static bool SwordHadImpactFlags(Player* player, const char** reasonOut = nullptr
         return;
     }
 
-    const bool broke = Fuse::DamageSwordFuseDurability(1);
+    const bool broke = Fuse::DamageSwordFuseDurability(play, 1);
     const int after = Fuse::GetSwordFuseDurability();
 
     Fuse::Log("[FuseMVP] Durability drained event=hit amount=1 reason=%s durability=%d->%d%s\n", reason,
@@ -273,7 +273,7 @@ extern "C" void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollid
         return;
     }
 
-    const bool broke = Fuse::DamageSwordFuseDurability(1);
+    const bool broke = Fuse::DamageSwordFuseDurability(play, 1);
     const int after = Fuse::GetSwordFuseDurability();
     Fuse::Log("[FuseMVP] Sword AT collision DRAIN frame=%d fused=%d victim=%p durability=%d->%d%s\n", curFrame, 1,
               victimPtr, before, after, broke ? " (broke)" : "");
@@ -331,6 +331,22 @@ static void UpdateThrownRockAcquisition(PlayState* play, Player* player) {
 // -----------------------------------------------------------------------------
 namespace FuseHooks {
 
+void RestoreSwordHitboxVanillaNow(PlayState* play) {
+    Player* player = GetPlayerSafe(play);
+    const int frame = play ? play->gameplayFrames : -1;
+
+    if (player && gSwordBaseValid) {
+        RestoreSwordBaseDmgFlags(player);
+        Fuse::Log("[FuseMVP] Break->vanilla: restored sword hitbox flags immediately frame=%d base0=0x%08X\n", frame,
+                  gSwordBaseDmgFlags[0]);
+    } else {
+        Fuse::Log("[FuseMVP] Break->vanilla: restore skipped frame=%d player=%d baseValid=%d\n", frame,
+                  player ? 1 : 0, gSwordBaseValid ? 1 : 0);
+    }
+
+    gHammerizeAppliedFrame = -1;
+}
+
 void OnLoadGame_ResetObjects() {
     gHammerizeAppliedFrame = -1;
     gPrevHeldActor = nullptr;
@@ -364,8 +380,10 @@ void OnFrame_Objects_Pre(PlayState* play) {
 
     UpdateThrownRockAcquisition(play, player);
 
-    // Rock-breaking behavior (works): apply hammer flags only when rocks are nearby
-    if (IsPlayerSwingingSword(player) && IsAnyLiftableRockNearPlayer(play, player)) {
+    const bool swordFused = Fuse::IsSwordFusedWithRock();
+
+    // Rock-breaking behavior (works): apply hammer flags only when rocks are nearby and fuse is active
+    if (swordFused && IsPlayerSwingingSword(player) && IsAnyLiftableRockNearPlayer(play, player)) {
         ApplyHammerFlagsToSwordHitbox(player);
         gHammerizeAppliedFrame = play->gameplayFrames;
         Fuse::Log("[FuseMVP] Hammerize applied at frame=%d\n", gHammerizeAppliedFrame);

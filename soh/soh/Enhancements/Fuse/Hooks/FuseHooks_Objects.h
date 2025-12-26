@@ -16,6 +16,6 @@ void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollider, Collide
 }
 
 namespace FuseHooks {
-void OnSwordFuseBroken();
+void RestoreSwordHitboxVanillaNow(PlayState* play);
 }
 #endif
