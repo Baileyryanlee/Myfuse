@@ -7,7 +7,7 @@
 #include "functions.h"
 
 namespace {
-constexpr s16 kPromptYOffset = -8;
+constexpr s16 kPromptYOffset = 0;
 constexpr s16 kStatusYOffset = -16;
 constexpr s16 kBarHeight = 4;
 constexpr s16 kBarWidth = 48;
@@ -95,15 +95,12 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp) {
     GfxPrint_Open(&printer, DISP);
     GfxPrint_SetColor(&printer, 255, 255, 255, 255);
 
-    const s32 baseX = pauseCtx->infoPanelVtx[16].v.ob[0];
-    const s32 baseY = pauseCtx->infoPanelVtx[16].v.ob[1];
-    const s32 xCell = CLAMP((baseX + kPromptPadding) / 8, 0, 39);
+    const s32 baseX = pauseCtx->infoPanelVtx[16].v.ob[0] + kPromptPadding;
+    const s32 baseY = pauseCtx->infoPanelVtx[20].v.ob[1];
+    const s32 xCell = CLAMP(baseX / 8, 0, 39);
 
-    s32 yCell = 26; // Known-good prompt strip row
-    const s32 yCellCandidate = (baseY + kPromptYOffset) / 8;
-    if (yCellCandidate >= 20 && yCellCandidate <= 29) {
-        yCell = yCellCandidate;
-    }
+    const s32 yCellCandidate = CLAMP((baseY + kPromptYOffset) / 8, 0, 29);
+    s32 yCell = (baseY < 50) ? 27 : yCellCandidate;
 
     const s32 statusYCell = CLAMP(yCell - 1, 0, 29);
 
