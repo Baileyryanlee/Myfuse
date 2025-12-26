@@ -73,6 +73,8 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp)
         return;
     }
 
+    static int sCount = 0;
+
     PauseContext* pauseCtx = &play->pauseCtx;
     GraphicsContext* gfxCtx = play->state.gfxCtx;
     Gfx*& OPA = *polyOpaDisp;
@@ -118,12 +120,9 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp)
 
     const bool swordFused = Fuse::IsSwordFused();
     Input* input = &play->state.input[0];
-    if (sModal.open && (!isPauseOpen || !isEquipmentPage)) {
-        sModal.open = false;
-        Fuse::Log("[FuseUI] Modal closed (pause/page)\n");
-    }
 
-    if (!sModal.open && shouldShowFusePrompt && !swordFused && CHECK_BTN_ALL(input->press.button, BTN_A)) {
+    if (!sModal.open && isPauseOpen && isEquipmentPage && shouldShowFusePrompt && !swordFused &&
+        CHECK_BTN_ALL(input->press.button, BTN_A)) {
         sModal.open = true;
         sModal.cursor = 0;
         sModal.scroll = 0;
@@ -131,13 +130,103 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp)
         Fuse::Log("[FuseUI] Modal opened\n");
     }
 
-    if (!shouldShowFusePrompt && !sModal.open) {
-        return;
-    }
+    if (sModal.open) {
+        if ((sCount++ % 30) == 0) {
+            Fuse::Log("[FuseUI] modal open, drawing\n");
+        }
 
-    GfxPrint printer;
+        if (CHECK_BTN_ALL(input->press.button, BTN_B)) {
+            sModal.open = false;
+            Fuse::Log("[FuseUI] Modal closed (B)\n");
+            input->press.button &= ~BTN_B;
+            return;
+        }
 
-    if (shouldShowFusePrompt && !sModal.open) {
+        if (!isPauseOpen || !isEquipmentPage) {
+            sModal.open = false;
+            return;
+        }
+
+        std::vector<MaterialEntry> materials = BuildMaterialList();
+        const int entryCount = static_cast<int>(materials.size());
+
+        const int maxCursor = (entryCount > 0) ? (entryCount - 1) : 0;
+        sModal.cursor = std::clamp(sModal.cursor, 0, maxCursor);
+
+        if (entryCount > 0 && CHECK_BTN_ALL(input->press.button, BTN_DUP)) {
+            sModal.cursor = std::max(0, sModal.cursor - 1);
+            input->press.button &= ~BTN_DUP;
+        }
+
+        if (entryCount > 0 && CHECK_BTN_ALL(input->press.button, BTN_DDOWN)) {
+            sModal.cursor = std::min(maxCursor, sModal.cursor + 1);
+            input->press.button &= ~BTN_DDOWN;
+        }
+
+        constexpr int kVisibleRows = 8;
+        if (sModal.cursor < sModal.scroll) {
+            sModal.scroll = sModal.cursor;
+        }
+        if (sModal.cursor >= sModal.scroll + kVisibleRows) {
+            sModal.scroll = sModal.cursor - kVisibleRows + 1;
+        }
+        const int maxScroll = std::max(0, entryCount - kVisibleRows);
+        sModal.scroll = std::clamp(sModal.scroll, 0, maxScroll);
+
+        if (CHECK_BTN_ALL(input->press.button, BTN_A)) {
+            if (entryCount > 0) {
+                const MaterialEntry& entry = materials[sModal.cursor];
+                char buffer[128];
+                std::snprintf(buffer, sizeof(buffer), "[FuseUI] Selected material: %s (qty %d)\n",
+                              entry.def ? entry.def->name : "Unknown", entry.quantity);
+                Fuse::Log(buffer);
+            } else {
+                Fuse::Log("[FuseUI] Selected material: <none available>\n");
+            }
+            input->press.button &= ~BTN_A;
+        }
+
+        GfxPrint printer;
+
+        Gfx_SetupDL_39Opa(gfxCtx);
+
+        gDPSetPrimColor(OPA++, 0, 0, 0, 0, 0, 160);
+        gDPFillRectangle(OPA++, 0, 0, SCREEN_WIDTH - 1, SCREEN_HEIGHT - 1);
+
+        constexpr s32 panelX = 40;
+        constexpr s32 panelY = 40;
+        constexpr s32 panelW = 240;
+        constexpr s32 panelH = 160;
+        constexpr s32 border = 2;
+
+        gDPSetPrimColor(OPA++, 0, 0, 20, 20, 20, 240);
+        gDPFillRectangle(OPA++, panelX, panelY, panelX + panelW, panelY + panelH);
+
+        gDPSetPrimColor(OPA++, 0, 0, 200, 200, 200, 255);
+        gDPFillRectangle(OPA++, panelX, panelY, panelX + panelW, panelY + border);
+        gDPFillRectangle(OPA++, panelX, panelY + panelH - border, panelX + panelW, panelY + panelH);
+        gDPFillRectangle(OPA++, panelX, panelY, panelX + border, panelY + panelH);
+        gDPFillRectangle(OPA++, panelX + panelW - border, panelY, panelX + panelW, panelY + panelH);
+
+        constexpr s32 textStartX = panelX + 12;
+        constexpr s32 textStartY = panelY + 16;
+        constexpr s32 listStartY = panelY + 40;
+        constexpr s32 rowHeight = 14;
+
+        for (int i = 0; i < kVisibleRows; i++) {
+            const int entryIndex = sModal.scroll + i;
+            if (entryIndex >= entryCount) {
+                break;
+            }
+
+            if (entryIndex == sModal.cursor) {
+                const s32 y0 = listStartY + (i * rowHeight) - 2;
+                const s32 y1 = y0 + rowHeight;
+                gDPSetPrimColor(OPA++, 0, 0, 60, 60, 80, 255);
+                gDPFillRectangle(OPA++, panelX + 6, y0, panelX + panelW - 6, y1);
+            }
+        }
+
         gDPPipeSync(OPA++);
         gDPSetPrimColor(OPA++, 0, 0, 255, 255, 255, 255);
 
@@ -145,24 +234,63 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp)
         GfxPrint_Open(&printer, OPA);
         GfxPrint_SetColor(&printer, 255, 255, 255, 255);
 
-        // TODO: Fine-tune Fuse prompt placement once Fuse modal UI is implemented.
-        // Pause UI is image-based; final alignment may change.
-        const s32 baseY = pauseCtx->infoPanelVtx[16].v.ob[1];
-        const s32 toEquipX = pauseCtx->infoPanelVtx[20].v.ob[0];
-        const s32 toEquipW = pauseCtx->infoPanelVtx[21].v.ob[0] - pauseCtx->infoPanelVtx[20].v.ob[0];
-        const s32 baseX = toEquipX + toEquipW + kPromptPadding;
+        GfxPrint_SetPosPx(&printer, textStartX, textStartY);
+        GfxPrint_Printf(&printer, "Fuse");
 
-        const s32 xCell = CLAMP(baseX / 8, 0, 39);
+        GfxPrint_SetPosPx(&printer, textStartX, textStartY + 14);
+        GfxPrint_Printf(&printer, "A: Select   B: Back");
 
-        const s32 yCell = CLAMP((baseY + kPromptYOffset) / 8, 0, 29);
+        if (entryCount == 0) {
+            GfxPrint_SetPosPx(&printer, textStartX, listStartY);
+            GfxPrint_Printf(&printer, "No materials available");
+        } else {
+            for (int i = 0; i < kVisibleRows; i++) {
+                const int entryIndex = sModal.scroll + i;
+                if (entryIndex >= entryCount) {
+                    break;
+                }
 
-        GfxPrint_SetPos(&printer, xCell, yCell);
-
-        GfxPrint_Printf(&printer, "A: Fuse");
+                const MaterialEntry& entry = materials[entryIndex];
+                GfxPrint_SetPosPx(&printer, textStartX, listStartY + (i * rowHeight));
+                GfxPrint_Printf(&printer, "%s  x%d", entry.def ? entry.def->name : "Unknown", entry.quantity);
+            }
+        }
 
         OPA = GfxPrint_Close(&printer);
         GfxPrint_Destroy(&printer);
+        return;
     }
+
+    if (!shouldShowFusePrompt) {
+        return;
+    }
+
+    GfxPrint printer;
+
+    gDPPipeSync(OPA++);
+    gDPSetPrimColor(OPA++, 0, 0, 255, 255, 255, 255);
+
+    GfxPrint_Init(&printer);
+    GfxPrint_Open(&printer, OPA);
+    GfxPrint_SetColor(&printer, 255, 255, 255, 255);
+
+    // TODO: Fine-tune Fuse prompt placement once Fuse modal UI is implemented.
+    // Pause UI is image-based; final alignment may change.
+    const s32 baseY = pauseCtx->infoPanelVtx[16].v.ob[1];
+    const s32 toEquipX = pauseCtx->infoPanelVtx[20].v.ob[0];
+    const s32 toEquipW = pauseCtx->infoPanelVtx[21].v.ob[0] - pauseCtx->infoPanelVtx[20].v.ob[0];
+    const s32 baseX = toEquipX + toEquipW + kPromptPadding;
+
+    const s32 xCell = CLAMP(baseX / 8, 0, 39);
+
+    const s32 yCell = CLAMP((baseY + kPromptYOffset) / 8, 0, 29);
+
+    GfxPrint_SetPos(&printer, xCell, yCell);
+
+    GfxPrint_Printf(&printer, "A: Fuse");
+
+    OPA = GfxPrint_Close(&printer);
+    GfxPrint_Destroy(&printer);
 
     if (swordFused) {
         const s32 barX = pauseCtx->infoPanelVtx[16].v.ob[0];
@@ -180,125 +308,4 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp)
         gDPSetPrimColor(OPA++, 0, 0, 60, 200, 60, 255);
         gDPFillRectangle(OPA++, barX, barY, barX + filled, barY + kBarHeight);
     }
-
-    if (!sModal.open) {
-        return;
-    }
-
-    if (CHECK_BTN_ALL(input->press.button, BTN_B)) {
-        sModal.open = false;
-        Fuse::Log("[FuseUI] Modal closed (B)\n");
-        input->press.button &= ~BTN_B;
-        return;
-    }
-
-    std::vector<MaterialEntry> materials = BuildMaterialList();
-    const int entryCount = static_cast<int>(materials.size());
-
-    const int maxCursor = (entryCount > 0) ? (entryCount - 1) : 0;
-    sModal.cursor = std::clamp(sModal.cursor, 0, maxCursor);
-
-    if (entryCount > 0 && CHECK_BTN_ALL(input->press.button, BTN_DUP)) {
-        sModal.cursor = std::max(0, sModal.cursor - 1);
-        input->press.button &= ~BTN_DUP;
-    }
-
-    if (entryCount > 0 && CHECK_BTN_ALL(input->press.button, BTN_DDOWN)) {
-        sModal.cursor = std::min(maxCursor, sModal.cursor + 1);
-        input->press.button &= ~BTN_DDOWN;
-    }
-
-    constexpr int kVisibleRows = 8;
-    if (sModal.cursor < sModal.scroll) {
-        sModal.scroll = sModal.cursor;
-    }
-    if (sModal.cursor >= sModal.scroll + kVisibleRows) {
-        sModal.scroll = sModal.cursor - kVisibleRows + 1;
-    }
-    const int maxScroll = std::max(0, entryCount - kVisibleRows);
-    sModal.scroll = std::clamp(sModal.scroll, 0, maxScroll);
-
-    if (CHECK_BTN_ALL(input->press.button, BTN_A)) {
-        if (entryCount > 0) {
-            const MaterialEntry& entry = materials[sModal.cursor];
-            char buffer[128];
-            std::snprintf(buffer, sizeof(buffer), "[FuseUI] Selected material: %s (qty %d)\n",
-                          entry.def ? entry.def->name : "Unknown", entry.quantity);
-            Fuse::Log(buffer);
-        } else {
-            Fuse::Log("[FuseUI] Selected material: <none available>\n");
-        }
-        input->press.button &= ~BTN_A;
-    }
-
-    Gfx_SetupDL_39Opa(gfxCtx);
-
-    gDPSetPrimColor(OPA++, 0, 0, 0, 0, 0, 160);
-    gDPFillRectangle(OPA++, 0, 0, SCREEN_WIDTH - 1, SCREEN_HEIGHT - 1);
-
-    constexpr s32 panelX = 40;
-    constexpr s32 panelY = 40;
-    constexpr s32 panelW = 240;
-    constexpr s32 panelH = 160;
-    constexpr s32 border = 2;
-
-    gDPSetPrimColor(OPA++, 0, 0, 20, 20, 20, 240);
-    gDPFillRectangle(OPA++, panelX, panelY, panelX + panelW, panelY + panelH);
-
-    gDPSetPrimColor(OPA++, 0, 0, 200, 200, 200, 255);
-    gDPFillRectangle(OPA++, panelX, panelY, panelX + panelW, panelY + border);
-    gDPFillRectangle(OPA++, panelX, panelY + panelH - border, panelX + panelW, panelY + panelH);
-    gDPFillRectangle(OPA++, panelX, panelY, panelX + border, panelY + panelH);
-    gDPFillRectangle(OPA++, panelX + panelW - border, panelY, panelX + panelW, panelY + panelH);
-
-    constexpr s32 textStartX = panelX + 12;
-    constexpr s32 textStartY = panelY + 16;
-    constexpr s32 listStartY = panelY + 40;
-    constexpr s32 rowHeight = 14;
-
-    for (int i = 0; i < kVisibleRows; i++) {
-        const int entryIndex = sModal.scroll + i;
-        if (entryIndex >= entryCount) {
-            break;
-        }
-
-        if (entryIndex == sModal.cursor) {
-            const s32 y0 = listStartY + (i * rowHeight) - 2;
-            const s32 y1 = y0 + rowHeight;
-            gDPSetPrimColor(OPA++, 0, 0, 60, 60, 80, 255);
-            gDPFillRectangle(OPA++, panelX + 6, y0, panelX + panelW - 6, y1);
-        }
-    }
-
-    gDPPipeSync(OPA++);
-    gDPSetPrimColor(OPA++, 0, 0, 255, 255, 255, 255);
-
-    GfxPrint_Init(&printer);
-    GfxPrint_Open(&printer, OPA);
-    GfxPrint_SetColor(&printer, 255, 255, 255, 255);
-
-    GfxPrint_SetPosPx(&printer, textStartX, textStartY);
-    GfxPrint_Printf(&printer, "Fuse");
-
-    GfxPrint_SetPosPx(&printer, textStartX, textStartY + 14);
-    GfxPrint_Printf(&printer, "A: Select   B: Back");
-
-    if (entryCount == 0) {
-        GfxPrint_SetPosPx(&printer, textStartX, listStartY);
-        GfxPrint_Printf(&printer, "No materials available");
-    } else {
-        for (int i = 0; i < kVisibleRows; i++) {
-            const int entryIndex = sModal.scroll + i;
-            if (entryIndex >= entryCount) {
-                break;
-            }
-
-            const MaterialEntry& entry = materials[entryIndex];
-            GfxPrint_SetPosPx(&printer, textStartX, listStartY + (i * rowHeight));
-            GfxPrint_Printf(&printer, "%s  x%d", entry.def ? entry.def->name : "Unknown", entry.quantity);
-        }
-    }
-
-    OPA = GfxPrint_Close(&printer);
-    GfxPrint_Destroy(&printer);
 }
