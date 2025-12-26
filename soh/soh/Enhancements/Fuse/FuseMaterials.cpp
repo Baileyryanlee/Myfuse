@@ -7,14 +7,14 @@ static const ModifierSpec kRockMods[] = {
     { ModifierId::Hammerize, 1 },
 };
 
-static const ModifierSpec kIceMods[] = {
-    { ModifierId::Freeze, 1 },
+static const ModifierSpec kDekuNutMods[] = {
+    { ModifierId::Stun, 1 },
 };
 
 constexpr MaterialDef kMaterialDefs[] = {
     { MaterialId::None, "None", 0, nullptr, 0 },
     { MaterialId::Rock, "ROCK", 20, kRockMods, 1 },
-    { MaterialId::Ice, "Ice", 15, kIceMods, 1 },
+    { MaterialId::DekuNut, "Deku Nut", 5, kDekuNutMods, 1 },
 };
 
 } // namespace
