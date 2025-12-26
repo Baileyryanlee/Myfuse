@@ -1,6 +1,7 @@
 #include "soh/Enhancements/Fuse/UI/FusePauseBridge.h"
 
 #include "soh/Enhancements/Fuse/Fuse.h"
+#include "soh/Enhancements/Fuse/FuseMaterials.h"
 #include "global.h"
 #include "functions.h"
 
