@@ -14,13 +14,16 @@ bool PauseOnEquippedSwordSlot(PauseContext* pauseCtx) {
         return false;
     }
 
-    if (pauseCtx->cursorX[PAUSE_EQUIP] != 0 || pauseCtx->cursorY[PAUSE_EQUIP] != 0) {
+    constexpr u16 kFirstSwordSlot = 1;
+    constexpr u16 kLastSwordSlot = 3;
+
+    const u16 cursorSlot = pauseCtx->cursorSlot[PAUSE_EQUIP];
+    const bool onSwordSlot = cursorSlot >= kFirstSwordSlot && cursorSlot <= kLastSwordSlot;
+    if (!onSwordSlot) {
         return false;
     }
 
-    u16 cursorItem = pauseCtx->cursorItem[PAUSE_EQUIP];
-    return cursorItem == ITEM_SWORD_KOKIRI || cursorItem == ITEM_SWORD_MASTER || cursorItem == ITEM_SWORD_BIGGORON ||
-           cursorItem == ITEM_SWORD_BROKEN;
+    return CUR_EQUIP_VALUE(EQUIP_TYPE_SWORD) != EQUIP_VALUE_SWORD_NONE;
 }
 }
 
