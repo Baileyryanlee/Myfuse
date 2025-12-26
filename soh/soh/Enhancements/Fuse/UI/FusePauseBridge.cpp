@@ -32,6 +32,8 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp) {
         return;
     }
 
+    static bool sForceShow = true;
+
     PauseContext* pauseCtx = &play->pauseCtx;
     GraphicsContext* gfxCtx = play->state.gfxCtx;
     Gfx*& DISP = *polyOpaDisp;
@@ -46,6 +48,8 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp) {
     const bool shouldShowFusePrompt =
         isPauseOpen && isEquipmentPage && isSwordSlotHovered && isSwordAlreadyEquippedSlot &&
         (equippedSword != EQUIP_VALUE_SWORD_NONE);
+
+    const bool show = sForceShow ? true : shouldShowFusePrompt;
 
     static bool sShowDebugOverlay = false;
     if (sShowDebugOverlay && isPauseOpen) {
@@ -69,9 +73,23 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp) {
 
     Fuse::Log("[FuseMVP] FusePause_DrawPrompt called\n");
 
-    if (!shouldShowFusePrompt) {
+    if (!show) {
         return;
     }
+
+    gDPPipeSync(DISP++);
+    gDPSetPrimColor(DISP++, 0, 0, 255, 255, 255, 255);
+
+    GfxPrint p;
+    GfxPrint_Init(&p);
+    GfxPrint_Open(&p, DISP);
+    GfxPrint_SetColor(&p, 255, 255, 255, 255);
+
+    GfxPrint_SetPos(&p, 18, 26);
+    GfxPrint_Printf(&p, "[FUSE TEST]");
+
+    DISP = GfxPrint_Close(&p);
+    GfxPrint_Destroy(&p);
 
     const bool swordFused = Fuse::IsSwordFused();
     Input* input = &play->state.input[0];
