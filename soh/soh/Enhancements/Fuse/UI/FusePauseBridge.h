@@ -7,7 +7,7 @@ extern "C" {
 struct PlayState;
 union Gfx;
 
-void FusePause_DrawPrompt(struct PlayState* play, union Gfx** polyOpaDisp);
+void FusePause_DrawPrompt(struct PlayState* play, union Gfx** polyOpaDisp, union Gfx** polyXluDisp);
 
 #ifdef __cplusplus
 }

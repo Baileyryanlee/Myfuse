@@ -2424,7 +2424,7 @@ void KaleidoScope_DrawInfoPanel(PlayState* play) {
                 POLY_OPA_DISP = KaleidoScope_QuadTextureIA8(POLY_OPA_DISP, sToEquipTextures[gSaveContext.language],
                                                             D_8082ADD8[gSaveContext.language], 16, 4);
 
-                FusePause_DrawPrompt(play, &POLY_OPA_DISP);
+                FusePause_DrawPrompt(play, &POLY_OPA_DISP, &POLY_XLU_DISP);
             }
         }
     }
