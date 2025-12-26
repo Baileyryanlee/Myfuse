@@ -101,8 +101,17 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp) {
 
     const s32 yCellCandidate = CLAMP((baseY + kPromptYOffset) / 8, 0, 29);
     s32 yCell = (baseY < 50) ? 27 : yCellCandidate;
+    const s32 yCellBeforeBump = yCell;
+    const s32 kRowBump = 2; // try 2 first (≈16px)
+    yCell = CLAMP(yCell + kRowBump, 0, 29);
 
     const s32 statusYCell = CLAMP(yCell - 1, 0, 29);
+
+    GfxPrint_SetPos(&printer, xCell - 1, yCellBeforeBump);
+    GfxPrint_Printf(&printer, "|");
+
+    GfxPrint_SetPos(&printer, xCell - 1, yCell);
+    GfxPrint_Printf(&printer, "|");
 
     GfxPrint_SetPos(&printer, xCell, yCell);
 
