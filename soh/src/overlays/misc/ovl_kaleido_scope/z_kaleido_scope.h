@@ -51,4 +51,16 @@ void KaleidoScope_UpdateCursorSize(PauseContext* pauseCtx);
 
 void KaleidoScope_ResetItemCycling();
 
+typedef struct SwordFuseUiState {
+    bool cursorOnEquippedSword;
+    bool swordFused;
+    const char* materialName;
+    int durability;
+    int maxDurability;
+} SwordFuseUiState;
+
+bool KaleidoScope_IsCursorOnEquippedSword(PauseContext* pauseCtx);
+SwordFuseUiState KaleidoScope_GetSwordFuseUiState(PauseContext* pauseCtx);
+void KaleidoScope_DrawSwordFuseStatus(PlayState* play, const SwordFuseUiState* state, s16 textX, s16 textY);
+
 #endif
