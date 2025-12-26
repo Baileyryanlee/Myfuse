@@ -468,3 +468,5 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     OPA = GfxPrint_Close(&printer);
     GfxPrint_Destroy(&printer);
 }
+
+} // namespace
