@@ -404,7 +404,7 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     Gfx_SetupDL_39Opa(gfxCtx);
 
     gDPPipeSync(OPA++);
-    gDPSetScissor(OPA++, G_SC_NON_INTERLACE, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    gDPSetScissor(OPA++, G_SC_NON_INTERLACE, 0, 0, 320, 240);
 
     gDPSetPrimColor(OPA++, 0, 0, 0, 0, 0, 160);
     gDPFillRectangle(OPA++, 0, 0, SCREEN_WIDTH - 1, SCREEN_HEIGHT - 1);
@@ -428,9 +428,13 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
 
         if (entryIndex == sModal.cursor) {
             const s32 rowY = kListY + (i * kRowH);
+            const s32 left = kPanelX + 6;
+            const s32 right = kPanelX + kPanelW - 6;
+            const s32 top = rowY - 4;
+            const s32 bottom = rowY + kRowH - 1;
             Gfx_SetupDL_39Opa(gfxCtx);
-            gDPSetPrimColor(OPA++, 0, 0, 60, 80, 200, 255);
-            gDPFillRectangle(OPA++, kPanelX + 8, rowY - 2, kPanelX + kPanelW - 8, rowY + kRowH - 2);
+            gDPSetPrimColor(OPA++, 0, 0, 60, 120, 255, 255);
+            gDPFillRectangle(OPA++, left, top, right, bottom);
         }
     }
 
