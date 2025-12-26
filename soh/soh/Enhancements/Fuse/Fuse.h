@@ -2,6 +2,7 @@
 #include <cstdint>
 
 #include "soh/Enhancements/Fuse/FuseMaterials.h"
+#include "soh/Enhancements/Fuse/FuseModifiers.h"
 
 struct PlayState;
 struct Player;
@@ -20,6 +21,8 @@ void SetEnabled(bool enabled);
 // Materials registry and helpers
 const MaterialDef* GetMaterialDef(MaterialId id);
 uint16_t GetMaterialBaseDurability(MaterialId id);
+uint8_t GetSwordModifierLevel(ModifierId id);
+bool SwordHasModifier(ModifierId id);
 
 // Materials inventory API (v0: ROCK only)
 int GetMaterialCount(MaterialId id);

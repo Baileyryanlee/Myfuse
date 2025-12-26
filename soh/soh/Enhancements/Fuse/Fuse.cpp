@@ -76,6 +76,24 @@ uint16_t Fuse::GetMaterialBaseDurability(MaterialId id) {
     return def ? def->baseMaxDurability : 0;
 }
 
+uint8_t Fuse::GetSwordModifierLevel(ModifierId id) {
+    if (!Fuse::IsSwordFused()) {
+        return 0;
+    }
+
+    const MaterialDef* def = Fuse::GetMaterialDef(Fuse::GetSwordMaterial());
+    if (!def) {
+        return 0;
+    }
+
+    uint8_t level = 0;
+    return HasModifier(def->modifiers, def->modifierCount, id, &level) ? level : 0;
+}
+
+bool Fuse::SwordHasModifier(ModifierId id) {
+    return Fuse::GetSwordModifierLevel(id) > 0;
+}
+
 int Fuse::GetMaterialCount(MaterialId id) {
     switch (id) {
         case MaterialId::Rock:
