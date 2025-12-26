@@ -156,6 +156,10 @@ FusePromptContext BuildPromptContext(PlayState* play) {
 
 extern "C" {
 
+bool FusePause_IsModalOpen(void) {
+    return sModal.open;
+}
+
 void FusePause_UpdateModal(PlayState* play) {
     if (play == nullptr) {
         return;
