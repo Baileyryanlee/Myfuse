@@ -1,6 +1,8 @@
 #pragma once
 #include <cstdint>
 
+#include "soh/Enhancements/Fuse/FuseMaterials.h"
+
 struct PlayState;
 struct Player;
 struct Actor;
@@ -18,7 +20,9 @@ void SetEnabled(bool enabled);
 // MVP material: ROCK
 bool HasRockMaterial(); // now means rockCount > 0
 int GetRockCount();     // NEW
-bool IsSwordFusedWithRock();
+bool IsSwordFused();
+MaterialId GetSwordMaterial();
+void FuseSwordWithMaterial(MaterialId id, uint16_t maxDurability);
 
 // MVP: award rock and (optionally) auto-fuse to sword (runtime for now)
 void AwardRockMaterial();
@@ -28,7 +32,7 @@ int GetSwordFuseDurability();
 int GetSwordFuseMaxDurability();
 void SetSwordFuseDurability(int v);
 void SetSwordFuseMaxDurability(int v);
-bool DamageSwordFuseDurability(PlayState* play, int amount);
+bool DamageSwordFuseDurability(PlayState* play, int amount, const char* reason);
 void ClearSwordFuse();
 void OnSwordFuseBroken(PlayState* play);
 
