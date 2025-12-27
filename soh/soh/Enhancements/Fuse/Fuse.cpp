@@ -434,8 +434,6 @@ Fuse::FuseResult Fuse::TryFuseSword(MaterialId id) {
 
     Fuse::FuseSwordWithMaterial(id, Fuse::GetMaterialBaseDurability(id));
 
-    Fuse_WriteSwordFuseToSave(nullptr);
-
     if (id == MaterialId::DekuNut) {
         const int postConsumeCount = Fuse::GetMaterialCount(id);
         Fuse::Log("[FuseMVP] TryFuseSword(DekuNut): before=%d after=%d\n", preConsumeCount, postConsumeCount);
