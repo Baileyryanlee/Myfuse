@@ -39,39 +39,6 @@ static void ResetFuseSaveContextData() {
     gSaveContext.ship.fuseSwordCurDurabilityPresent = false;
 }
 
-static void LoadFuseSaveContextData() {
-    gSaveContext.ship.fuseSwordCurDurabilityPresent = false;
-    uint16_t savedCurDurability = 0;
-    bool hasSavedCurDurability = false;
-
-    SaveManager::Instance->LoadStruct("fuse", [&]() {
-        nlohmann::json* fuseContext = SaveManager::Instance->currentJsonContext;
-        gSaveContext.ship.fuseSwordCurDurabilityPresent =
-            fuseContext != nullptr && fuseContext->contains("curDurability");
-        hasSavedCurDurability = gSaveContext.ship.fuseSwordCurDurabilityPresent;
-        SaveManager::Instance->LoadData("swordMaterialId", gSaveContext.ship.fuseSwordMaterialId,
-                                        static_cast<s16>(kFuseSwordMaterialIdNone));
-        SaveManager::Instance->LoadData("swordMaxDur", gSaveContext.ship.fuseSwordMaxDur, static_cast<s16>(0));
-        SaveManager::Instance->LoadData("swordCurDur", gSaveContext.ship.fuseSwordCurDur, static_cast<s16>(0));
-        SaveManager::Instance->LoadData("swordCurrentDur", gSaveContext.ship.fuseSwordCurrentDurability,
-                                        static_cast<u16>(0));
-        SaveManager::Instance->LoadData("curDurability", savedCurDurability, static_cast<u16>(0));
-    });
-
-    if (hasSavedCurDurability) {
-        gSaveContext.ship.fuseSwordCurrentDurability = savedCurDurability;
-    } else if (gSaveContext.ship.fuseSwordCurrentDurability == 0) {
-        if (gSaveContext.ship.fuseSwordMaxDur > 0) {
-            gSaveContext.ship.fuseSwordCurrentDurability = static_cast<u16>(gSaveContext.ship.fuseSwordMaxDur);
-        } else if (gSaveContext.ship.fuseSwordCurDur > 0) {
-            gSaveContext.ship.fuseSwordCurrentDurability = static_cast<u16>(gSaveContext.ship.fuseSwordCurDur);
-        }
-    }
-
-    spdlog::info("[FuseDBG] Loaded fuse save data matId={} cur={} max={} (legacyCur={} hasSavedCur={})",
-                 gSaveContext.ship.fuseSwordMaterialId, gSaveContext.ship.fuseSwordCurrentDurability,
-                 gSaveContext.ship.fuseSwordMaxDur, gSaveContext.ship.fuseSwordCurDur, hasSavedCurDurability);
-}
 
 void SaveManager::WriteSaveFile(const std::filesystem::path& savePath, const uintptr_t addr, void* dramAddr,
                                 const size_t size) {
@@ -1580,7 +1547,6 @@ void SaveManager::LoadBaseVersion1() {
     SaveManager::Instance->LoadArray("randomizerInf", ARRAY_COUNT(gSaveContext.ship.randomizerInf), [](size_t i) {
         SaveManager::Instance->LoadData("", gSaveContext.ship.randomizerInf[i]);
     });
-    LoadFuseSaveContextData();
 }
 
 void SaveManager::LoadBaseVersion2() {
@@ -1792,7 +1758,6 @@ void SaveManager::LoadBaseVersion2() {
                 });
         }
     }
-    LoadFuseSaveContextData();
 }
 
 void SaveManager::LoadBaseVersion3() {
@@ -2008,7 +1973,6 @@ void SaveManager::LoadBaseVersion3() {
         SaveManager::Instance->LoadData("tempCollectFlags", gSaveContext.ship.backupFW.tempCollectFlags);
     });
     SaveManager::Instance->LoadData("dogParams", gSaveContext.dogParams);
-    LoadFuseSaveContextData();
 }
 
 void SaveManager::LoadBaseVersion4() {
@@ -2186,7 +2150,6 @@ void SaveManager::LoadBaseVersion4() {
     SaveManager::Instance->LoadData("dogParams", gSaveContext.dogParams);
     SaveManager::Instance->LoadData("filenameLanguage", gSaveContext.ship.filenameLanguage);
     SaveManager::Instance->LoadData("maskMemory", gSaveContext.ship.maskMemory);
-    LoadFuseSaveContextData();
 }
 
 void SaveManager::LoadBaseVersion5() {
@@ -2340,15 +2303,6 @@ void SaveManager::SaveBase(SaveContext* saveContext, int sectionID, bool fullSav
 
     SaveManager::Instance->SaveArray("randomizerInf", ARRAY_COUNT(saveContext->ship.randomizerInf), [&](size_t i) {
         SaveManager::Instance->SaveData("", saveContext->ship.randomizerInf[i]);
-    });
-    spdlog::info("[FuseDBG] Saving fuse matId={} cur={} max={}", saveContext->ship.fuseSwordMaterialId,
-                 saveContext->ship.fuseSwordCurrentDurability, saveContext->ship.fuseSwordMaxDur);
-    SaveManager::Instance->SaveStruct("fuse", [&]() {
-        SaveManager::Instance->SaveData("swordMaterialId", saveContext->ship.fuseSwordMaterialId);
-        SaveManager::Instance->SaveData("swordCurDur", saveContext->ship.fuseSwordCurDur);
-        SaveManager::Instance->SaveData("curDurability", saveContext->ship.fuseSwordCurrentDurability);
-        SaveManager::Instance->SaveData("swordCurrentDur", saveContext->ship.fuseSwordCurrentDurability);
-        SaveManager::Instance->SaveData("swordMaxDur", saveContext->ship.fuseSwordMaxDur);
     });
     SaveManager::Instance->SaveData("isMasterQuest", saveContext->ship.quest.id == QUEST_MASTER);
     SaveManager::Instance->SaveStruct("backupFW", [&]() {
