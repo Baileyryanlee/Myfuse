@@ -30,6 +30,7 @@ static constexpr int kFusePanelLeftX = 4;
 static constexpr int kFusePanelLeftY = 2;
 static constexpr int kFusePanelRightX = 22;
 static constexpr int kFusePanelRightY = 2;
+static constexpr int kFuseModalYOffset = 3;
 
 struct FuseModalState {
     bool open = false;
@@ -514,14 +515,17 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     GfxPrint_Open(&printer, OPA);
     GfxPrint_SetColor(&printer, 255, 255, 255, 255);
 
-    GfxPrint_SetPosPx(&printer, kListX, kTitleY);
+    const int yOffsetCells = kFuseModalYOffset;
+    const int yOffsetPx = kFuseModalYOffset * 8;
+
+    GfxPrint_SetPosPx(&printer, kListX, kTitleY + yOffsetPx);
     GfxPrint_Printf(&printer, "Fuse");
 
-    GfxPrint_SetPosPx(&printer, kListX, kTitleY + 14);
+    GfxPrint_SetPosPx(&printer, kListX, kTitleY + 14 + yOffsetPx);
     GfxPrint_Printf(&printer, "A: Select   B: Back");
 
     if (entryCount == 0) {
-        GfxPrint_SetPosPx(&printer, kListX, kListY);
+        GfxPrint_SetPosPx(&printer, kListX, kListY + yOffsetPx);
         GfxPrint_Printf(&printer, "No materials available");
     } else {
         for (int i = 0; i < kVisibleRows; i++) {
@@ -542,7 +546,7 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
                 GfxPrint_SetColor(&printer, 255, 255, 255, 255);
             }
 
-            GfxPrint_SetPosPx(&printer, kListX, kListY + (i * kRowH));
+            GfxPrint_SetPosPx(&printer, kListX, kListY + (i * kRowH) + yOffsetPx);
             GfxPrint_Printf(&printer, "%s  x%d", entry.def ? entry.def->name : "Unknown", entry.quantity);
         }
     }
@@ -571,36 +575,36 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
 
     GfxPrint_SetColor(&printer, 255, 255, 255, 255);
 
-    GfxPrint_SetPos(&printer, kFusePanelLeftX, kFusePanelLeftY);
+    GfxPrint_SetPos(&printer, kFusePanelLeftX, kFusePanelLeftY + yOffsetCells);
     GfxPrint_Printf(&printer, "Selected:");
 
-    GfxPrint_SetPos(&printer, kFusePanelLeftX, kFusePanelLeftY + 1);
+    GfxPrint_SetPos(&printer, kFusePanelLeftX, kFusePanelLeftY + 1 + yOffsetCells);
     GfxPrint_Printf(&printer, "%s", selectedItemName);
 
-    GfxPrint_SetPos(&printer, kFusePanelLeftX, kFusePanelLeftY + 2);
+    GfxPrint_SetPos(&printer, kFusePanelLeftX, kFusePanelLeftY + 2 + yOffsetCells);
     if (!weaponView.isFused) {
         GfxPrint_Printf(&printer, "Durability: --");
     } else {
         GfxPrint_Printf(&printer, "Durability: %d / %d", weaponView.curDurability, weaponView.maxDurability);
 
-        GfxPrint_SetPos(&printer, kFusePanelLeftX, kFusePanelLeftY + 3);
+        GfxPrint_SetPos(&printer, kFusePanelLeftX, kFusePanelLeftY + 3 + yOffsetCells);
         const std::string bar = Fuse_MakeDurabilityBar(weaponView.curDurability, weaponView.maxDurability, 10);
         GfxPrint_Printf(&printer, "          %s", bar.c_str());
     }
 
-    GfxPrint_SetPos(&printer, kFusePanelRightX, kFusePanelRightY);
+    GfxPrint_SetPos(&printer, kFusePanelRightX, kFusePanelRightY + yOffsetCells);
     GfxPrint_Printf(&printer, "Material:");
 
-    GfxPrint_SetPos(&printer, kFusePanelRightX, kFusePanelRightY + 1);
+    GfxPrint_SetPos(&printer, kFusePanelRightX, kFusePanelRightY + 1 + yOffsetCells);
     GfxPrint_Printf(&printer, "%s", matName.c_str());
 
-    GfxPrint_SetPos(&printer, kFusePanelRightX, kFusePanelRightY + 2);
+    GfxPrint_SetPos(&printer, kFusePanelRightX, kFusePanelRightY + 2 + yOffsetCells);
     GfxPrint_Printf(&printer, "Qty: %d", matQty);
 
-    GfxPrint_SetPos(&printer, kFusePanelRightX, kFusePanelRightY + 3);
+    GfxPrint_SetPos(&printer, kFusePanelRightX, kFusePanelRightY + 3 + yOffsetCells);
     GfxPrint_Printf(&printer, "Effect:");
 
-    GfxPrint_SetPos(&printer, kFusePanelRightX, kFusePanelRightY + 4);
+    GfxPrint_SetPos(&printer, kFusePanelRightX, kFusePanelRightY + 4 + yOffsetCells);
     GfxPrint_Printf(&printer, "%s", modifierText.c_str());
 
     OPA = GfxPrint_Close(&printer);
