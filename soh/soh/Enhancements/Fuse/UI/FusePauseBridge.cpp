@@ -553,7 +553,7 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     }
 
     const char* selectedItemName = SwordNameFromEquip(context.hoveredSword);
-    const FuseWeaponView weaponView = Fuse::GetSwordFuseView();
+    const FuseWeaponView weaponView = Fuse_GetEquippedSwordView(play);
 
     std::string matName = highlightedEntry && highlightedEntry->def ? highlightedEntry->def->name : "--";
     int matQty = highlightedEntry ? highlightedEntry->quantity : 0;
@@ -581,10 +581,10 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     if (!weaponView.isFused) {
         GfxPrint_Printf(&printer, "Durability: --");
     } else {
-        GfxPrint_Printf(&printer, "Durability: %d / %d", weaponView.curDur, weaponView.maxDur);
+        GfxPrint_Printf(&printer, "Durability: %d / %d", weaponView.curDurability, weaponView.maxDurability);
 
         GfxPrint_SetPos(&printer, kFusePanelLeftX, kFusePanelLeftY + 4);
-        const std::string bar = Fuse_MakeDurabilityBar(weaponView.curDur, weaponView.maxDur, 10);
+        const std::string bar = Fuse_MakeDurabilityBar(weaponView.curDurability, weaponView.maxDurability, 10);
         GfxPrint_Printf(&printer, "          %s", bar.c_str());
     }
 
