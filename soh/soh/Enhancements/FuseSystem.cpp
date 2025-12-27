@@ -3,8 +3,11 @@
 
 #include "soh/Enhancements/Fuse/Fuse.h"
 #include "soh/Enhancements/Fuse/UI/FuseMenuWindow.h"
+#include "soh/SaveManager.h"
 
 #include <memory>
+
+#include <spdlog/spdlog.h>
 
 extern "C" {
 #include "z64.h"
@@ -22,6 +25,41 @@ void OnPlayerUpdate(PlayState* play);
 
 static std::shared_ptr<FuseMenuWindow> sFuseMenuWindow;
 static bool sFuseMenuShown = false;
+static constexpr const char* kFuseWeaponSectionName = "FuseWeapon";
+static constexpr s16 kFuseSwordMaterialIdNone = -1;
+
+static void SaveFuseWeaponSection(SaveContext* saveContext, int /*sectionID*/, bool /*fullSave*/) {
+    const s16 materialId = saveContext->ship.fuseSwordMaterialId;
+    const u16 curDurability = saveContext->ship.fuseSwordCurrentDurability;
+
+    spdlog::info("[FuseDBG] Saving fuse matId={} cur={} max={}", materialId, curDurability,
+                 saveContext->ship.fuseSwordMaxDur);
+
+    SaveManager::Instance->SaveStruct("", [&]() {
+        SaveManager::Instance->SaveData("matId", materialId);
+        SaveManager::Instance->SaveData("curDurability", curDurability);
+    });
+}
+
+static void LoadFuseWeaponSection() {
+    s16 materialId = kFuseSwordMaterialIdNone;
+    u16 curDurability = 0;
+
+    SaveManager::Instance->LoadStruct("", [&]() {
+        SaveManager::Instance->LoadData("matId", materialId, static_cast<s16>(kFuseSwordMaterialIdNone));
+        SaveManager::Instance->LoadData("curDurability", curDurability, static_cast<u16>(0));
+    });
+
+    const bool hasFuseData = materialId != kFuseSwordMaterialIdNone;
+    gSaveContext.ship.fuseSwordMaterialId = materialId;
+    gSaveContext.ship.fuseSwordCurrentDurability = curDurability;
+    gSaveContext.ship.fuseSwordCurDurabilityPresent = hasFuseData;
+    gSaveContext.ship.fuseSwordCurDur = 0;
+    gSaveContext.ship.fuseSwordMaxDur = 0;
+
+    spdlog::info("[FuseDBG] Loaded fuse save data matId={} cur={} hasSavedCur={}", materialId, curDurability,
+                 hasFuseData);
+}
 
 static bool IsInGameplay() {
     return gPlayState != nullptr;
@@ -39,6 +77,9 @@ static void EnsureFuseMenuWindow() {
 }
 
 static void RegisterFuseMod() {
+    SaveManager::Instance->AddSaveFunction(kFuseWeaponSectionName, 1, SaveFuseWeaponSection, true, SECTION_PARENT_NONE);
+    SaveManager::Instance->AddLoadFunction(kFuseWeaponSectionName, 1, LoadFuseWeaponSection);
+
     COND_HOOK(OnLoadGame, true, [](int32_t fileNum) {
         Fuse::OnLoadGame(fileNum);
         FuseHooks::OnLoadGame_ResetObjects();

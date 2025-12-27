@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 
+#include "z64.h"
 #include "soh/Enhancements/Fuse/FuseMaterials.h"
 #include "soh/Enhancements/Fuse/FuseModifiers.h"
 
