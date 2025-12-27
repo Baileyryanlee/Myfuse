@@ -437,23 +437,24 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     gDPFillRectangle(OPA++, kPanelX, kPanelY, kPanelX + border, kPanelY + kPanelH);
     gDPFillRectangle(OPA++, kPanelX + kPanelW - border, kPanelY, kPanelX + kPanelW, kPanelY + kPanelH);
 
-    for (int i = 0; i < kVisibleRows; i++) {
-        const int entryIndex = sModal.scroll + i;
-        if (entryIndex >= entryCount) {
-            break;
-        }
-
-        if (entryIndex == sModal.cursor) {
-            const s32 rowY = kListY + (i * kRowH);
-            const s32 left = kPanelX + 6;
-            const s32 right = kPanelX + kPanelW - 6;
-            const s32 top = rowY - 4;
-            const s32 bottom = rowY + kRowH - 1;
-            Gfx_SetupDL_39Opa(gfxCtx);
-            gDPSetPrimColor(OPA++, 0, 0, 60, 120, 255, 255);
-            gDPFillRectangle(OPA++, left, top, right, bottom);
-        }
-    }
+    // Temporary: highlight bar disabled in favor of text color cues.
+    // for (int i = 0; i < kVisibleRows; i++) {
+    //     const int entryIndex = sModal.scroll + i;
+    //     if (entryIndex >= entryCount) {
+    //         break;
+    //     }
+    //
+    //     if (entryIndex == sModal.cursor) {
+    //         const s32 rowY = kListY + (i * kRowH);
+    //         const s32 left = kPanelX + 6;
+    //         const s32 right = kPanelX + kPanelW - 6;
+    //         const s32 top = rowY - 4;
+    //         const s32 bottom = rowY + kRowH - 1;
+    //         Gfx_SetupDL_39Opa(gfxCtx);
+    //         gDPSetPrimColor(OPA++, 0, 0, 60, 120, 255, 255);
+    //         gDPFillRectangle(OPA++, left, top, right, bottom);
+    //     }
+    // }
 
     gDPPipeSync(OPA++);
     gDPSetPrimColor(OPA++, 0, 0, 255, 255, 255, 255);
@@ -479,8 +480,13 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
             }
 
             const MaterialEntry& entry = materials[entryIndex];
-            if (!entry.enabled) {
+            const bool isSelected = (entryIndex == sModal.cursor);
+            const bool enabled = entry.enabled;
+
+            if (!enabled) {
                 GfxPrint_SetColor(&printer, 140, 140, 140, 255);
+            } else if (isSelected) {
+                GfxPrint_SetColor(&printer, 255, 255, 0, 255);
             } else {
                 GfxPrint_SetColor(&printer, 255, 255, 255, 255);
             }
@@ -489,6 +495,8 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
             GfxPrint_Printf(&printer, "%s  x%d", entry.def ? entry.def->name : "Unknown", entry.quantity);
         }
     }
+
+    GfxPrint_SetColor(&printer, 255, 255, 255, 255);
 
     OPA = GfxPrint_Close(&printer);
     GfxPrint_Destroy(&printer);
