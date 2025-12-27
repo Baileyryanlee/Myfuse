@@ -244,6 +244,14 @@ int Fuse::GetSwordFuseMaxDurability() {
     return (int)gFuseSave.swordFuseMaxDurability;
 }
 
+FuseWeaponView Fuse::GetSwordFuseView() {
+    FuseWeaponView view;
+    view.isFused = Fuse::IsSwordFused();
+    view.curDur = Fuse::GetSwordFuseDurability();
+    view.maxDur = Fuse::GetSwordFuseMaxDurability();
+    return view;
+}
+
 void Fuse::SetSwordFuseDurability(int v) {
     v = std::clamp(v, 0, 65535);
     gFuseSave.swordFuseDurability = (uint16_t)v;

@@ -6,6 +6,7 @@
 #include "soh/Enhancements/Fuse/Fuse.h"
 #include <algorithm>
 #include <cstdio>
+#include <string>
 #include <vector>
 
 namespace {
@@ -25,6 +26,11 @@ constexpr s32 kListY = kPanelY + 36;
 constexpr s32 kRowH = 14;
 constexpr s32 kVisibleRows = 8;
 
+static constexpr int kFusePanelLeftX = 5;
+static constexpr int kFusePanelLeftY = 5;
+static constexpr int kFusePanelRightX = 22;
+static constexpr int kFusePanelRightY = 5;
+
 struct FuseModalState {
     bool open = false;
     int cursor = 0;
@@ -41,6 +47,51 @@ struct MaterialEntry {
     int quantity;
     bool enabled;
 };
+
+static const char* SwordNameFromEquip(EquipValueSword sword) {
+    switch (sword) {
+        case EQUIP_VALUE_SWORD_KOKIRI:
+            return "Kokiri Sword";
+        case EQUIP_VALUE_SWORD_MASTER:
+            return "Master Sword";
+        case EQUIP_VALUE_SWORD_BIGGORON:
+            return "Biggoron Sword";
+        default:
+            return "Selected Sword";
+    }
+}
+
+static const char* ModifierName(ModifierId id) {
+    switch (id) {
+        case ModifierId::Hammerize:
+            return "Hammerize";
+        case ModifierId::Stun:
+            return "Stun";
+        default:
+            return "Unknown";
+    }
+}
+
+static std::string Fuse_MakeDurabilityBar(int cur, int max, int width = 10) {
+    if (max <= 0) {
+        return "[----------]";
+    }
+    if (cur < 0) {
+        cur = 0;
+    }
+    if (cur > max) {
+        cur = max;
+    }
+
+    const int filled = (cur * width) / max;
+
+    std::string s = "[";
+    for (int i = 0; i < width; i++) {
+        s += (i < filled) ? '#' : '-';
+    }
+    s += "]";
+    return s;
+}
 
 std::vector<MaterialEntry> BuildMaterialList() {
     std::vector<MaterialEntry> materials;
@@ -496,7 +547,61 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         }
     }
 
+    const MaterialEntry* highlightedEntry = nullptr;
+    if (entryCount > 0 && sModal.cursor >= 0 && sModal.cursor < entryCount) {
+        highlightedEntry = &materials[sModal.cursor];
+    }
+
+    const char* selectedItemName = SwordNameFromEquip(context.hoveredSword);
+    const FuseWeaponView weaponView = Fuse::GetSwordFuseView();
+
+    std::string matName = highlightedEntry && highlightedEntry->def ? highlightedEntry->def->name : "--";
+    int matQty = highlightedEntry ? highlightedEntry->quantity : 0;
+    std::string modifierText = "None";
+    if (highlightedEntry && highlightedEntry->def && highlightedEntry->def->modifierCount > 0) {
+        modifierText.clear();
+        for (size_t i = 0; i < highlightedEntry->def->modifierCount; i++) {
+            const ModifierSpec& mod = highlightedEntry->def->modifiers[i];
+            if (!modifierText.empty()) {
+                modifierText += ", ";
+            }
+            modifierText += ModifierName(mod.id);
+        }
+    }
+
     GfxPrint_SetColor(&printer, 255, 255, 255, 255);
+
+    GfxPrint_SetPos(&printer, kFusePanelLeftX, kFusePanelLeftY);
+    GfxPrint_Printf(&printer, "Selected:");
+
+    GfxPrint_SetPos(&printer, kFusePanelLeftX, kFusePanelLeftY + 1);
+    GfxPrint_Printf(&printer, "%s", selectedItemName);
+
+    GfxPrint_SetPos(&printer, kFusePanelLeftX, kFusePanelLeftY + 3);
+    if (!weaponView.isFused) {
+        GfxPrint_Printf(&printer, "Durability: --");
+    } else {
+        GfxPrint_Printf(&printer, "Durability: %d / %d", weaponView.curDur, weaponView.maxDur);
+
+        GfxPrint_SetPos(&printer, kFusePanelLeftX, kFusePanelLeftY + 4);
+        const std::string bar = Fuse_MakeDurabilityBar(weaponView.curDur, weaponView.maxDur, 10);
+        GfxPrint_Printf(&printer, "          %s", bar.c_str());
+    }
+
+    GfxPrint_SetPos(&printer, kFusePanelRightX, kFusePanelRightY);
+    GfxPrint_Printf(&printer, "Material:");
+
+    GfxPrint_SetPos(&printer, kFusePanelRightX, kFusePanelRightY + 1);
+    GfxPrint_Printf(&printer, "%s", matName.c_str());
+
+    GfxPrint_SetPos(&printer, kFusePanelRightX, kFusePanelRightY + 3);
+    GfxPrint_Printf(&printer, "Qty: %d", matQty);
+
+    GfxPrint_SetPos(&printer, kFusePanelRightX, kFusePanelRightY + 5);
+    GfxPrint_Printf(&printer, "Effect:");
+
+    GfxPrint_SetPos(&printer, kFusePanelRightX, kFusePanelRightY + 6);
+    GfxPrint_Printf(&printer, "%s", modifierText.c_str());
 
     OPA = GfxPrint_Close(&printer);
     GfxPrint_Destroy(&printer);

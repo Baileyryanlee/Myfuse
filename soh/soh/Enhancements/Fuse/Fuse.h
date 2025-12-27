@@ -36,6 +36,12 @@ int GetRockCount();     // NEW
 bool IsSwordFused();
 MaterialId GetSwordMaterial();
 void FuseSwordWithMaterial(MaterialId id, uint16_t maxDurability);
+struct FuseWeaponView {
+    bool isFused = false;
+    int curDur = 0;
+    int maxDur = 0;
+};
+FuseWeaponView GetSwordFuseView();
 enum class FuseResult { Ok, NotEnoughMaterial, InvalidMaterial, AlreadyFused, NotAllowed };
 FuseResult TryFuseSword(MaterialId id);
 FuseResult TryUnfuseSword();
