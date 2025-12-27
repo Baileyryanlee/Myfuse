@@ -21,6 +21,7 @@ struct FuseSaveData {
 
 struct FuseRuntimeState {
     bool enabled = true;
+    bool swordFuseLoadedFromSave = false;
 
     // Useful for debugging/testing
     const char* lastEvent = "None";

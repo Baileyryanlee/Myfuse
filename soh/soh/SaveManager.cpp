@@ -35,15 +35,30 @@ static void ResetFuseSaveContextData() {
     gSaveContext.ship.fuseSwordMaterialId = kFuseSwordMaterialIdNone;
     gSaveContext.ship.fuseSwordCurDur = 0;
     gSaveContext.ship.fuseSwordMaxDur = 0;
+    gSaveContext.ship.fuseSwordCurrentDurability = 0;
 }
 
 static void LoadFuseSaveContextData() {
     SaveManager::Instance->LoadStruct("fuse", []() {
         SaveManager::Instance->LoadData("swordMaterialId", gSaveContext.ship.fuseSwordMaterialId,
                                         static_cast<s16>(kFuseSwordMaterialIdNone));
-        SaveManager::Instance->LoadData("swordCurDur", gSaveContext.ship.fuseSwordCurDur, static_cast<s16>(0));
         SaveManager::Instance->LoadData("swordMaxDur", gSaveContext.ship.fuseSwordMaxDur, static_cast<s16>(0));
+        SaveManager::Instance->LoadData("swordCurDur", gSaveContext.ship.fuseSwordCurDur, static_cast<s16>(0));
+        SaveManager::Instance->LoadData("swordCurrentDur", gSaveContext.ship.fuseSwordCurrentDurability,
+                                        static_cast<u16>(0));
     });
+
+    if (gSaveContext.ship.fuseSwordCurrentDurability == 0) {
+        if (gSaveContext.ship.fuseSwordMaxDur > 0) {
+            gSaveContext.ship.fuseSwordCurrentDurability = static_cast<u16>(gSaveContext.ship.fuseSwordMaxDur);
+        } else if (gSaveContext.ship.fuseSwordCurDur > 0) {
+            gSaveContext.ship.fuseSwordCurrentDurability = static_cast<u16>(gSaveContext.ship.fuseSwordCurDur);
+        }
+    }
+
+    spdlog::info("[FuseDBG] Loaded fuse save data matId={} cur={} max={} (legacyCur={})",
+                 gSaveContext.ship.fuseSwordMaterialId, gSaveContext.ship.fuseSwordCurrentDurability,
+                 gSaveContext.ship.fuseSwordMaxDur, gSaveContext.ship.fuseSwordCurDur);
 }
 
 void SaveManager::WriteSaveFile(const std::filesystem::path& savePath, const uintptr_t addr, void* dramAddr,
@@ -134,7 +149,8 @@ SaveManager::SaveManager() {
     AddLoadFunction("base", 2, LoadBaseVersion2);
     AddLoadFunction("base", 3, LoadBaseVersion3);
     AddLoadFunction("base", 4, LoadBaseVersion4);
-    AddSaveFunction("base", 4, SaveBase, true, SECTION_PARENT_NONE);
+    AddLoadFunction("base", 5, LoadBaseVersion5);
+    AddSaveFunction("base", 5, SaveBase, true, SECTION_PARENT_NONE);
 
     AddLoadFunction("randomizer", 1, LoadRandomizer);
     AddSaveFunction("randomizer", 1, SaveRandomizer, true, SECTION_PARENT_NONE);
@@ -2161,6 +2177,10 @@ void SaveManager::LoadBaseVersion4() {
     LoadFuseSaveContextData();
 }
 
+void SaveManager::LoadBaseVersion5() {
+    LoadBaseVersion4();
+}
+
 void SaveManager::SaveBase(SaveContext* saveContext, int sectionID, bool fullSave) {
     SaveManager::Instance->SaveData("entranceIndex", saveContext->entranceIndex);
     SaveManager::Instance->SaveData("linkAge", saveContext->linkAge);
@@ -2312,6 +2332,7 @@ void SaveManager::SaveBase(SaveContext* saveContext, int sectionID, bool fullSav
     SaveManager::Instance->SaveStruct("fuse", [&]() {
         SaveManager::Instance->SaveData("swordMaterialId", saveContext->ship.fuseSwordMaterialId);
         SaveManager::Instance->SaveData("swordCurDur", saveContext->ship.fuseSwordCurDur);
+        SaveManager::Instance->SaveData("swordCurrentDur", saveContext->ship.fuseSwordCurrentDurability);
         SaveManager::Instance->SaveData("swordMaxDur", saveContext->ship.fuseSwordMaxDur);
     });
     SaveManager::Instance->SaveData("isMasterQuest", saveContext->ship.quest.id == QUEST_MASTER);

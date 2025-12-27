@@ -48,7 +48,7 @@ bool HasRockMaterial(); // now means rockCount > 0
 int GetRockCount();     // NEW
 bool IsSwordFused();
 MaterialId GetSwordMaterial();
-void FuseSwordWithMaterial(MaterialId id, uint16_t maxDurability);
+void FuseSwordWithMaterial(MaterialId id, uint16_t maxDurability, bool initializeCurrentDurability = true);
 enum class FuseResult { Ok, NotEnoughMaterial, InvalidMaterial, AlreadyFused, NotAllowed };
 FuseResult TryFuseSword(MaterialId id);
 FuseResult TryUnfuseSword();
