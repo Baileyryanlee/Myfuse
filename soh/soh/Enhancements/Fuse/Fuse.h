@@ -15,7 +15,8 @@ struct FuseWeaponView {
     MaterialId materialId = MaterialId::None;
 };
 
-void Fuse_ApplySavedSwordFuse(const PlayState* play);
+void Fuse_ApplySavedSwordFuse(const PlayState* play, s16 savedMaterialId, s16 savedMaxDurability,
+                              bool hasSavedCurDurability, u16 savedCurDurability, s16 legacyCurDurability);
 void Fuse_WriteSwordFuseToSave(const PlayState* play);
 void Fuse_ClearSavedSwordFuse(const PlayState* play);
 
@@ -48,7 +49,8 @@ bool HasRockMaterial(); // now means rockCount > 0
 int GetRockCount();     // NEW
 bool IsSwordFused();
 MaterialId GetSwordMaterial();
-void FuseSwordWithMaterial(MaterialId id, uint16_t maxDurability, bool initializeCurrentDurability = true);
+void FuseSwordWithMaterial(MaterialId id, uint16_t maxDurability, bool initializeCurrentDurability = true,
+                           bool logDurability = true);
 enum class FuseResult { Ok, NotEnoughMaterial, InvalidMaterial, AlreadyFused, NotAllowed };
 FuseResult TryFuseSword(MaterialId id);
 FuseResult TryUnfuseSword();
