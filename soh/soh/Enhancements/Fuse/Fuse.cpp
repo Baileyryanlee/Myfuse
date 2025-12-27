@@ -185,7 +185,11 @@ void Fuse_ApplySavedSwordFuse(const PlayState* play) {
     }
 
     if (savedCurrentDurability == 0) {
-        savedCurrentDurability = static_cast<uint16_t>(std::clamp<int>(savedCurDur, 0, maxDurability));
+        if (savedCurDur > 0) {
+            savedCurrentDurability = static_cast<uint16_t>(std::clamp<int>(savedCurDur, 0, maxDurability));
+        } else {
+            savedCurrentDurability = static_cast<uint16_t>(maxDurability);
+        }
     }
 
     const int clampedCur = std::clamp<int>(savedCurrentDurability, 0, maxDurability);
@@ -195,13 +199,13 @@ void Fuse_ApplySavedSwordFuse(const PlayState* play) {
         return;
     }
 
-    gFuseRuntime.swordFuseLoadedFromSave = true;
-    Fuse::SetSwordFuseDurability(clampedCur);
     Fuse::FuseSwordWithMaterial(materialId, static_cast<uint16_t>(maxDurability), false);
+    Fuse::SetSwordFuseDurability(clampedCur);
+    gFuseRuntime.swordFuseLoadedFromSave = true;
     Fuse::SetLastEvent("Sword fuse restored from save");
 
-    Fuse::Log("[FuseDBG] Applied saved fuse matId=%d cur=%d max=%d\n", static_cast<int>(materialId),
-              Fuse::GetSwordFuseDurability(), Fuse::GetSwordFuseMaxDurability());
+    Fuse::Log("[FuseDBG] Applied saved fuse matId=%d cur=%d max=%d\n", static_cast<int>(materialId), clampedCur,
+              Fuse::GetSwordFuseMaxDurability());
 }
 
 // -----------------------------------------------------------------------------

@@ -2329,6 +2329,8 @@ void SaveManager::SaveBase(SaveContext* saveContext, int sectionID, bool fullSav
     SaveManager::Instance->SaveArray("randomizerInf", ARRAY_COUNT(saveContext->ship.randomizerInf), [&](size_t i) {
         SaveManager::Instance->SaveData("", saveContext->ship.randomizerInf[i]);
     });
+    spdlog::info("[FuseDBG] Saving fuse matId={} cur={} max={}", saveContext->ship.fuseSwordMaterialId,
+                 saveContext->ship.fuseSwordCurrentDurability, saveContext->ship.fuseSwordMaxDur);
     SaveManager::Instance->SaveStruct("fuse", [&]() {
         SaveManager::Instance->SaveData("swordMaterialId", saveContext->ship.fuseSwordMaterialId);
         SaveManager::Instance->SaveData("swordCurDur", saveContext->ship.fuseSwordCurDur);
