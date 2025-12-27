@@ -244,12 +244,23 @@ int Fuse::GetSwordFuseMaxDurability() {
     return (int)gFuseSave.swordFuseMaxDurability;
 }
 
-FuseWeaponView Fuse::GetSwordFuseView() {
-    FuseWeaponView view;
-    view.isFused = Fuse::IsSwordFused();
-    view.curDur = Fuse::GetSwordFuseDurability();
-    view.maxDur = Fuse::GetSwordFuseMaxDurability();
-    return view;
+FuseWeaponView Fuse_GetEquippedSwordView(const PlayState* play) {
+    (void)play;
+
+    FuseWeaponView out{};
+    out.isFused = false;
+    out.curDurability = 0;
+    out.maxDurability = 0;
+    out.materialId = MaterialId::None;
+
+    if (Fuse::IsSwordFused()) {
+        out.isFused = true;
+        out.curDurability = Fuse::GetSwordFuseDurability();
+        out.maxDurability = Fuse::GetSwordFuseMaxDurability();
+        out.materialId = Fuse::GetSwordMaterial();
+    }
+
+    return out;
 }
 
 void Fuse::SetSwordFuseDurability(int v) {

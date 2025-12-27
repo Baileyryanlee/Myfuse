@@ -8,6 +8,15 @@ struct PlayState;
 struct Player;
 struct Actor;
 
+struct FuseWeaponView {
+    bool isFused = false;
+    int curDurability = 0;
+    int maxDurability = 0;
+    MaterialId materialId = MaterialId::None;
+};
+
+FuseWeaponView Fuse_GetEquippedSwordView(const PlayState* play);
+
 namespace Fuse {
 
 // Call once on load / init and every frame.
@@ -36,12 +45,6 @@ int GetRockCount();     // NEW
 bool IsSwordFused();
 MaterialId GetSwordMaterial();
 void FuseSwordWithMaterial(MaterialId id, uint16_t maxDurability);
-struct FuseWeaponView {
-    bool isFused = false;
-    int curDur = 0;
-    int maxDur = 0;
-};
-FuseWeaponView GetSwordFuseView();
 enum class FuseResult { Ok, NotEnoughMaterial, InvalidMaterial, AlreadyFused, NotAllowed };
 FuseResult TryFuseSword(MaterialId id);
 FuseResult TryUnfuseSword();
