@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstdarg>
 #include <cstdio>
+#include <limits>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -23,6 +24,13 @@ extern "C" {
 // -----------------------------------------------------------------------------
 static FuseSaveData gFuseSave; // persistent-ready (not serialized yet)
 static FuseRuntimeState gFuseRuntime;
+static constexpr s16 kSavedSwordMaterialIdNone = -1;
+
+static void ResetSavedSwordFuseFields() {
+    gSaveContext.ship.fuseSwordMaterialId = kSavedSwordMaterialIdNone;
+    gSaveContext.ship.fuseSwordCurDur = 0;
+    gSaveContext.ship.fuseSwordMaxDur = 0;
+}
 
 // -----------------------------------------------------------------------------
 // Modifier helpers (module-local)
@@ -110,6 +118,69 @@ void Fuse::Log(const char* fmt, ...) {
 
     fputs(buf, stdout);
     fflush(stdout);
+}
+
+// -----------------------------------------------------------------------------
+// Save synchronization helpers (equipped sword only)
+// -----------------------------------------------------------------------------
+void Fuse_ClearSavedSwordFuse(const PlayState* play) {
+    (void)play;
+
+    ResetSavedSwordFuseFields();
+    Fuse::ClearSwordFuse();
+}
+
+void Fuse_WriteSwordFuseToSave(const PlayState* play) {
+    (void)play;
+
+    if (!Fuse::IsSwordFused()) {
+        ResetSavedSwordFuseFields();
+        return;
+    }
+
+    const MaterialId materialId = Fuse::GetSwordMaterial();
+    gSaveContext.ship.fuseSwordMaterialId = static_cast<s16>(materialId);
+    gSaveContext.ship.fuseSwordCurDur = static_cast<s16>(std::clamp(
+        Fuse::GetSwordFuseDurability(), 0, static_cast<int>(std::numeric_limits<int16_t>::max())));
+    gSaveContext.ship.fuseSwordMaxDur = static_cast<s16>(std::clamp(
+        Fuse::GetSwordFuseMaxDurability(), 0, static_cast<int>(std::numeric_limits<int16_t>::max())));
+}
+
+void Fuse_ApplySavedSwordFuse(const PlayState* play) {
+    (void)play;
+
+    const s16 savedMaterial = gSaveContext.ship.fuseSwordMaterialId;
+    const s16 savedCurDur = gSaveContext.ship.fuseSwordCurDur;
+    const s16 savedMaxDur = gSaveContext.ship.fuseSwordMaxDur;
+
+    if (savedMaterial == kSavedSwordMaterialIdNone) {
+        Fuse::ClearSwordFuse();
+        return;
+    }
+
+    const MaterialId materialId = static_cast<MaterialId>(std::max<s16>(0, savedMaterial));
+    const MaterialDef* def = Fuse::GetMaterialDef(materialId);
+
+    if (!def) {
+        Fuse_ClearSavedSwordFuse(play);
+        return;
+    }
+
+    int maxDurability = savedMaxDur;
+    if (maxDurability <= 0) {
+        maxDurability = Fuse::GetMaterialBaseDurability(materialId);
+    }
+
+    if (maxDurability <= 0) {
+        Fuse_ClearSavedSwordFuse(play);
+        return;
+    }
+
+    const int clampedCur = std::clamp<int>(savedCurDur, 0, maxDurability);
+
+    Fuse::FuseSwordWithMaterial(materialId, static_cast<uint16_t>(maxDurability));
+    Fuse::SetSwordFuseDurability(clampedCur);
+    Fuse::SetLastEvent("Sword fuse restored from save");
 }
 
 // -----------------------------------------------------------------------------
@@ -321,6 +392,8 @@ Fuse::FuseResult Fuse::TryFuseSword(MaterialId id) {
 
     Fuse::FuseSwordWithMaterial(id, Fuse::GetMaterialBaseDurability(id));
 
+    Fuse_WriteSwordFuseToSave(nullptr);
+
     if (id == MaterialId::DekuNut) {
         const int postConsumeCount = Fuse::GetMaterialCount(id);
         Fuse::Log("[FuseMVP] TryFuseSword(DekuNut): before=%d after=%d\n", preConsumeCount, postConsumeCount);
@@ -334,7 +407,7 @@ Fuse::FuseResult Fuse::TryUnfuseSword() {
         return FuseResult::Ok;
     }
 
-    Fuse::ClearSwordFuse();
+    Fuse_ClearSavedSwordFuse(nullptr);
     return FuseResult::Ok;
 }
 
@@ -350,7 +423,7 @@ bool Fuse::DamageSwordFuseDurability(PlayState* play, int amount, const char* re
     SetSwordFuseDurability(cur);
 
     if (cur == 0) {
-        ClearSwordFuse();
+        Fuse_ClearSavedSwordFuse(play);
         const int frame = play ? play->gameplayFrames : -1;
         Log("[FuseMVP] Sword fuse broke at frame=%d; clearing fuse and reverting to vanilla (reason=%s)\n", frame,
             reason ? reason : "unknown");
@@ -386,9 +459,8 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
     gFuseRuntime.enabled = true;
     gFuseRuntime.lastEvent = "Loaded";
 
-    // For now, reset save-state too (until we implement persistence)
-    // NOTE: When we add serialization, remove this reset.
     gFuseSave = FuseSaveData{};
+    Fuse_ApplySavedSwordFuse(nullptr);
 
     Fuse::Log("[FuseMVP] Save loaded -> Fuse ACTIVE (always enabled)\n");
     Fuse::Log("[FuseMVP] MVP: Throw a liftable rock until it BREAKS to acquire ROCK.\n");

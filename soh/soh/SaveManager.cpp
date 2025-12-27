@@ -29,6 +29,23 @@
 extern "C" SaveContext gSaveContext;
 using namespace std::string_literals;
 
+static constexpr s16 kFuseSwordMaterialIdNone = -1;
+
+static void ResetFuseSaveContextData() {
+    gSaveContext.ship.fuseSwordMaterialId = kFuseSwordMaterialIdNone;
+    gSaveContext.ship.fuseSwordCurDur = 0;
+    gSaveContext.ship.fuseSwordMaxDur = 0;
+}
+
+static void LoadFuseSaveContextData() {
+    SaveManager::Instance->LoadStruct("fuse", []() {
+        SaveManager::Instance->LoadData("swordMaterialId", gSaveContext.ship.fuseSwordMaterialId,
+                                        static_cast<s16>(kFuseSwordMaterialIdNone));
+        SaveManager::Instance->LoadData("swordCurDur", gSaveContext.ship.fuseSwordCurDur, static_cast<s16>(0));
+        SaveManager::Instance->LoadData("swordMaxDur", gSaveContext.ship.fuseSwordMaxDur, static_cast<s16>(0));
+    });
+}
+
 void SaveManager::WriteSaveFile(const std::filesystem::path& savePath, const uintptr_t addr, void* dramAddr,
                                 const size_t size) {
     std::ofstream saveFile = std::ofstream(savePath, std::fstream::in | std::fstream::out | std::fstream::binary);
@@ -788,6 +805,7 @@ void SaveManager::InitFileNormal() {
     gSaveContext.ship.pendingSaleMod = MOD_NONE;
     gSaveContext.ship.pendingIceTrapCount = 0;
     gSaveContext.ship.maskMemory = PLAYER_MASK_NONE;
+    ResetFuseSaveContextData();
 
     // Init with normal quest unless only an MQ rom is provided
     gSaveContext.ship.quest.id = OTRGlobals::Instance->HasOriginal() ? QUEST_NORMAL : QUEST_MASTER;
@@ -964,6 +982,7 @@ void SaveManager::InitFileMaxed() {
     gSaveContext.isDoubleDefenseAcquired = 1;
     gSaveContext.bgsFlag = 1;
     gSaveContext.ocarinaGameRoundNum = 0;
+    ResetFuseSaveContextData();
     for (int button = 0; button < ARRAY_COUNT(gSaveContext.childEquips.buttonItems); button++) {
         gSaveContext.childEquips.buttonItems[button] = ITEM_NONE;
     }
@@ -1533,6 +1552,7 @@ void SaveManager::LoadBaseVersion1() {
     SaveManager::Instance->LoadArray("randomizerInf", ARRAY_COUNT(gSaveContext.ship.randomizerInf), [](size_t i) {
         SaveManager::Instance->LoadData("", gSaveContext.ship.randomizerInf[i]);
     });
+    LoadFuseSaveContextData();
 }
 
 void SaveManager::LoadBaseVersion2() {
@@ -1744,6 +1764,7 @@ void SaveManager::LoadBaseVersion2() {
                 });
         }
     }
+    LoadFuseSaveContextData();
 }
 
 void SaveManager::LoadBaseVersion3() {
@@ -1959,6 +1980,7 @@ void SaveManager::LoadBaseVersion3() {
         SaveManager::Instance->LoadData("tempCollectFlags", gSaveContext.ship.backupFW.tempCollectFlags);
     });
     SaveManager::Instance->LoadData("dogParams", gSaveContext.dogParams);
+    LoadFuseSaveContextData();
 }
 
 void SaveManager::LoadBaseVersion4() {
@@ -2136,6 +2158,7 @@ void SaveManager::LoadBaseVersion4() {
     SaveManager::Instance->LoadData("dogParams", gSaveContext.dogParams);
     SaveManager::Instance->LoadData("filenameLanguage", gSaveContext.ship.filenameLanguage);
     SaveManager::Instance->LoadData("maskMemory", gSaveContext.ship.maskMemory);
+    LoadFuseSaveContextData();
 }
 
 void SaveManager::SaveBase(SaveContext* saveContext, int sectionID, bool fullSave) {
@@ -2285,6 +2308,11 @@ void SaveManager::SaveBase(SaveContext* saveContext, int sectionID, bool fullSav
 
     SaveManager::Instance->SaveArray("randomizerInf", ARRAY_COUNT(saveContext->ship.randomizerInf), [&](size_t i) {
         SaveManager::Instance->SaveData("", saveContext->ship.randomizerInf[i]);
+    });
+    SaveManager::Instance->SaveStruct("fuse", [&]() {
+        SaveManager::Instance->SaveData("swordMaterialId", saveContext->ship.fuseSwordMaterialId);
+        SaveManager::Instance->SaveData("swordCurDur", saveContext->ship.fuseSwordCurDur);
+        SaveManager::Instance->SaveData("swordMaxDur", saveContext->ship.fuseSwordMaxDur);
     });
     SaveManager::Instance->SaveData("isMasterQuest", saveContext->ship.quest.id == QUEST_MASTER);
     SaveManager::Instance->SaveStruct("backupFW", [&]() {

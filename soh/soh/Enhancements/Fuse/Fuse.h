@@ -15,6 +15,10 @@ struct FuseWeaponView {
     MaterialId materialId = MaterialId::None;
 };
 
+void Fuse_ApplySavedSwordFuse(const PlayState* play);
+void Fuse_WriteSwordFuseToSave(const PlayState* play);
+void Fuse_ClearSavedSwordFuse(const PlayState* play);
+
 FuseWeaponView Fuse_GetEquippedSwordView(const PlayState* play);
 
 namespace Fuse {
