@@ -178,6 +178,11 @@ void Fuse_ApplySavedSwordFuse(const PlayState* play) {
 
     const int clampedCur = std::clamp<int>(savedCurDur, 0, maxDurability);
 
+    if (clampedCur <= 0) {
+        Fuse_ClearSavedSwordFuse(play);
+        return;
+    }
+
     Fuse::FuseSwordWithMaterial(materialId, static_cast<uint16_t>(maxDurability));
     Fuse::SetSwordFuseDurability(clampedCur);
     Fuse::SetLastEvent("Sword fuse restored from save");
