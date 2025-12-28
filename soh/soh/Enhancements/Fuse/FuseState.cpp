@@ -34,6 +34,17 @@ void NormalizeState(FuseSwordSaveState& state) {
     }
 }
 
+bool IsNoneMaterialId(int matId) {
+    constexpr int kMaterialIdMin = static_cast<int>(MaterialId::None);
+    constexpr int kMaterialIdMax = static_cast<int>(MaterialId::DekuNut);
+
+    if (matId == kMaterialIdMin || matId == -1) {
+        return true;
+    }
+
+    return matId < kMaterialIdMin || matId > kMaterialIdMax;
+}
+
 void DebugLogState(const char* prefix, const FuseSwordSaveState& state) {
 #if FUSE_DEBUG_LOGS
     const int material = state.isFused ? static_cast<int>(state.materialId) : FusePersistence::kSwordMaterialIdNone;
@@ -80,8 +91,9 @@ FuseSwordSaveState BuildRuntimeSwordState() {
 
 FuseSwordSaveState ReadSwordStateFromContext() {
     FuseSwordSaveState state{};
-    state.isFused = gSaveContext.ship.fuseSwordMaterialId != kSwordMaterialIdNone;
-    state.materialId = static_cast<MaterialId>(std::max<s16>(gSaveContext.ship.fuseSwordMaterialId, 0));
+    const int rawMat = gSaveContext.ship.fuseSwordMaterialId;
+    state.isFused = !IsNoneMaterialId(rawMat);
+    state.materialId = state.isFused ? static_cast<MaterialId>(rawMat) : MaterialId::None;
     state.durabilityMax = gSaveContext.ship.fuseSwordMaxDur;
     state.hasExplicitCur = gSaveContext.ship.fuseSwordCurDurabilityPresent;
     state.durabilityCur = state.hasExplicitCur ? gSaveContext.ship.fuseSwordCurrentDurability
@@ -139,8 +151,8 @@ FuseSwordSaveState LoadSwordStateFromManager(SaveManager& manager) {
         manager.LoadData(kSwordDurabilityKey, curDurability, -999);
     });
 
-    state.isFused = materialId != kSwordMaterialIdNone;
-    state.materialId = static_cast<MaterialId>(std::max(materialId, 0));
+    state.isFused = !IsNoneMaterialId(materialId);
+    state.materialId = state.isFused ? static_cast<MaterialId>(materialId) : MaterialId::None;
     state.hasExplicitCur = curDurability != -999;
     state.durabilityCur = state.hasExplicitCur ? curDurability : 0;
     state.legacyDurability = 0;
