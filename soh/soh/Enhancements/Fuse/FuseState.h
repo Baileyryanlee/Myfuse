@@ -52,7 +52,7 @@ struct FuseRuntimeState {
 
 namespace FusePersistence {
 
-constexpr s16 kSwordMaterialIdNone = -1;
+constexpr s16 kSwordMaterialIdNone = static_cast<s16>(MaterialId::None);
 constexpr const char* kSwordSaveSectionName = "enhancements.fuse";
 constexpr const char* kSwordMaterialKey = "matId";
 constexpr const char* kSwordDurabilityKey = "curDurability";
