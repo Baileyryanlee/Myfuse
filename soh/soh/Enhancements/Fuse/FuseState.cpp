@@ -8,6 +8,7 @@
 
 extern "C" {
 #include "z64.h"
+#include "variables.h"
 }
 
 #ifndef FUSE_DEBUG_LOGS
@@ -91,7 +92,7 @@ FuseSwordSaveState BuildRuntimeSwordState() {
 
 FuseSwordSaveState ReadSwordStateFromContext() {
     FuseSwordSaveState state{};
-    const int rawMat = gSaveContext.ship.fuseSwordMaterialId;
+    const s16 rawMat = gSaveContext.ship.fuseSwordMaterialId;
     state.isFused = !IsNoneMaterialId(rawMat);
     state.materialId = state.isFused ? static_cast<MaterialId>(rawMat) : MaterialId::None;
     state.durabilityMax = gSaveContext.ship.fuseSwordMaxDur;
