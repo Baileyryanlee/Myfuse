@@ -1,5 +1,7 @@
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
 #include "soh/ShipInit.hpp"
+#include "soh/cvar_prefixes.h"
+#include "soh/OTRGlobals.h"
 
 #include "soh/Enhancements/Fuse/Fuse.h"
 #include "soh/Enhancements/Fuse/UI/FuseMenuWindow.h"
@@ -26,14 +28,22 @@ void OnPlayerUpdate(PlayState* play);
 
 static std::shared_ptr<FuseMenuWindow> sFuseMenuWindow;
 static bool sFuseMenuShown = false;
-static bool gFuseEnableSaveWrite = false;
+static constexpr const char* kFuseSaveWriteCVar = CVAR_ENHANCEMENT("Fuse.SaveWrite");
 static constexpr const char* kFuseWeaponSectionName = "enhancements.fuse";
 static constexpr s16 kFuseSwordMaterialIdNone = -1;
 
 static void SaveFuseWeaponSection(SaveContext* saveContext, int /*sectionID*/, bool /*fullSave*/) {
     (void)saveContext;
 
-    if (!gFuseEnableSaveWrite) {
+    const bool enableSaveWrite = CVarGetInteger(kFuseSaveWriteCVar, 0) != 0;
+
+    static bool sLoggedSaveWriteState = false;
+    if (!sLoggedSaveWriteState) {
+        spdlog::info("[FuseDBG] Fuse.SaveWrite cvar={} enabled={}", kFuseSaveWriteCVar, enableSaveWrite ? 1 : 0);
+        sLoggedSaveWriteState = true;
+    }
+
+    if (!enableSaveWrite) {
         return;
     }
 
