@@ -9,6 +9,7 @@
 #include "Enhancements/randomizer/hint.h"
 #include "Enhancements/randomizer/item.h"
 #include "ResourceManagerHelpers.h"
+#include "soh/Enhancements/Fuse/FuseState.h"
 
 #include "z64.h"
 #include "cvar_prefixes.h"
@@ -28,15 +29,8 @@
 
 extern "C" SaveContext gSaveContext;
 using namespace std::string_literals;
-
-static constexpr s16 kFuseSwordMaterialIdNone = -1;
-
 static void ResetFuseSaveContextData() {
-    gSaveContext.ship.fuseSwordMaterialId = kFuseSwordMaterialIdNone;
-    gSaveContext.ship.fuseSwordCurDur = 0;
-    gSaveContext.ship.fuseSwordMaxDur = 0;
-    gSaveContext.ship.fuseSwordCurrentDurability = 0;
-    gSaveContext.ship.fuseSwordCurDurabilityPresent = false;
+    FusePersistence::WriteSwordStateToContext(FusePersistence::ClearedSwordState());
 }
 
 

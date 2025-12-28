@@ -4,6 +4,7 @@
 #include "soh/OTRGlobals.h"
 
 #include "soh/Enhancements/Fuse/Fuse.h"
+#include "soh/Enhancements/Fuse/FuseState.h"
 #include "soh/Enhancements/Fuse/UI/FuseMenuWindow.h"
 #include "soh/SaveManager.h"
 
@@ -29,8 +30,6 @@ void OnPlayerUpdate(PlayState* play);
 static std::shared_ptr<FuseMenuWindow> sFuseMenuWindow;
 static bool sFuseMenuShown = false;
 static constexpr const char* kFuseSaveWriteCVar = CVAR_ENHANCEMENT("Fuse.SaveWrite");
-static constexpr const char* kFuseWeaponSectionName = "enhancements.fuse";
-static constexpr s16 kFuseSwordMaterialIdNone = -1;
 
 static void SaveFuseWeaponSection(SaveContext* saveContext, int /*sectionID*/, bool /*fullSave*/) {
     (void)saveContext;
@@ -47,40 +46,13 @@ static void SaveFuseWeaponSection(SaveContext* saveContext, int /*sectionID*/, b
         return;
     }
 
-    const int materialId = Fuse::IsSwordFused() ? static_cast<int>(Fuse::GetSwordMaterial())
-                                                : static_cast<int>(kFuseSwordMaterialIdNone);
-    const int curDurability = Fuse::IsSwordFused() ? Fuse::GetSwordFuseDurability() : 0;
-
-    spdlog::info("[FuseDBG] SaveWrite begin: matId={} cur={}", materialId, curDurability);
-
-    SaveManager::Instance->SaveStruct(kFuseWeaponSectionName, [&]() {
-        SaveManager::Instance->SaveData("matId", materialId);
-        SaveManager::Instance->SaveData("curDurability", curDurability);
-    });
-
-    spdlog::info("[FuseDBG] SaveWrite end: wrote section {}", kFuseWeaponSectionName);
+    const FuseSwordSaveState state = FusePersistence::BuildRuntimeSwordState();
+    FusePersistence::SaveSwordStateToManager(*SaveManager::Instance, state);
 }
 
 static void LoadFuseWeaponSection() {
-    int materialId = kFuseSwordMaterialIdNone;
-    int curDurability = -999;
-
-    SaveManager::Instance->LoadStruct(kFuseWeaponSectionName, [&]() {
-        SaveManager::Instance->LoadData("matId", materialId, static_cast<int>(kFuseSwordMaterialIdNone));
-        SaveManager::Instance->LoadData("curDurability", curDurability, -999);
-    });
-
-    const bool hasFuseData = materialId != kFuseSwordMaterialIdNone;
-    const bool hasCurKey = curDurability != -999;
-    gSaveContext.ship.fuseSwordMaterialId = static_cast<s16>(materialId);
-    gSaveContext.ship.fuseSwordCurrentDurability =
-        static_cast<u16>(std::max(hasCurKey ? curDurability : 0, 0));
-    gSaveContext.ship.fuseSwordCurDurabilityPresent = hasCurKey;
-    gSaveContext.ship.fuseSwordCurDur = 0;
-    gSaveContext.ship.fuseSwordMaxDur = 0;
-
-    spdlog::info("[FuseDBG] SaveRead: hasFuseData={} hasCurKey={} matId={} cur={}", hasFuseData ? 1 : 0,
-                 hasCurKey ? 1 : 0, materialId, curDurability);
+    const FuseSwordSaveState state = FusePersistence::LoadSwordStateFromManager(*SaveManager::Instance);
+    FusePersistence::WriteSwordStateToContext(state);
 }
 
 static bool IsInGameplay() {
@@ -99,8 +71,9 @@ static void EnsureFuseMenuWindow() {
 }
 
 static void RegisterFuseMod() {
-    SaveManager::Instance->AddSaveFunction(kFuseWeaponSectionName, 1, SaveFuseWeaponSection, true, SECTION_PARENT_NONE);
-    SaveManager::Instance->AddLoadFunction(kFuseWeaponSectionName, 1, LoadFuseWeaponSection);
+    SaveManager::Instance->AddSaveFunction(FusePersistence::kSwordSaveSectionName, 1, SaveFuseWeaponSection, true,
+                                           SECTION_PARENT_NONE);
+    SaveManager::Instance->AddLoadFunction(FusePersistence::kSwordSaveSectionName, 1, LoadFuseWeaponSection);
 
     COND_HOOK(OnLoadGame, true, [](int32_t fileNum) {
         Fuse::OnLoadGame(fileNum);
