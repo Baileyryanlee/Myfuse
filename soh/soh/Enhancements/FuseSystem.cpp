@@ -63,22 +63,24 @@ static void SaveFuseWeaponSection(SaveContext* saveContext, int /*sectionID*/, b
 
 static void LoadFuseWeaponSection() {
     int materialId = kFuseSwordMaterialIdNone;
-    int curDurability = 0;
+    int curDurability = -999;
 
     SaveManager::Instance->LoadStruct(kFuseWeaponSectionName, [&]() {
         SaveManager::Instance->LoadData("matId", materialId, static_cast<int>(kFuseSwordMaterialIdNone));
-        SaveManager::Instance->LoadData("curDurability", curDurability, 0);
+        SaveManager::Instance->LoadData("curDurability", curDurability, -999);
     });
 
     const bool hasFuseData = materialId != kFuseSwordMaterialIdNone;
+    const bool hasCurKey = curDurability != -999;
     gSaveContext.ship.fuseSwordMaterialId = static_cast<s16>(materialId);
-    gSaveContext.ship.fuseSwordCurrentDurability = static_cast<u16>(std::max(curDurability, 0));
-    gSaveContext.ship.fuseSwordCurDurabilityPresent = hasFuseData;
+    gSaveContext.ship.fuseSwordCurrentDurability =
+        static_cast<u16>(std::max(hasCurKey ? curDurability : 0, 0));
+    gSaveContext.ship.fuseSwordCurDurabilityPresent = hasCurKey;
     gSaveContext.ship.fuseSwordCurDur = 0;
     gSaveContext.ship.fuseSwordMaxDur = 0;
 
-    spdlog::info("[FuseDBG] SaveRead: hasSection={} matId={} cur={}", hasFuseData ? 1 : 0, materialId,
-                 curDurability);
+    spdlog::info("[FuseDBG] SaveRead: hasFuseData={} hasCurKey={} matId={} cur={}", hasFuseData ? 1 : 0,
+                 hasCurKey ? 1 : 0, materialId, curDurability);
 }
 
 static bool IsInGameplay() {
