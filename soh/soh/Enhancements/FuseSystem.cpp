@@ -34,7 +34,7 @@ static constexpr const char* kFuseSaveWriteCVar = CVAR_ENHANCEMENT("Fuse.SaveWri
 static void SaveFuseWeaponSection(SaveContext* saveContext, int /*sectionID*/, bool /*fullSave*/) {
     (void)saveContext;
 
-    const bool enableSaveWrite = CVarGetInteger(kFuseSaveWriteCVar, 0) != 0;
+    const bool enableSaveWrite = CVarGetInteger(kFuseSaveWriteCVar, 1) != 0;
 
     static bool sLoggedSaveWriteState = false;
     if (!sLoggedSaveWriteState) {
