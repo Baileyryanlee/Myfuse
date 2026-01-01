@@ -8,6 +8,7 @@ extern "C" {
 #include "variables.h"
 #include "z64.h"
 #include "z64actor.h"
+#include "overlays/actors/ovl_En_Fz/z_en_fz.h"
 #include <functions.h>
 }
 
@@ -31,6 +32,7 @@ static int gFramesUntilThrownRockCheck = 0;
 static int gLastImpactDrainFrame = -1;
 static int gSwordATVictimCooldownFrame = -1;
 static std::unordered_set<void*> gSwordATVictimCooldown;
+static std::unordered_set<void*> gAwardedFrozenShards;
 static uint32_t gSwordBaseDmgFlags[4];
 static bool gSwordBaseValid = false;
 
@@ -124,6 +126,62 @@ static bool IsPlayerSwordCollider(Player* player, Collider* collider) {
     }
 
     return false;
+}
+
+static void CleanupAwardedFreezards(PlayState* play) {
+    if (!play) {
+        gAwardedFrozenShards.clear();
+        return;
+    }
+
+    for (auto it = gAwardedFrozenShards.begin(); it != gAwardedFrozenShards.end();) {
+        Actor* tracked = static_cast<Actor*>(*it);
+
+        if (!IsActorStillInLists(play, tracked)) {
+            it = gAwardedFrozenShards.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+static void MaybeAwardFrozenShard(PlayState* play) {
+    if (!play) {
+        return;
+    }
+
+    CleanupAwardedFreezards(play);
+
+    ActorContext* actorCtx = &play->actorCtx;
+
+    for (int cat = 0; cat < ACTORCAT_MAX; cat++) {
+        for (Actor* actor = actorCtx->actorLists[cat].head; actor; actor = actor->next) {
+            if (actor->id != ACTOR_EN_FZ) {
+                continue;
+            }
+
+            if (gAwardedFrozenShards.count(actor) > 0) {
+                continue;
+            }
+
+            EnFz* freezard = reinterpret_cast<EnFz*>(actor);
+            const bool flaggedForDespawn = freezard && freezard->isDespawning;
+            const bool zeroHealth = actor->colChkInfo.health == 0;
+
+            if (!flaggedForDespawn && !zeroHealth) {
+                continue;
+            }
+
+            gAwardedFrozenShards.insert(actor);
+
+            if (Rand_ZeroOne() < 0.25f) {
+                Fuse::AddMaterial(MaterialId::FrozenShard, 1);
+                const int newCount = Fuse::GetMaterialCount(MaterialId::FrozenShard);
+                Fuse::Log("[FuseDBG] MatGain: mat=%d qty=%d actor=0x%04X\n", static_cast<int>(MaterialId::FrozenShard),
+                          newCount, static_cast<uint16_t>(actor->id));
+            }
+        }
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -367,6 +425,7 @@ void OnLoadGame_ResetObjects() {
     gLastImpactDrainFrame = -1;
     gSwordATVictimCooldownFrame = -1;
     gSwordATVictimCooldown.clear();
+    gAwardedFrozenShards.clear();
     gSwordBaseValid = false;
 }
 
@@ -390,6 +449,7 @@ void OnFrame_Objects_Pre(PlayState* play) {
     CaptureSwordBaseDmgFlags(play, player);
 
     UpdateThrownRockAcquisition(play, player);
+    MaybeAwardFrozenShard(play);
 
     const bool swordFused = Fuse::IsSwordFused();
 

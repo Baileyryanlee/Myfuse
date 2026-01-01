@@ -585,4 +585,11 @@ void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim) {
     if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Stun, &stunLevel) && stunLevel > 0) {
         ApplyDekuNutStunVanilla(play, GET_PLAYER(play), victim, stunLevel);
     }
+
+    uint8_t freezeLevel = 0;
+    constexpr uint8_t kIceArrowDamageEffect = 3; // Matches ice arrows / ice magic
+    if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Freeze, &freezeLevel) && freezeLevel > 0) {
+        victim->colChkInfo.damageEffect = kIceArrowDamageEffect;
+        Fuse::Log("[FuseDBG] FreezeHit: victim=%p mat=%d\n", (void*)victim, static_cast<int>(def->id));
+    }
 }
