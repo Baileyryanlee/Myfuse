@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <vector>
 
 extern "C" {
 #include "z64.h"
@@ -174,6 +175,50 @@ void SaveSwordStateToManager(SaveManager& manager, const FuseSwordSaveState& sta
     });
 
     LogPersistenceEvent("Save", normalizedState);
+}
+
+std::vector<std::pair<MaterialId, uint16_t>> LoadMaterialInventoryFromManager(SaveManager& manager) {
+    uint32_t entryCount = 0;
+    std::vector<std::pair<MaterialId, uint16_t>> entries;
+
+    manager.LoadStruct(kMaterialSaveSectionName, [&]() {
+        manager.LoadData(kMaterialCountKey, entryCount, 0u);
+        manager.LoadArray(kMaterialArrayKey, entryCount, [&](size_t /*i*/) {
+            uint16_t idRaw = static_cast<uint16_t>(MaterialId::None);
+            uint16_t qty = 0;
+
+            manager.LoadStruct("", [&]() {
+                manager.LoadData(kMaterialEntryIdKey, idRaw, static_cast<uint16_t>(MaterialId::None));
+                manager.LoadData(kMaterialEntryQtyKey, qty, 0u);
+            });
+
+            entries.push_back({ static_cast<MaterialId>(idRaw), qty });
+            Fuse::Log("[FuseDBG] MatLoad: mat=%u qty=%u\n", static_cast<unsigned int>(idRaw),
+                      static_cast<unsigned int>(qty));
+        });
+    });
+
+    return entries;
+}
+
+void SaveMaterialInventoryToManager(SaveManager& manager,
+                                    const std::vector<std::pair<MaterialId, uint16_t>>& inventoryEntries) {
+    const uint32_t entryCount = static_cast<uint32_t>(inventoryEntries.size());
+
+    manager.SaveStruct(kMaterialSaveSectionName, [&]() {
+        manager.SaveData(kMaterialCountKey, entryCount);
+        manager.SaveArray(kMaterialArrayKey, entryCount, [&](size_t i) {
+            const auto& entry = inventoryEntries[i];
+
+            manager.SaveStruct("", [&]() {
+                manager.SaveData(kMaterialEntryIdKey, static_cast<uint16_t>(entry.first));
+                manager.SaveData(kMaterialEntryQtyKey, entry.second);
+            });
+
+            Fuse::Log("[FuseDBG] MatSave: mat=%u qty=%u\n", static_cast<unsigned int>(entry.first),
+                      static_cast<unsigned int>(entry.second));
+        });
+    });
 }
 
 } // namespace FusePersistence

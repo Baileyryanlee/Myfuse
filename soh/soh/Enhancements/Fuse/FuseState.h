@@ -1,5 +1,7 @@
 #pragma once
 #include <cstdint>
+#include <unordered_map>
+#include <vector>
 
 #include "z64.h"
 #include "soh/Enhancements/Fuse/FuseMaterials.h"
@@ -57,6 +59,12 @@ constexpr const char* kSwordSaveSectionName = "enhancements.fuse";
 constexpr const char* kSwordMaterialKey = "matId";
 constexpr const char* kSwordDurabilityKey = "curDurability";
 
+constexpr const char* kMaterialSaveSectionName = "enhancements.fuse.materials";
+constexpr const char* kMaterialCountKey = "count";
+constexpr const char* kMaterialArrayKey = "materials";
+constexpr const char* kMaterialEntryIdKey = "id";
+constexpr const char* kMaterialEntryQtyKey = "qty";
+
 // Core helpers
 FuseSwordSaveState ClearedSwordState();
 FuseSwordSaveState BuildRuntimeSwordState();
@@ -67,5 +75,8 @@ void ApplySwordStateFromContext(const PlayState* play);
 // SaveManager helpers
 FuseSwordSaveState LoadSwordStateFromManager(SaveManager& manager);
 void SaveSwordStateToManager(SaveManager& manager, const FuseSwordSaveState& state);
+std::vector<std::pair<MaterialId, uint16_t>> LoadMaterialInventoryFromManager(SaveManager& manager);
+void SaveMaterialInventoryToManager(
+    SaveManager& manager, const std::vector<std::pair<MaterialId, uint16_t>>& inventoryEntries);
 
 } // namespace FusePersistence

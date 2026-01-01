@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <vector>
 
 #include "z64.h"
 #include "soh/Enhancements/Fuse/FuseMaterials.h"
@@ -42,12 +43,16 @@ bool SwordHasModifier(ModifierId id);
 
 // Materials inventory API (v0: ROCK + Deku Nut adapter)
 int GetMaterialCount(MaterialId id);
+void SetMaterialCount(MaterialId id, int amount);
 bool HasMaterial(MaterialId id, int amount = 1);
 void AddMaterial(MaterialId id, int amount);
 bool ConsumeMaterial(MaterialId id, int amount);
 // Back-compat helpers for the MVP rock-only flow
 bool HasRockMaterial(); // now means rockCount > 0
 int GetRockCount();     // NEW
+std::vector<std::pair<MaterialId, uint16_t>> GetCustomMaterialInventory();
+void ApplyCustomMaterialInventory(const std::vector<std::pair<MaterialId, uint16_t>>& entries);
+void ClearMaterialInventory();
 bool IsSwordFused();
 MaterialId GetSwordMaterial();
 void FuseSwordWithMaterial(MaterialId id, uint16_t maxDurability, bool initializeCurrentDurability = true,

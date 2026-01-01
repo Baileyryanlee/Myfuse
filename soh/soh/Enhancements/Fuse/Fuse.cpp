@@ -7,6 +7,8 @@
 #include <cstdarg>
 #include <cstdio>
 #include <limits>
+#include <unordered_map>
+#include <vector>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -24,6 +26,8 @@ extern "C" {
 // -----------------------------------------------------------------------------
 static FuseSaveData gFuseSave; // persistent-ready (not serialized yet)
 static FuseRuntimeState gFuseRuntime;
+static std::unordered_map<MaterialId, uint16_t> sMaterialInventory;
+static bool sMaterialInventoryInitialized = false;
 
 static void ResetSavedSwordFuseFields() {
     FusePersistence::WriteSwordStateToContext(FusePersistence::ClearedSwordState());
@@ -90,6 +94,54 @@ void ApplyDekuNutStunVanilla(PlayState* play, Player* player, Actor* victim, uin
     } else {
         Fuse::Log("[FuseMVP] DekuNut stun: spawn failed\n");
     }
+}
+
+bool IsVanillaMaterial(MaterialId id) {
+    return id == MaterialId::DekuNut;
+}
+
+bool IsCustomMaterial(MaterialId id) {
+    return id != MaterialId::None && !IsVanillaMaterial(id);
+}
+
+void EnsureMaterialInventoryInitialized() {
+    if (!sMaterialInventoryInitialized) {
+        sMaterialInventory.clear();
+        sMaterialInventoryInitialized = true;
+    }
+}
+
+uint16_t GetStoredMaterialCount(MaterialId id) {
+    EnsureMaterialInventoryInitialized();
+    auto it = sMaterialInventory.find(id);
+    return (it != sMaterialInventory.end()) ? it->second : 0;
+}
+
+void SetStoredMaterialCount(MaterialId id, int amount) {
+    if (!IsCustomMaterial(id)) {
+        return;
+    }
+
+    EnsureMaterialInventoryInitialized();
+    const uint16_t clamped = static_cast<uint16_t>(std::clamp(amount, 0, 65535));
+    sMaterialInventory[id] = clamped;
+}
+
+std::vector<std::pair<MaterialId, uint16_t>> BuildCustomMaterialInventorySnapshot() {
+    EnsureMaterialInventoryInitialized();
+    std::vector<std::pair<MaterialId, uint16_t>> entries;
+
+    for (const auto& kvp : sMaterialInventory) {
+        if (IsCustomMaterial(kvp.first) && kvp.second > 0) {
+            entries.push_back({ kvp.first, kvp.second });
+        }
+    }
+
+    std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
+        return static_cast<uint16_t>(a.first) < static_cast<uint16_t>(b.first);
+    });
+
+    return entries;
 }
 
 } // namespace
@@ -238,14 +290,23 @@ bool Fuse::SwordHasModifier(ModifierId id) {
 }
 
 int Fuse::GetMaterialCount(MaterialId id) {
-    switch (id) {
-        case MaterialId::Rock:
-            return gFuseSave.rockCount;
-        case MaterialId::DekuNut:
-            return GetDekuNutAmmoCount();
-        default:
-            return 0;
+    if (IsVanillaMaterial(id)) {
+        return GetDekuNutAmmoCount();
     }
+
+    if (!IsCustomMaterial(id)) {
+        return 0;
+    }
+
+    return GetStoredMaterialCount(id);
+}
+
+void Fuse::SetMaterialCount(MaterialId id, int amount) {
+    if (IsVanillaMaterial(id)) {
+        return;
+    }
+
+    SetStoredMaterialCount(id, amount);
 }
 
 bool Fuse::HasMaterial(MaterialId id, int amount) {
@@ -260,15 +321,12 @@ void Fuse::AddMaterial(MaterialId id, int amount) {
         return;
     }
 
-    switch (id) {
-        case MaterialId::Rock: {
-            const int newCount = std::clamp<int>(gFuseSave.rockCount + amount, 0, 65535);
-            gFuseSave.rockCount = (uint16_t)newCount;
-            break;
-        }
-        default:
-            break;
+    if (IsVanillaMaterial(id)) {
+        return;
     }
+
+    const int newCount = std::clamp<int>(GetStoredMaterialCount(id) + amount, 0, 65535);
+    SetStoredMaterialCount(id, newCount);
 }
 
 bool Fuse::ConsumeMaterial(MaterialId id, int amount) {
@@ -280,17 +338,13 @@ bool Fuse::ConsumeMaterial(MaterialId id, int amount) {
         return false;
     }
 
-    switch (id) {
-        case MaterialId::Rock:
-            gFuseSave.rockCount = (uint16_t)(gFuseSave.rockCount - amount);
-            return true;
-        case MaterialId::DekuNut:
-            return ConsumeDekuNutAmmo(amount);
-        default:
-            break;
+    if (IsVanillaMaterial(id)) {
+        return ConsumeDekuNutAmmo(amount);
     }
 
-    return false;
+    const int newCount = std::max(0, GetStoredMaterialCount(id) - amount);
+    SetStoredMaterialCount(id, newCount);
+    return true;
 }
 
 bool Fuse::HasRockMaterial() {
@@ -299,6 +353,27 @@ bool Fuse::HasRockMaterial() {
 
 int Fuse::GetRockCount() {
     return GetMaterialCount(MaterialId::Rock);
+}
+
+std::vector<std::pair<MaterialId, uint16_t>> Fuse::GetCustomMaterialInventory() {
+    return BuildCustomMaterialInventorySnapshot();
+}
+
+void Fuse::ApplyCustomMaterialInventory(const std::vector<std::pair<MaterialId, uint16_t>>& entries) {
+    ClearMaterialInventory();
+
+    for (const auto& entry : entries) {
+        if (!IsCustomMaterial(entry.first)) {
+            continue;
+        }
+
+        SetStoredMaterialCount(entry.first, entry.second);
+    }
+}
+
+void Fuse::ClearMaterialInventory() {
+    sMaterialInventory.clear();
+    sMaterialInventoryInitialized = true;
 }
 
 bool Fuse::IsSwordFused() {
@@ -474,6 +549,8 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
     gFuseRuntime = FuseRuntimeState{};
     gFuseRuntime.enabled = true;
     gFuseRuntime.lastEvent = "Loaded";
+
+    EnsureMaterialInventoryInitialized();
 
     gFuseSave = FuseSaveData{};
     FusePersistence::ApplySwordStateFromContext(nullptr);
