@@ -3,7 +3,7 @@ extern "C" {
 #include "z64.h"
 #include "z64actor.h"
 #include "overlays/actors/ovl_En_Fz/z_en_fz.h"
-#include <functions.h>
+#include "functions.h"
 }
 
 #include "soh/Enhancements/Fuse/Fuse.h"
