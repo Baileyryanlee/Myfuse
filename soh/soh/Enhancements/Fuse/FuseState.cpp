@@ -42,15 +42,14 @@ bool IsNoneMaterialId(int matId) {
     return matId < kMaterialIdMin || matId > kMaterialIdMax;
 }
 
-int GetEquippedSwordItemId() {
-    return gSaveContext.equips.buttonItems[0];
-}
-
 void LogPersistenceEvent(const char* prefix, const FuseSwordSaveState& state) {
     const int material = state.isFused ? static_cast<int>(state.materialId) : FusePersistence::kSwordMaterialIdNone;
     const int durabilityCur = state.isFused ? state.durabilityCur : 0;
     const int durabilityMax = state.isFused ? state.durabilityMax : 0;
-    const int swordItemId = GetEquippedSwordItemId();
+    // The persisted save data does not track the equipped sword item ID. Use a sentinel to avoid
+    // misreporting unrelated inventory state in persistence logs.
+    constexpr int kSwordItemIdUnknown = -1;
+    const int swordItemId = kSwordItemIdUnknown;
 
     Fuse::Log("[FuseDBG] %s: sword=%d material=%d dura=%d/%d\n", prefix, swordItemId, material, durabilityCur,
               durabilityMax);
@@ -99,7 +98,6 @@ FuseSwordSaveState ReadSwordStateFromContext() {
     state.legacyDurability = gSaveContext.ship.fuseSwordCurDur;
 
     NormalizeState(state);
-    LogPersistenceEvent("Load", state);
     return state;
 }
 
@@ -113,7 +111,6 @@ void WriteSwordStateToContext(const FuseSwordSaveState& state) {
         gSaveContext.ship.fuseSwordMaxDur = 0;
         gSaveContext.ship.fuseSwordCurrentDurability = 0;
         gSaveContext.ship.fuseSwordCurDurabilityPresent = false;
-        LogPersistenceEvent("Save", normalizedState);
         return;
     }
 
@@ -125,8 +122,6 @@ void WriteSwordStateToContext(const FuseSwordSaveState& state) {
     gSaveContext.ship.fuseSwordCurrentDurability = static_cast<uint16_t>(std::clamp(
         normalizedState.durabilityCur, 0, static_cast<int>(std::numeric_limits<uint16_t>::max())));
     gSaveContext.ship.fuseSwordCurDurabilityPresent = normalizedState.hasExplicitCur;
-
-    LogPersistenceEvent("Save", normalizedState);
 }
 
 void ApplySwordStateFromContext(const PlayState* play) {
