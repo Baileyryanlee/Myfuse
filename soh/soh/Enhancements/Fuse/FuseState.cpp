@@ -11,10 +11,6 @@ extern "C" {
 #include "variables.h"
 }
 
-#ifndef FUSE_DEBUG_LOGS
-#define FUSE_DEBUG_LOGS 0
-#endif
-
 namespace {
 
 void NormalizeState(FuseSwordSaveState& state) {
@@ -46,16 +42,18 @@ bool IsNoneMaterialId(int matId) {
     return matId < kMaterialIdMin || matId > kMaterialIdMax;
 }
 
-void DebugLogState(const char* prefix, const FuseSwordSaveState& state) {
-#if FUSE_DEBUG_LOGS
+int GetEquippedSwordItemId() {
+    return gSaveContext.equips.buttonItems[0];
+}
+
+void LogPersistenceEvent(const char* prefix, const FuseSwordSaveState& state) {
     const int material = state.isFused ? static_cast<int>(state.materialId) : FusePersistence::kSwordMaterialIdNone;
     const int durabilityCur = state.isFused ? state.durabilityCur : 0;
     const int durabilityMax = state.isFused ? state.durabilityMax : 0;
-    Fuse::Log("[FuseDBG] %s: item=sword mat=%d dura=%d/%d\n", prefix, material, durabilityCur, durabilityMax);
-#else
-    (void)prefix;
-    (void)state;
-#endif
+    const int swordItemId = GetEquippedSwordItemId();
+
+    Fuse::Log("[FuseDBG] %s: sword=%d material=%d dura=%d/%d\n", prefix, swordItemId, material, durabilityCur,
+              durabilityMax);
 }
 
 } // namespace
@@ -86,7 +84,6 @@ FuseSwordSaveState BuildRuntimeSwordState() {
     }
 
     NormalizeState(state);
-    DebugLogState("Save", state);
     return state;
 }
 
@@ -102,31 +99,34 @@ FuseSwordSaveState ReadSwordStateFromContext() {
     state.legacyDurability = gSaveContext.ship.fuseSwordCurDur;
 
     NormalizeState(state);
-    DebugLogState("Load", state);
+    LogPersistenceEvent("Load", state);
     return state;
 }
 
 void WriteSwordStateToContext(const FuseSwordSaveState& state) {
-    if (!state.isFused) {
+    FuseSwordSaveState normalizedState = state;
+    NormalizeState(normalizedState);
+
+    if (!normalizedState.isFused) {
         gSaveContext.ship.fuseSwordMaterialId = kSwordMaterialIdNone;
         gSaveContext.ship.fuseSwordCurDur = 0;
         gSaveContext.ship.fuseSwordMaxDur = 0;
         gSaveContext.ship.fuseSwordCurrentDurability = 0;
         gSaveContext.ship.fuseSwordCurDurabilityPresent = false;
-        DebugLogState("Save", state);
+        LogPersistenceEvent("Save", normalizedState);
         return;
     }
 
-    gSaveContext.ship.fuseSwordMaterialId = static_cast<s16>(state.materialId);
+    gSaveContext.ship.fuseSwordMaterialId = static_cast<s16>(normalizedState.materialId);
     gSaveContext.ship.fuseSwordCurDur = static_cast<s16>(std::clamp(
-        state.legacyDurability, 0, static_cast<int>(std::numeric_limits<int16_t>::max())));
+        normalizedState.legacyDurability, 0, static_cast<int>(std::numeric_limits<int16_t>::max())));
     gSaveContext.ship.fuseSwordMaxDur = static_cast<s16>(std::clamp(
-        state.durabilityMax, 0, static_cast<int>(std::numeric_limits<int16_t>::max())));
+        normalizedState.durabilityMax, 0, static_cast<int>(std::numeric_limits<int16_t>::max())));
     gSaveContext.ship.fuseSwordCurrentDurability = static_cast<uint16_t>(std::clamp(
-        state.durabilityCur, 0, static_cast<int>(std::numeric_limits<uint16_t>::max())));
-    gSaveContext.ship.fuseSwordCurDurabilityPresent = state.hasExplicitCur;
+        normalizedState.durabilityCur, 0, static_cast<int>(std::numeric_limits<uint16_t>::max())));
+    gSaveContext.ship.fuseSwordCurDurabilityPresent = normalizedState.hasExplicitCur;
 
-    DebugLogState("Save", state);
+    LogPersistenceEvent("Save", normalizedState);
 }
 
 void ApplySwordStateFromContext(const PlayState* play) {
@@ -159,7 +159,7 @@ FuseSwordSaveState LoadSwordStateFromManager(SaveManager& manager) {
     state.legacyDurability = 0;
 
     NormalizeState(state);
-    DebugLogState("Load", state);
+    LogPersistenceEvent("Load", state);
     return state;
 }
 
@@ -178,7 +178,7 @@ void SaveSwordStateToManager(SaveManager& manager, const FuseSwordSaveState& sta
         manager.SaveData(kSwordDurabilityKey, durabilityCur);
     });
 
-    DebugLogState("Save", normalizedState);
+    LogPersistenceEvent("Save", normalizedState);
 }
 
 } // namespace FusePersistence

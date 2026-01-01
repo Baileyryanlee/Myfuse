@@ -10,7 +10,7 @@ class SaveManager;
 // Centralized representation of the save data for the currently equipped sword.
 // Invariants:
 // * `isFused` determines whether the remaining fields are meaningful; when false, the sword is unfused and
-//   `materialId` is treated as `MaterialId::None`.
+//   `materialId` is treated as `MaterialId::None` and durability fields are zeroed.
 // * Durability values are always clamped to be non-negative. `durabilityCur` is further clamped to the range
 //   [0, durabilityMax] when a maximum is known (durabilityMax > 0).
 // * `hasExplicitCur` mirrors the save field that tracks whether a current durability value was written; when
