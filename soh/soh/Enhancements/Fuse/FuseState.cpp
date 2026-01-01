@@ -3,6 +3,7 @@
 #include "Fuse.h"
 #include "soh/SaveManager.h"
 
+#include <cstdint>
 #include <algorithm>
 #include <limits>
 #include <vector>
@@ -184,17 +185,20 @@ std::vector<std::pair<MaterialId, uint16_t>> LoadMaterialInventoryFromManager(Sa
     manager.LoadStruct(kMaterialSaveSectionName, [&]() {
         manager.LoadData(kMaterialCountKey, entryCount, 0u);
         manager.LoadArray(kMaterialArrayKey, entryCount, [&](size_t /*i*/) {
-            uint16_t idRaw = static_cast<uint16_t>(MaterialId::None);
-            uint16_t qty = 0;
+            int32_t idRaw = static_cast<int32_t>(MaterialId::None);
+            int32_t qty = 0;
 
             manager.LoadStruct("", [&]() {
-                manager.LoadData(kMaterialEntryIdKey, idRaw, static_cast<uint16_t>(MaterialId::None));
-                manager.LoadData(kMaterialEntryQtyKey, qty, 0u);
+                manager.LoadData(kMaterialEntryIdKey, idRaw, static_cast<int32_t>(MaterialId::None));
+                manager.LoadData(kMaterialEntryQtyKey, qty, 0);
             });
 
-            entries.push_back({ static_cast<MaterialId>(idRaw), qty });
-            Fuse::Log("[FuseDBG] MatLoad: mat=%u qty=%u\n", static_cast<unsigned int>(idRaw),
-                      static_cast<unsigned int>(qty));
+            if (qty > 0) {
+                const uint16_t clampedQty = static_cast<uint16_t>(std::clamp(qty, 0, 65535));
+                entries.push_back({ static_cast<MaterialId>(idRaw), clampedQty });
+                Fuse::Log("[FuseDBG] MatLoad: mat=%u qty=%u\n", static_cast<unsigned int>(idRaw),
+                          static_cast<unsigned int>(clampedQty));
+            }
         });
     });
 
@@ -209,10 +213,12 @@ void SaveMaterialInventoryToManager(SaveManager& manager,
         manager.SaveData(kMaterialCountKey, entryCount);
         manager.SaveArray(kMaterialArrayKey, entryCount, [&](size_t i) {
             const auto& entry = inventoryEntries[i];
+            const int32_t idSaved = static_cast<int32_t>(entry.first);
+            const int32_t qtySaved = static_cast<int32_t>(entry.second);
 
             manager.SaveStruct("", [&]() {
-                manager.SaveData(kMaterialEntryIdKey, static_cast<uint16_t>(entry.first));
-                manager.SaveData(kMaterialEntryQtyKey, entry.second);
+                manager.SaveData(kMaterialEntryIdKey, idSaved);
+                manager.SaveData(kMaterialEntryQtyKey, qtySaved);
             });
 
             Fuse::Log("[FuseDBG] MatSave: mat=%u qty=%u\n", static_cast<unsigned int>(entry.first),
