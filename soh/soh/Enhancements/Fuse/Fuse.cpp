@@ -104,6 +104,10 @@ bool IsCustomMaterial(MaterialId id) {
     return id != MaterialId::None && !IsVanillaMaterial(id);
 }
 
+bool IsSupportedCustomMaterial(MaterialId id) {
+    return IsCustomMaterial(id) && Fuse::GetMaterialDef(id) != nullptr;
+}
+
 void EnsureMaterialInventoryInitialized() {
     if (!sMaterialInventoryInitialized) {
         sMaterialInventory.clear();
@@ -363,7 +367,11 @@ void Fuse::ApplyCustomMaterialInventory(const std::vector<std::pair<MaterialId, 
     ClearMaterialInventory();
 
     for (const auto& entry : entries) {
-        if (!IsCustomMaterial(entry.first)) {
+        if (entry.second == 0) {
+            continue;
+        }
+
+        if (!IsSupportedCustomMaterial(entry.first)) {
             continue;
         }
 
