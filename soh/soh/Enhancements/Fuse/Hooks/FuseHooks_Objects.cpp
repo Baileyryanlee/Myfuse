@@ -177,8 +177,11 @@ static void MaybeAwardFrozenShard(PlayState* play) {
             if (Rand_ZeroOne() < 0.25f) {
                 Fuse::AddMaterial(MaterialId::FrozenShard, 1);
                 const int newCount = Fuse::GetMaterialCount(MaterialId::FrozenShard);
-                Fuse::Log("[FuseDBG] MatGain: mat=%d qty=%d actor=0x%04X\n", static_cast<int>(MaterialId::FrozenShard),
-                          newCount, static_cast<uint16_t>(actor->id));
+                const char* reason = flaggedForDespawn ? "despawn" : "health0";
+
+                Fuse::Log("[FuseDBG] MatGain: mat=%d qty=%d actor=%p pos=(%.2f,%.2f,%.2f) reason=%s\n",
+                          static_cast<int>(MaterialId::FrozenShard), newCount, actor, actor->world.pos.x,
+                          actor->world.pos.y, actor->world.pos.z, reason);
             }
         }
     }
