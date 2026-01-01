@@ -33,9 +33,6 @@ struct FuseSwordSaveState {
 struct FuseSaveData {
     uint32_t version = 1;
 
-    // v0 material storage: ROCK count (was bool)
-    uint16_t rockCount = 0;
-
     // Per-item fused material ids later.
     MaterialId swordFuseMaterialId = MaterialId::None;
 
@@ -59,6 +56,8 @@ constexpr const char* kSwordSaveSectionName = "enhancements.fuse";
 constexpr const char* kSwordMaterialKey = "matId";
 constexpr const char* kSwordDurabilityKey = "curDurability";
 
+// Vanilla materials read and consume directly from the vanilla inventory.
+// Custom materials live in the custom inventory map saved under "enhancements.fuse.materials".
 constexpr const char* kMaterialSaveSectionName = "enhancements.fuse.materials";
 constexpr const char* kMaterialCountKey = "count";
 constexpr const char* kMaterialArrayKey = "materials";
