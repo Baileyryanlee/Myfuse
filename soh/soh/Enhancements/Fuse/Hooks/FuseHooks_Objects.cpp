@@ -1,9 +1,3 @@
-#include "soh/Enhancements/Fuse/Fuse.h"
-
-#include <cstdint>
-#include <cmath>
-#include <unordered_set>
-
 extern "C" {
 #include "variables.h"
 #include "z64.h"
@@ -11,6 +5,12 @@ extern "C" {
 #include "overlays/actors/ovl_En_Fz/z_en_fz.h"
 #include <functions.h>
 }
+
+#include "soh/Enhancements/Fuse/Fuse.h"
+
+#include <cstdint>
+#include <cmath>
+#include <unordered_set>
 
 // Liftable rock actor
 static constexpr int16_t kLiftableRockActorId = ACTOR_EN_ISHI;
