@@ -50,9 +50,25 @@ static void SaveFuseWeaponSection(SaveContext* saveContext, int /*sectionID*/, b
     FusePersistence::SaveSwordStateToManager(*SaveManager::Instance, state);
 }
 
+static void SaveFuseMaterialsSection(SaveContext* /*saveContext*/, int /*sectionID*/, bool /*fullSave*/) {
+    const bool enableSaveWrite = CVarGetInteger(kFuseSaveWriteCVar, 1) != 0;
+
+    if (!enableSaveWrite) {
+        return;
+    }
+
+    const auto entries = Fuse::GetCustomMaterialInventory();
+    FusePersistence::SaveMaterialInventoryToManager(*SaveManager::Instance, entries);
+}
+
 static void LoadFuseWeaponSection() {
     const FuseSwordSaveState state = FusePersistence::LoadSwordStateFromManager(*SaveManager::Instance);
     FusePersistence::WriteSwordStateToContext(state);
+}
+
+static void LoadFuseMaterialsSection() {
+    const auto entries = FusePersistence::LoadMaterialInventoryFromManager(*SaveManager::Instance);
+    Fuse::ApplyCustomMaterialInventory(entries);
 }
 
 static bool IsInGameplay() {
@@ -74,6 +90,9 @@ static void RegisterFuseMod() {
     SaveManager::Instance->AddSaveFunction(FusePersistence::kSwordSaveSectionName, 1, SaveFuseWeaponSection, true,
                                            SECTION_PARENT_NONE);
     SaveManager::Instance->AddLoadFunction(FusePersistence::kSwordSaveSectionName, 1, LoadFuseWeaponSection);
+    SaveManager::Instance->AddSaveFunction(FusePersistence::kMaterialSaveSectionName, 1, SaveFuseMaterialsSection,
+                                           true, SECTION_PARENT_NONE);
+    SaveManager::Instance->AddLoadFunction(FusePersistence::kMaterialSaveSectionName, 1, LoadFuseMaterialsSection);
 
     COND_HOOK(OnLoadGame, true, [](int32_t fileNum) {
         Fuse::OnLoadGame(fileNum);
