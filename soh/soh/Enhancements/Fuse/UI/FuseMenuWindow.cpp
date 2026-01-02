@@ -182,14 +182,14 @@ void FuseMenuWindow::DrawElement() {
     // ------------------------------------------------------------------------
     ImGui::SeparatorText("Fuse-capable Items");
 
+    size_t materialDefCount = 0;
+    const MaterialDef* materialDefs = Fuse::GetMaterialDefs(&materialDefCount);
+
     // Table layout looks much cleaner than ad-hoc SameLine calls.
     if (ImGui::BeginTable("FuseItemsTable", 2, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg)) {
         ImGui::TableSetupColumn("Item", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("Fused Material", ImGuiTableColumnFlags_WidthFixed, 220.0f);
         ImGui::TableHeadersRow();
-
-        const bool rockOwned = Fuse::HasMaterial(MaterialId::Rock);
-        const bool dekuNutOwned = Fuse::HasMaterial(MaterialId::DekuNut);
 
         for (int i = 0; i < (int)FuseItem::COUNT; i++) {
             FuseItem item = (FuseItem)i;
@@ -235,36 +235,24 @@ void FuseMenuWindow::DrawElement() {
                         ImGui::SetItemDefaultFocus();
                 }
 
-                // Rock option (only selectable if owned)
-                {
-                    bool isSelected = (current == MaterialId::Rock);
-                    const std::string rockLabel = MatNameWithCount(MaterialId::Rock);
+                for (size_t materialIndex = 0; materialIndex < materialDefCount; materialIndex++) {
+                    const MaterialDef& def = materialDefs[materialIndex];
+                    if (def.id == MaterialId::None) {
+                        continue;
+                    }
 
-                    if (!rockOwned) {
+                    const int qty = Fuse::GetMaterialCount(def.id);
+                    const bool isSelected = (current == def.id);
+                    const std::string label = MatNameWithCount(def.id);
+
+                    if (qty <= 0) {
                         ImGui::BeginDisabled(true);
                     }
-                    if (ImGui::Selectable(rockLabel.c_str(), isSelected)) {
-                        newSelection = MaterialId::Rock;
+                    if (ImGui::Selectable(label.c_str(), isSelected)) {
+                        newSelection = def.id;
                         changed = true;
                     }
-                    if (!rockOwned) {
-                        ImGui::EndDisabled();
-                    }
-                }
-
-                // Deku Nut option (only selectable if owned)
-                {
-                    bool isSelected = (current == MaterialId::DekuNut);
-                    const std::string dekuNutLabel = MatNameWithCount(MaterialId::DekuNut);
-
-                    if (!dekuNutOwned) {
-                        ImGui::BeginDisabled(true);
-                    }
-                    if (ImGui::Selectable(dekuNutLabel.c_str(), isSelected)) {
-                        newSelection = MaterialId::DekuNut;
-                        changed = true;
-                    }
-                    if (!dekuNutOwned) {
+                    if (qty <= 0) {
                         ImGui::EndDisabled();
                     }
                 }
@@ -297,28 +285,26 @@ void FuseMenuWindow::DrawElement() {
     // ------------------------------------------------------------------------
     ImGui::SeparatorText("Materials");
 
-    // v0 is binary; later you'll switch this to a count array.
-    const int rockQty = Fuse::GetMaterialCount(MaterialId::Rock);
-    const int dekuNutQty = Fuse::GetMaterialCount(MaterialId::DekuNut);
-
     if (ImGui::BeginTable("MaterialsTable", 2, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg)) {
         ImGui::TableSetupColumn("Material", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("Qty", ImGuiTableColumnFlags_WidthFixed, 80.0f);
         ImGui::TableHeadersRow();
 
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0);
-        const std::string rockLabel = MatNameWithCount(MaterialId::Rock);
-        ImGui::TextUnformatted(rockLabel.c_str());
-        ImGui::TableSetColumnIndex(1);
-        ImGui::Text("%d", rockQty);
+        for (size_t materialIndex = 0; materialIndex < materialDefCount; materialIndex++) {
+            const MaterialDef& def = materialDefs[materialIndex];
+            if (def.id == MaterialId::None) {
+                continue;
+            }
 
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0);
-        const std::string dekuNutLabel = MatNameWithCount(MaterialId::DekuNut);
-        ImGui::TextUnformatted(dekuNutLabel.c_str());
-        ImGui::TableSetColumnIndex(1);
-        ImGui::Text("%d", dekuNutQty);
+            const int qty = Fuse::GetMaterialCount(def.id);
+
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            const std::string label = MatNameWithCount(def.id);
+            ImGui::TextUnformatted(label.c_str());
+            ImGui::TableSetColumnIndex(1);
+            ImGui::Text("%d", qty);
+        }
 
         ImGui::EndTable();
     }

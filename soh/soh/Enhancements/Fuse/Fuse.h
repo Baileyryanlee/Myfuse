@@ -37,6 +37,7 @@ void SetEnabled(bool enabled);
 
 // Materials registry and helpers
 const MaterialDef* GetMaterialDef(MaterialId id);
+const MaterialDef* GetMaterialDefs(size_t* count);
 uint16_t GetMaterialBaseDurability(MaterialId id);
 uint8_t GetSwordModifierLevel(ModifierId id);
 bool SwordHasModifier(ModifierId id);

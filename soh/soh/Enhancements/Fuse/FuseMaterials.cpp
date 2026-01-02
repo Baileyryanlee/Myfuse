@@ -33,3 +33,10 @@ const MaterialDef* FuseMaterials::GetMaterialDef(MaterialId id) {
     return nullptr;
 }
 
+const MaterialDef* FuseMaterials::GetMaterialDefs(size_t* count) {
+    if (count != nullptr) {
+        *count = sizeof(kMaterialDefs) / sizeof(kMaterialDefs[0]);
+    }
+    return kMaterialDefs;
+}
+
