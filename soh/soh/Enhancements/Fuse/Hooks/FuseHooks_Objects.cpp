@@ -234,12 +234,6 @@ static void ApplyHammerFlagsToSwordHitbox(Player* player, uint8_t level) {
               player->meleeWeaponQuads[0].info.toucher.dmgFlags);
 }
 
-static void ApplyFreezeEffectToSwordHitbox(Player* player, uint8_t level) {
-    (void)level;
-
-    (void)player;
-}
-
 // -----------------------------------------------------------------------------
 // Impact detection: read the quad AT flags that CollisionCheck_SetATvsAC / SetBounce set.
 // In your hook timing, these are often most reliable from the PREVIOUS frame,
@@ -310,16 +304,6 @@ extern "C" void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollid
     Player* player = GetPlayerSafe(play);
     if (!IsPlayerSwordCollider(player, atCollider))
         return;
-
-    const uint8_t freezeLevel = Fuse::GetSwordModifierLevel(ModifierId::Freeze);
-    const bool freezeActive = freezeLevel > 0 && Fuse::IsSwordFused();
-
-    if (freezeActive && atInfo != nullptr && atInfo->toucher.dmgFlags != DMG_MAGIC_ICE) {
-        atInfo->toucher.dmgFlags = DMG_MAGIC_ICE;
-
-        Fuse::Log("[FuseDBG] FreezeAT: victim=%p effect=RR_DMG_ICE mat=FrozenShard\n",
-                  acCollider ? (void*)acCollider->actor : nullptr);
-    }
 
     const int curFrame = play ? play->gameplayFrames : -1;
     if (gSwordATVictimCooldownFrame != curFrame) {
@@ -468,13 +452,11 @@ void OnFrame_Objects_Pre(PlayState* play) {
     UpdateThrownRockAcquisition(play, player);
     MaybeAwardFrozenShard(play);
 
-    const bool swordFused = Fuse::IsSwordFused();
-
     // Rock-breaking behavior (works): apply hammer flags only when rocks are nearby and fuse is active
     const uint8_t hammerLevel = Fuse::GetSwordModifierLevel(ModifierId::Hammerize);
     bool hammerApplied = false;
 
-    if (hammerLevel > 0 && swordFused && IsPlayerSwingingSword(player) && IsAnyLiftableRockNearPlayer(play, player)) {
+    if (hammerLevel > 0 && Fuse::IsSwordFused() && IsPlayerSwingingSword(player) && IsAnyLiftableRockNearPlayer(play, player)) {
         ApplyHammerFlagsToSwordHitbox(player, hammerLevel);
         gHammerizeAppliedFrame = play->gameplayFrames;
         hammerApplied = true;
@@ -483,12 +465,7 @@ void OnFrame_Objects_Pre(PlayState* play) {
         RestoreSwordBaseDmgFlags(player);
     }
 
-    const uint8_t freezeLevel = Fuse::GetSwordModifierLevel(ModifierId::Freeze);
-
-    if (freezeLevel > 0 && swordFused && IsPlayerSwingingSword(player)) {
-        ApplyFreezeEffectToSwordHitbox(player, freezeLevel);
-        Fuse::Log("[FuseDBG] FreezePre: frame=%d level=%u\n", play ? play->gameplayFrames : -1, freezeLevel);
-    } else if (!hammerApplied) {
+    if (!hammerApplied) {
         RestoreSwordBaseDmgFlags(player);
     }
 }
