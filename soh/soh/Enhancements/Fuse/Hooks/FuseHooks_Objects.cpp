@@ -32,7 +32,6 @@ static int gSwordATVictimCooldownFrame = -1;
 static std::unordered_set<void*> gSwordATVictimCooldown;
 static std::unordered_set<void*> gAwardedFrozenShards;
 static uint32_t gSwordBaseDmgFlags[4];
-static uint8_t gSwordBaseDamageEffect[4];
 static bool gSwordBaseValid = false;
 
 // -----------------------------------------------------------------------------
@@ -200,7 +199,6 @@ static void CaptureSwordBaseDmgFlags(PlayState* play, Player* player) {
 
     for (int i = 0; i < 4; i++) {
         gSwordBaseDmgFlags[i] = player->meleeWeaponQuads[i].info.toucher.dmgFlags;
-        gSwordBaseDamageEffect[i] = player->meleeWeaponQuads[i].info.toucher.damageEffect;
     }
 
     gSwordBaseValid = true;
@@ -212,16 +210,6 @@ static void RestoreSwordBaseDmgFlags(Player* player) {
 
     for (int i = 0; i < 4; i++) {
         player->meleeWeaponQuads[i].info.toucher.dmgFlags = gSwordBaseDmgFlags[i];
-        player->meleeWeaponQuads[i].info.toucher.damageEffect = gSwordBaseDamageEffect[i];
-    }
-}
-
-static void RestoreSwordBaseDamageEffect(Player* player) {
-    if (!player || !gSwordBaseValid)
-        return;
-
-    for (int i = 0; i < 4; i++) {
-        player->meleeWeaponQuads[i].info.toucher.damageEffect = gSwordBaseDamageEffect[i];
     }
 }
 
@@ -249,14 +237,7 @@ static void ApplyHammerFlagsToSwordHitbox(Player* player, uint8_t level) {
 static void ApplyFreezeEffectToSwordHitbox(Player* player, uint8_t level) {
     (void)level;
 
-    if (!player)
-        return;
-
-    constexpr uint8_t kIceArrowDamageEffect = 3;
-
-    for (int i = 0; i < 4; i++) {
-        player->meleeWeaponQuads[i].info.toucher.damageEffect = kIceArrowDamageEffect;
-    }
+    (void)player;
 }
 
 // -----------------------------------------------------------------------------
@@ -482,8 +463,6 @@ void OnFrame_Objects_Pre(PlayState* play) {
         gHammerizeAppliedFrame = -1;
     }
 
-    RestoreSwordBaseDamageEffect(player);
-
     CaptureSwordBaseDmgFlags(play, player);
 
     UpdateThrownRockAcquisition(play, player);
@@ -511,8 +490,6 @@ void OnFrame_Objects_Pre(PlayState* play) {
         Fuse::Log("[FuseDBG] FreezePre: frame=%d level=%u\n", play ? play->gameplayFrames : -1, freezeLevel);
     } else if (!hammerApplied) {
         RestoreSwordBaseDmgFlags(player);
-    } else {
-        RestoreSwordBaseDamageEffect(player);
     }
 }
 
