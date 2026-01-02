@@ -152,8 +152,6 @@ std::vector<std::pair<MaterialId, uint16_t>> BuildCustomMaterialInventorySnapsho
 }
 
 void ApplyIceArrowFreeze(PlayState* play, Actor* victim, uint8_t level) {
-    (void)play;
-
     if (!victim || level == 0) {
         return;
     }
@@ -161,8 +159,21 @@ void ApplyIceArrowFreeze(PlayState* play, Actor* victim, uint8_t level) {
     constexpr s16 kBaseFreezeDuration = 40;
     const s16 duration = static_cast<s16>(kBaseFreezeDuration * level);
 
+    // Apply the same immobilization and visual feedback that Ice Arrows use
     victim->freezeTimer = std::max<s16>(victim->freezeTimer, duration);
     Actor_SetColorFilter(victim, 0, 255, 0, duration);
+
+    if (play != nullptr) {
+        Vec3f spawnPos = victim->world.pos;
+        constexpr s16 kPrim = 150;
+        constexpr s16 kEnvPrim = 250;
+        constexpr s16 kEnvSecondary = 235;
+        constexpr s16 kEnvTertiary = 245;
+        const float scale = 1.0f + (0.25f * (level - 1));
+
+        EffectSsEnIce_SpawnFlyingVec3f(play, victim, &spawnPos, kPrim, kPrim, kPrim, kEnvPrim, kEnvSecondary,
+                                       kEnvTertiary, 255, scale);
+    }
 
     Fuse::Log("[FuseDBG] FreezeApply: victim=%p duration=%d mat=FrozenShard\n", (void*)victim, duration);
 }
