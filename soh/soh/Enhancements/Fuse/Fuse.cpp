@@ -270,6 +270,10 @@ const MaterialDef* Fuse::GetMaterialDef(MaterialId id) {
     return FuseMaterials::GetMaterialDef(id);
 }
 
+const MaterialDef* Fuse::GetMaterialDefs(size_t* count) {
+    return FuseMaterials::GetMaterialDefs(count);
+}
+
 uint16_t Fuse::GetMaterialBaseDurability(MaterialId id) {
     const MaterialDef* def = Fuse::GetMaterialDef(id);
     return def ? def->baseMaxDurability : 0;

@@ -22,5 +22,6 @@ struct MaterialDef {
 
 namespace FuseMaterials {
 const MaterialDef* GetMaterialDef(MaterialId id);
+const MaterialDef* GetMaterialDefs(size_t* count);
 }
 

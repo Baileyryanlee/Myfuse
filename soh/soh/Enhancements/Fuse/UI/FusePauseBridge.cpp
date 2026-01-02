@@ -97,19 +97,17 @@ static std::string Fuse_MakeDurabilityBar(int cur, int max, int width = 10) {
 std::vector<MaterialEntry> BuildMaterialList() {
     std::vector<MaterialEntry> materials;
 
-    constexpr MaterialId kMaterialIds[] = {
-        MaterialId::Rock,
-        MaterialId::DekuNut,
-    };
+    size_t materialDefCount = 0;
+    const MaterialDef* materialDefs = Fuse::GetMaterialDefs(&materialDefCount);
 
-    for (MaterialId id : kMaterialIds) {
-        const MaterialDef* def = Fuse::GetMaterialDef(id);
-        if (!def) {
+    for (size_t i = 0; i < materialDefCount; i++) {
+        const MaterialDef& def = materialDefs[i];
+        if (def.id == MaterialId::None) {
             continue;
         }
 
-        const int qty = Fuse::GetMaterialCount(id);
-        materials.push_back({ id, def, qty, qty > 0 });
+        const int qty = Fuse::GetMaterialCount(def.id);
+        materials.push_back({ def.id, &def, qty, qty > 0 });
     }
 
     return materials;
