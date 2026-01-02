@@ -593,7 +593,7 @@ void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim) {
     uint8_t freezeLevel = 0;
     constexpr uint8_t kIceArrowDamageEffect = 3; // Matches ice arrows / ice magic
     if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Freeze, &freezeLevel) && freezeLevel > 0) {
-        victim->colChkInfo.damageEffect = kIceArrowDamageEffect;
-        Fuse::Log("[FuseDBG] FreezeHit: victim=%p mat=%d\n", (void*)victim, static_cast<int>(def->id));
+        Fuse::Log("[FuseDBG] FreezeHit(post): victim=%p mat=%d effect=%u (handled pre-collision)\n", (void*)victim,
+                  static_cast<int>(def->id), kIceArrowDamageEffect);
     }
 }
