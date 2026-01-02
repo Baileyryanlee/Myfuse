@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <limits>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #ifdef _WIN32
@@ -28,6 +29,8 @@ static FuseSaveData gFuseSave; // persistent-ready (not serialized yet)
 static FuseRuntimeState gFuseRuntime;
 static std::unordered_map<MaterialId, uint16_t> sMaterialInventory;
 static bool sMaterialInventoryInitialized = false;
+static int sSwordFreezeApplyFrame = -1;
+static std::unordered_set<void*> sSwordFreezeApplied;
 
 static void ResetSavedSwordFuseFields() {
     FusePersistence::WriteSwordStateToContext(FusePersistence::ClearedSwordState());
@@ -146,6 +149,22 @@ std::vector<std::pair<MaterialId, uint16_t>> BuildCustomMaterialInventorySnapsho
     });
 
     return entries;
+}
+
+void ApplyIceArrowFreeze(PlayState* play, Actor* victim, uint8_t level) {
+    (void)play;
+
+    if (!victim || level == 0) {
+        return;
+    }
+
+    constexpr s16 kBaseFreezeDuration = 40;
+    const s16 duration = static_cast<s16>(kBaseFreezeDuration * level);
+
+    victim->freezeTimer = std::max<s16>(victim->freezeTimer, duration);
+    Actor_SetColorFilter(victim, 0, 255, 0, duration);
+
+    Fuse::Log("[FuseDBG] FreezeApply: victim=%p duration=%d mat=FrozenShard\n", (void*)victim, duration);
 }
 
 } // namespace
@@ -591,9 +610,16 @@ void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim) {
     }
 
     uint8_t freezeLevel = 0;
-    constexpr uint8_t kIceArrowDamageEffect = 3; // Matches ice arrows / ice magic
     if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Freeze, &freezeLevel) && freezeLevel > 0) {
-        Fuse::Log("[FuseDBG] FreezeHit(post): victim=%p mat=%d effect=%u (handled pre-collision)\n", (void*)victim,
-                  static_cast<int>(def->id), kIceArrowDamageEffect);
+        const int curFrame = play ? play->gameplayFrames : -1;
+        if (curFrame != sSwordFreezeApplyFrame) {
+            sSwordFreezeApplyFrame = curFrame;
+            sSwordFreezeApplied.clear();
+        }
+
+        if (sSwordFreezeApplied.count(victim) == 0) {
+            sSwordFreezeApplied.insert(victim);
+            ApplyIceArrowFreeze(play, victim, freezeLevel);
+        }
     }
 }
