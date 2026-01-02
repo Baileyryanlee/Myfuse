@@ -323,14 +323,22 @@ static bool SwordHadImpactFlags(Player* player, const char** reasonOut = nullptr
 
 extern "C" void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollider, ColliderInfo* atInfo,
                                              Collider* acCollider, ColliderInfo* acInfo) {
-    (void)atInfo;
-
     if (!Fuse::IsEnabled())
         return;
 
     Player* player = GetPlayerSafe(play);
     if (!IsPlayerSwordCollider(player, atCollider))
         return;
+
+    const uint8_t freezeLevel = Fuse::GetSwordModifierLevel(ModifierId::Freeze);
+    const bool freezeActive = freezeLevel > 0 && Fuse::IsSwordFused();
+
+    if (freezeActive && atInfo != nullptr && atInfo->toucher.dmgFlags != DMG_MAGIC_ICE) {
+        atInfo->toucher.dmgFlags = DMG_MAGIC_ICE;
+
+        Fuse::Log("[FuseDBG] FreezeAT: victim=%p effect=RR_DMG_ICE mat=FrozenShard\n",
+                  acCollider ? (void*)acCollider->actor : nullptr);
+    }
 
     const int curFrame = play ? play->gameplayFrames : -1;
     if (gSwordATVictimCooldownFrame != curFrame) {
