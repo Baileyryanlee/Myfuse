@@ -180,11 +180,21 @@ void ApplyIceArrowFreeze(PlayState* play, Actor* victim, uint8_t level) {
         constexpr s16 kEnvTertiary = 245;
         const float scale = 1.0f + (0.25f * (level - 1));
 
-        for (int i = 0; i < 3; i++) {
-            Vec3f spawnPos = victim->world.pos;
-            spawnPos.x += Rand_CenteredFloat(10.0f);
-            spawnPos.y += Rand_CenteredFloat(8.0f);
-            spawnPos.z += Rand_CenteredFloat(10.0f);
+        Vec3f center = victim->focus.pos;
+        const bool hasFocus = !(center.x == 0.0f && center.y == 0.0f && center.z == 0.0f);
+
+        if (!hasFocus) {
+            center = victim->world.pos;
+            center.y += 40.0f;
+        }
+
+        const int shardCount = Rand_S16Offset(3, 3);
+
+        for (int i = 0; i < shardCount; i++) {
+            Vec3f spawnPos = center;
+            spawnPos.x += Rand_CenteredFloat(20.0f);
+            spawnPos.y += Rand_CenteredFloat(10.0f);
+            spawnPos.z += Rand_CenteredFloat(20.0f);
 
             EffectSsEnIce_SpawnFlyingVec3f(play, victim, &spawnPos, kPrim, kPrim, kPrim, kEnvPrim, kEnvSecondary,
                                            kEnvTertiary, 255, scale);
