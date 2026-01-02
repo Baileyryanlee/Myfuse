@@ -2,6 +2,7 @@
 #include "FuseMaterials.h"
 #include "FuseState.h"
 #include "soh/Enhancements/Fuse/Hooks/FuseHooks_Objects.h"
+#include "soh/SaveManager.h"
 
 #include <algorithm>
 #include <cstdarg>
@@ -10,6 +11,7 @@
 #include <limits>
 #include <unordered_map>
 #include <unordered_set>
+#include <string>
 #include <vector>
 
 #ifdef _WIN32
@@ -31,6 +33,8 @@ static FuseRuntimeState gFuseRuntime;
 static std::unordered_map<MaterialId, uint16_t> sMaterialInventory;
 static bool sMaterialInventoryInitialized = false;
 static constexpr size_t kSwordFreezeQueueCount = 2;
+static std::unordered_map<MaterialId, MaterialDebugOverride> sMaterialDebugOverrides;
+static bool sUseDebugOverrides = false;
 
 struct SwordFreezeRequest {
     Actor* victim = nullptr;
@@ -118,6 +122,14 @@ bool IsCustomMaterial(MaterialId id) {
 
 bool IsSupportedCustomMaterial(MaterialId id) {
     return IsCustomMaterial(id) && Fuse::GetMaterialDef(id) != nullptr;
+}
+
+bool IsDefaultOverride(const MaterialDebugOverride& override) {
+    return override.attackBonusDelta == 0 && override.baseDurabilityOverride == -1;
+}
+
+MaterialDebugOverride& EnsureMaterialOverride(MaterialId id) {
+    return sMaterialDebugOverrides[id];
 }
 
 void EnsureMaterialInventoryInitialized() {
@@ -297,7 +309,7 @@ void Fuse_ApplySavedSwordFuse(const PlayState* play, s16 savedMaterial, s16 save
 
     int maxDurability = savedMaxDur;
     if (maxDurability <= 0) {
-        maxDurability = Fuse::GetMaterialBaseDurability(materialId);
+        maxDurability = Fuse::GetMaterialEffectiveBaseDurability(materialId);
     }
 
     if (maxDurability <= 0) {
@@ -364,6 +376,152 @@ const MaterialDef* Fuse::GetMaterialDefs(size_t* count) {
 uint16_t Fuse::GetMaterialBaseDurability(MaterialId id) {
     const MaterialDef* def = Fuse::GetMaterialDef(id);
     return def ? def->baseMaxDurability : 0;
+}
+
+static int GetMaterialBaseAttackBonus(MaterialId id) {
+    // Attack bonus defaults are currently implicit (zero) until defined in MaterialDef.
+    (void)id;
+    return 0;
+}
+
+int Fuse::GetMaterialAttackBonus(MaterialId id) {
+    const int base = GetMaterialBaseAttackBonus(id);
+    if (!sUseDebugOverrides) {
+        return base;
+    }
+
+    return base + Fuse::GetMaterialAttackBonusDelta(id);
+}
+
+int Fuse::GetMaterialDurabilityOverride(MaterialId id) {
+    auto it = sMaterialDebugOverrides.find(id);
+    if (it == sMaterialDebugOverrides.end()) {
+        return -1;
+    }
+
+    return it->second.baseDurabilityOverride;
+}
+
+int Fuse::GetMaterialEffectiveBaseDurability(MaterialId id) {
+    const int base = static_cast<int>(Fuse::GetMaterialBaseDurability(id));
+    if (!sUseDebugOverrides) {
+        return base;
+    }
+
+    const int overrideValue = Fuse::GetMaterialDurabilityOverride(id);
+    return overrideValue >= 0 ? overrideValue : base;
+}
+
+int Fuse::GetMaterialAttackBonusDelta(MaterialId id) {
+    auto it = sMaterialDebugOverrides.find(id);
+    if (it == sMaterialDebugOverrides.end()) {
+        return 0;
+    }
+
+    return it->second.attackBonusDelta;
+}
+
+void Fuse::SetMaterialAttackBonusDelta(MaterialId id, int v) {
+    MaterialDebugOverride& entry = EnsureMaterialOverride(id);
+    entry.attackBonusDelta = v;
+
+    if (IsDefaultOverride(entry)) {
+        sMaterialDebugOverrides.erase(id);
+    }
+}
+
+void Fuse::SetMaterialBaseDurabilityOverride(MaterialId id, int v) {
+    MaterialDebugOverride& entry = EnsureMaterialOverride(id);
+    entry.baseDurabilityOverride = v;
+
+    if (IsDefaultOverride(entry)) {
+        sMaterialDebugOverrides.erase(id);
+    }
+}
+
+void Fuse::ResetMaterialOverride(MaterialId id) {
+    sMaterialDebugOverrides.erase(id);
+}
+
+void Fuse::ResetAllMaterialOverrides() {
+    sMaterialDebugOverrides.clear();
+}
+
+void Fuse::SetUseDebugOverrides(bool enabled) {
+    sUseDebugOverrides = enabled;
+}
+
+bool Fuse::GetUseDebugOverrides() {
+    return sUseDebugOverrides;
+}
+
+void Fuse::LoadDebugOverrides() {
+    sMaterialDebugOverrides.clear();
+    int enabledInt = 0;
+
+    SaveManager::Instance->LoadStruct("enhancements.fuse.debugOverrides", [&]() {
+        SaveManager::Instance->LoadData("enabled", enabledInt, 0);
+
+        SaveManager::Instance->LoadStruct("materials", [&]() {
+            size_t defCount = 0;
+            const MaterialDef* defs = Fuse::GetMaterialDefs(&defCount);
+
+            for (size_t i = 0; i < defCount; i++) {
+                const MaterialId id = defs[i].id;
+                const std::string key = std::to_string(static_cast<int>(id));
+
+                SaveManager::Instance->LoadStruct(key, [&]() {
+                    int attackDelta = 0;
+                    int durabilityOverride = -1;
+                    SaveManager::Instance->LoadData("attackBonusDelta", attackDelta, 0);
+                    SaveManager::Instance->LoadData("baseDurabilityOverride", durabilityOverride, -1);
+
+                    if (attackDelta != 0 || durabilityOverride != -1) {
+                        MaterialDebugOverride entry{};
+                        entry.attackBonusDelta = attackDelta;
+                        entry.baseDurabilityOverride = durabilityOverride;
+                        sMaterialDebugOverrides[id] = entry;
+
+                        Fuse::Log("[FuseDBG] OverrideLoad: mat=%d atkDelta=%d duraOvr=%d\n", static_cast<int>(id),
+                                  attackDelta, durabilityOverride);
+                    }
+                });
+            }
+        });
+    });
+
+    sUseDebugOverrides = enabledInt != 0;
+    Fuse::Log("[FuseDBG] OverrideLoad: enabled=%d\n", sUseDebugOverrides ? 1 : 0);
+}
+
+void Fuse::SaveDebugOverrides() {
+    SaveManager::Instance->SaveStruct("enhancements.fuse.debugOverrides", [&]() {
+        SaveManager::Instance->SaveData("enabled", sUseDebugOverrides ? 1 : 0);
+
+        SaveManager::Instance->SaveStruct("materials", [&]() {
+            for (const auto& kvp : sMaterialDebugOverrides) {
+                if (IsDefaultOverride(kvp.second)) {
+                    continue;
+                }
+
+                const std::string key = std::to_string(static_cast<int>(kvp.first));
+                SaveManager::Instance->SaveStruct(key, [&]() {
+                    if (kvp.second.attackBonusDelta != 0) {
+                        SaveManager::Instance->SaveData("attackBonusDelta", kvp.second.attackBonusDelta);
+                    }
+                    if (kvp.second.baseDurabilityOverride != -1) {
+                        SaveManager::Instance->SaveData("baseDurabilityOverride", kvp.second.baseDurabilityOverride);
+                    }
+                });
+
+                Fuse::Log("[FuseDBG] OverrideSave: mat=%d atkDelta=%d duraOvr=%d\n",
+                          static_cast<int>(kvp.first), kvp.second.attackBonusDelta,
+                          kvp.second.baseDurabilityOverride);
+            }
+        });
+    });
+
+    Fuse::Log("[FuseDBG] OverrideSave: enabled=%d\n", sUseDebugOverrides ? 1 : 0);
 }
 
 uint8_t Fuse::GetSwordModifierLevel(ModifierId id) {
@@ -582,7 +740,7 @@ Fuse::FuseResult Fuse::TryFuseSword(MaterialId id) {
         return FuseResult::NotEnoughMaterial;
     }
 
-    Fuse::FuseSwordWithMaterial(id, Fuse::GetMaterialBaseDurability(id));
+    Fuse::FuseSwordWithMaterial(id, Fuse::GetMaterialEffectiveBaseDurability(id));
 
     if (id == MaterialId::DekuNut) {
         const int postConsumeCount = Fuse::GetMaterialCount(id);

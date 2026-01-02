@@ -30,6 +30,7 @@ void OnPlayerUpdate(PlayState* play);
 static std::shared_ptr<FuseMenuWindow> sFuseMenuWindow;
 static bool sFuseMenuShown = false;
 static constexpr const char* kFuseSaveWriteCVar = CVAR_ENHANCEMENT("Fuse.SaveWrite");
+static constexpr const char* kFuseDebugOverrideSectionName = "enhancements.fuse.debugOverrides";
 
 static void SaveFuseWeaponSection(SaveContext* saveContext, int /*sectionID*/, bool /*fullSave*/) {
     (void)saveContext;
@@ -61,6 +62,16 @@ static void SaveFuseMaterialsSection(SaveContext* /*saveContext*/, int /*section
     FusePersistence::SaveMaterialInventoryToManager(*SaveManager::Instance, entries);
 }
 
+static void SaveFuseDebugOverridesSection(SaveContext* /*saveContext*/, int /*sectionID*/, bool /*fullSave*/) {
+    const bool enableSaveWrite = CVarGetInteger(kFuseSaveWriteCVar, 1) != 0;
+
+    if (!enableSaveWrite) {
+        return;
+    }
+
+    Fuse::SaveDebugOverrides();
+}
+
 static void LoadFuseWeaponSection() {
     const FuseSwordSaveState state = FusePersistence::LoadSwordStateFromManager(*SaveManager::Instance);
     FusePersistence::WriteSwordStateToContext(state);
@@ -69,6 +80,10 @@ static void LoadFuseWeaponSection() {
 static void LoadFuseMaterialsSection() {
     const auto entries = FusePersistence::LoadMaterialInventoryFromManager(*SaveManager::Instance);
     Fuse::ApplyCustomMaterialInventory(entries);
+}
+
+static void LoadFuseDebugOverridesSection() {
+    Fuse::LoadDebugOverrides();
 }
 
 static bool IsInGameplay() {
@@ -93,6 +108,9 @@ static void RegisterFuseMod() {
     SaveManager::Instance->AddSaveFunction(FusePersistence::kMaterialSaveSectionName, 1, SaveFuseMaterialsSection,
                                            true, SECTION_PARENT_NONE);
     SaveManager::Instance->AddLoadFunction(FusePersistence::kMaterialSaveSectionName, 1, LoadFuseMaterialsSection);
+    SaveManager::Instance->AddSaveFunction(kFuseDebugOverrideSectionName, 1, SaveFuseDebugOverridesSection, true,
+                                           SECTION_PARENT_NONE);
+    SaveManager::Instance->AddLoadFunction(kFuseDebugOverrideSectionName, 1, LoadFuseDebugOverridesSection);
 
     COND_HOOK(OnLoadGame, true, [](int32_t fileNum) {
         Fuse::OnLoadGame(fileNum);
