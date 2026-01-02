@@ -1,10 +1,8 @@
-extern "C" {
 #include "variables.h"
 #include "z64.h"
 #include "z64actor.h"
 #include "overlays/actors/ovl_En_Fz/z_en_fz.h"
 #include "functions.h"
-}
 
 #include "soh/Enhancements/Fuse/Fuse.h"
 
@@ -281,8 +279,8 @@ static bool SwordHadImpactFlags(Player* player, const char** reasonOut = nullptr
     const bool fused = Fuse::IsSwordFused();
     const int before = Fuse::GetSwordFuseDurability();
 
-    Fuse::Log("[FuseMVP] Impact hook fired event=hit amount=1 reason=%s durability=%d fused=%d\n", reason,
-              before, fused ? 1 : 0);
+    Fuse::Log("[FuseMVP] Impact hook fired event=hit amount=1 reason=%s durability=%d fused=%d\n", reason, before,
+              fused ? 1 : 0);
 
     if (!fused) {
         // Still confirm the hook is running when no durability exists.
@@ -292,14 +290,14 @@ static bool SwordHadImpactFlags(Player* player, const char** reasonOut = nullptr
     const bool broke = Fuse::DamageSwordFuseDurability(play, 1, reason);
     const int after = Fuse::GetSwordFuseDurability();
 
-    Fuse::Log("[FuseMVP] Durability drained event=hit amount=1 reason=%s durability=%d->%d%s\n", reason,
-              before, after, broke ? " (broke)" : "");
+    Fuse::Log("[FuseMVP] Durability drained event=hit amount=1 reason=%s durability=%d->%d%s\n", reason, before, after,
+              broke ? " (broke)" : "");
 
     gLastImpactDrainFrame = curFrame;
 }
 
 extern "C" void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollider, ColliderInfo* atInfo,
-                                              Collider* acCollider, ColliderInfo* acInfo) {
+                                             Collider* acCollider, ColliderInfo* acInfo) {
     (void)atInfo;
 
     if (!Fuse::IsEnabled())
@@ -330,14 +328,16 @@ extern "C" void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollid
     const int before = Fuse::GetSwordFuseDurability();
 
     if (victimPtr && gSwordATVictimCooldown.count(victimPtr) > 0) {
-        Fuse::Log("[FuseMVP] Sword AT collision DRAIN frame=%d fused=%d victim=%p durability=%d->%d reason=victim-cooldown\n",
-                  curFrame, fused ? 1 : 0, victimPtr, before, before);
+        Fuse::Log(
+            "[FuseMVP] Sword AT collision DRAIN frame=%d fused=%d victim=%p durability=%d->%d reason=victim-cooldown\n",
+            curFrame, fused ? 1 : 0, victimPtr, before, before);
         return;
     }
 
     if (!fused) {
-        Fuse::Log("[FuseMVP] Sword AT collision DRAIN frame=%d fused=%d victim=%p durability=%d->%d reason=fuse-inactive\n",
-                  curFrame, 0, victimPtr, before, before);
+        Fuse::Log(
+            "[FuseMVP] Sword AT collision DRAIN frame=%d fused=%d victim=%p durability=%d->%d reason=fuse-inactive\n",
+            curFrame, 0, victimPtr, before, before);
         return;
     }
 
@@ -412,8 +412,8 @@ void RestoreSwordHitboxVanillaNow(PlayState* play) {
         Fuse::Log("[FuseMVP] Break->vanilla: restored sword hitbox flags immediately frame=%d base0=0x%08X\n", frame,
                   gSwordBaseDmgFlags[0]);
     } else {
-        Fuse::Log("[FuseMVP] Break->vanilla: restore skipped frame=%d player=%d baseValid=%d\n", frame,
-                  player ? 1 : 0, gSwordBaseValid ? 1 : 0);
+        Fuse::Log("[FuseMVP] Break->vanilla: restore skipped frame=%d player=%d baseValid=%d\n", frame, player ? 1 : 0,
+                  gSwordBaseValid ? 1 : 0);
     }
 
     gHammerizeAppliedFrame = -1;
@@ -459,8 +459,7 @@ void OnFrame_Objects_Pre(PlayState* play) {
     // Rock-breaking behavior (works): apply hammer flags only when rocks are nearby and fuse is active
     const uint8_t hammerLevel = Fuse::GetSwordModifierLevel(ModifierId::Hammerize);
 
-    if (hammerLevel > 0 && swordFused && IsPlayerSwingingSword(player) &&
-        IsAnyLiftableRockNearPlayer(play, player)) {
+    if (hammerLevel > 0 && swordFused && IsPlayerSwingingSword(player) && IsAnyLiftableRockNearPlayer(play, player)) {
         ApplyHammerFlagsToSwordHitbox(player, hammerLevel);
         gHammerizeAppliedFrame = play->gameplayFrames;
         Fuse::Log("[FuseMVP] Hammerize applied at frame=%d\n", gHammerizeAppliedFrame);
