@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstdarg>
 #include <cstdio>
+#include <array>
 #include <limits>
 #include <unordered_map>
 #include <unordered_set>
@@ -29,8 +30,16 @@ static FuseSaveData gFuseSave; // persistent-ready (not serialized yet)
 static FuseRuntimeState gFuseRuntime;
 static std::unordered_map<MaterialId, uint16_t> sMaterialInventory;
 static bool sMaterialInventoryInitialized = false;
-static int sSwordFreezeApplyFrame = -1;
-static std::unordered_set<void*> sSwordFreezeApplied;
+static constexpr size_t kSwordFreezeQueueCount = 2;
+
+struct SwordFreezeRequest {
+    Actor* victim = nullptr;
+    uint8_t level = 0;
+};
+
+static std::array<std::vector<SwordFreezeRequest>, kSwordFreezeQueueCount> sSwordFreezeQueues;
+static std::array<std::unordered_set<Actor*>, kSwordFreezeQueueCount> sSwordFreezeVictims;
+static std::array<int, kSwordFreezeQueueCount> sSwordFreezeQueueFrames = { -1, -1 };
 
 static void ResetSavedSwordFuseFields() {
     FusePersistence::WriteSwordStateToContext(FusePersistence::ClearedSwordState());
@@ -158,24 +167,61 @@ void ApplyIceArrowFreeze(PlayState* play, Actor* victim, uint8_t level) {
 
     constexpr s16 kBaseFreezeDuration = 40;
     const s16 duration = static_cast<s16>(kBaseFreezeDuration * level);
+    constexpr s16 kIceColorFlagBlue = 0; // Default flag yields the blue ice arrow tint (see z64actor.h)
 
     // Apply the same immobilization and visual feedback that Ice Arrows use
     victim->freezeTimer = std::max<s16>(victim->freezeTimer, duration);
-    Actor_SetColorFilter(victim, 0, 255, 0, duration);
+    Actor_SetColorFilter(victim, kIceColorFlagBlue, 255, 0, duration);
 
     if (play != nullptr) {
-        Vec3f spawnPos = victim->world.pos;
         constexpr s16 kPrim = 150;
         constexpr s16 kEnvPrim = 250;
         constexpr s16 kEnvSecondary = 235;
         constexpr s16 kEnvTertiary = 245;
         const float scale = 1.0f + (0.25f * (level - 1));
 
-        EffectSsEnIce_SpawnFlyingVec3f(play, victim, &spawnPos, kPrim, kPrim, kPrim, kEnvPrim, kEnvSecondary,
-                                       kEnvTertiary, 255, scale);
+        for (int i = 0; i < 3; i++) {
+            Vec3f spawnPos = victim->world.pos;
+            spawnPos.x += Rand_CenteredFloat(10.0f);
+            spawnPos.y += Rand_CenteredFloat(8.0f);
+            spawnPos.z += Rand_CenteredFloat(10.0f);
+
+            EffectSsEnIce_SpawnFlyingVec3f(play, victim, &spawnPos, kPrim, kPrim, kPrim, kEnvPrim, kEnvSecondary,
+                                           kEnvTertiary, 255, scale);
+        }
     }
 
     Fuse::Log("[FuseDBG] FreezeApply: victim=%p duration=%d mat=FrozenShard\n", (void*)victim, duration);
+}
+
+void ResetSwordFreezeQueueInternal() {
+    for (size_t i = 0; i < kSwordFreezeQueueCount; i++) {
+        sSwordFreezeQueues[i].clear();
+        sSwordFreezeVictims[i].clear();
+        sSwordFreezeQueueFrames[i] = -1;
+    }
+}
+
+void EnqueueSwordFreezeRequest(PlayState* play, Actor* victim, uint8_t level) {
+    if (!play || !victim || level == 0) {
+        return;
+    }
+
+    const int curFrame = play->gameplayFrames;
+    const size_t queueIndex = static_cast<size_t>(curFrame) % kSwordFreezeQueueCount;
+
+    if (sSwordFreezeQueueFrames[queueIndex] != curFrame) {
+        sSwordFreezeQueues[queueIndex].clear();
+        sSwordFreezeVictims[queueIndex].clear();
+        sSwordFreezeQueueFrames[queueIndex] = curFrame;
+    }
+
+    if (sSwordFreezeVictims[queueIndex].count(victim) > 0) {
+        return;
+    }
+
+    sSwordFreezeVictims[queueIndex].insert(victim);
+    sSwordFreezeQueues[queueIndex].push_back({ victim, level });
 }
 
 } // namespace
@@ -592,6 +638,8 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
     gFuseRuntime.enabled = true;
     gFuseRuntime.lastEvent = "Loaded";
 
+    ResetSwordFreezeQueueInternal();
+
     EnsureMaterialInventoryInitialized();
 
     gFuseSave = FuseSaveData{};
@@ -603,6 +651,41 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
 
 void Fuse::OnGameFrameUpdate(PlayState* /*play*/) {
     // No per-frame work needed yet
+}
+
+void Fuse::ProcessDeferredSwordFreezes(PlayState* play) {
+    if (!play) {
+        return;
+    }
+
+    if (!Fuse::IsEnabled()) {
+        ResetSwordFreezeQueueInternal();
+        return;
+    }
+
+    const int curFrame = play->gameplayFrames;
+    if (curFrame < 0) {
+        return;
+    }
+
+    const size_t applyIndex = static_cast<size_t>((curFrame + kSwordFreezeQueueCount - 1) % kSwordFreezeQueueCount);
+    const int queuedFrame = sSwordFreezeQueueFrames[applyIndex];
+
+    if (queuedFrame == -1 || queuedFrame >= curFrame) {
+        return;
+    }
+
+    for (const auto& request : sSwordFreezeQueues[applyIndex]) {
+        ApplyIceArrowFreeze(play, request.victim, request.level);
+    }
+
+    sSwordFreezeQueues[applyIndex].clear();
+    sSwordFreezeVictims[applyIndex].clear();
+    sSwordFreezeQueueFrames[applyIndex] = -1;
+}
+
+void Fuse::ResetSwordFreezeQueue() {
+    ResetSwordFreezeQueueInternal();
 }
 
 void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim) {
@@ -622,15 +705,6 @@ void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim) {
 
     uint8_t freezeLevel = 0;
     if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Freeze, &freezeLevel) && freezeLevel > 0) {
-        const int curFrame = play ? play->gameplayFrames : -1;
-        if (curFrame != sSwordFreezeApplyFrame) {
-            sSwordFreezeApplyFrame = curFrame;
-            sSwordFreezeApplied.clear();
-        }
-
-        if (sSwordFreezeApplied.count(victim) == 0) {
-            sSwordFreezeApplied.insert(victim);
-            ApplyIceArrowFreeze(play, victim, freezeLevel);
-        }
+        EnqueueSwordFreezeRequest(play, victim, freezeLevel);
     }
 }

@@ -428,6 +428,7 @@ void OnLoadGame_ResetObjects() {
     gSwordATVictimCooldown.clear();
     gAwardedFrozenShards.clear();
     gSwordBaseValid = false;
+    Fuse::ResetSwordFreezeQueue();
 }
 
 void OnFrame_Objects_Pre(PlayState* play) {
@@ -471,6 +472,7 @@ void OnFrame_Objects_Pre(PlayState* play) {
 }
 
 void OnFrame_Objects_Post(PlayState* play) {
+    Fuse::ProcessDeferredSwordFreezes(play);
 }
 
 void OnPlayerUpdate(PlayState* play) {
