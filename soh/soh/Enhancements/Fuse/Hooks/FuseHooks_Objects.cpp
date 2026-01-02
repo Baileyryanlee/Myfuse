@@ -344,6 +344,54 @@ extern "C" void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollid
     Fuse::Log("[FuseMVP] Sword AT collision DRAIN frame=%d fused=%d victim=%p durability=%d->%d%s\n", curFrame, 1,
               victimPtr, before, after, broke ? " (broke)" : "");
 
+    if (victimActor && victimActor->freezeTimer > 0 && victimPtr && gSwordATVictimCooldown.count(victimPtr) == 0) {
+        int baseDamage = 0;
+
+        if (atInfo) {
+            baseDamage = static_cast<int>(atInfo->toucher.damage);
+        }
+
+        if (baseDamage == 0) {
+            switch (CUR_EQUIP_VALUE(EQUIP_TYPE_SWORD)) {
+                case EQUIP_VALUE_SWORD_BIGGORON:
+                    baseDamage = 4;
+                    break;
+                case EQUIP_VALUE_SWORD_MASTER:
+                    baseDamage = 2;
+                    break;
+                case EQUIP_VALUE_SWORD_KOKIRI:
+                default:
+                    baseDamage = 1;
+                    break;
+            }
+        }
+
+        const int bonusDamage = static_cast<int>(std::ceil(baseDamage * 0.5f));
+
+        if (bonusDamage > 0) {
+            victimActor->colChkInfo.damage = bonusDamage;
+            Actor_ApplyDamage(victimActor);
+        }
+
+        Fuse::Log("[FuseDBG] FreezeShatter: victim=%p base=%d bonus=%d\n", (void*)victimActor, baseDamage, bonusDamage);
+
+        victimActor->freezeTimer = 0;
+
+        if (player) {
+            const Vec3f playerPos = player->actor.world.pos;
+            const Vec3f victimPos = victimActor->world.pos;
+            const float dx = victimPos.x - playerPos.x;
+            const float dz = victimPos.z - playerPos.z;
+            const s16 yaw = Math_Atan2S(dz, dx);
+
+            victimActor->world.rot.y = yaw;
+            victimActor->shape.rot.y = yaw;
+        }
+
+        victimActor->speedXZ = 10.0f;
+        victimActor->velocity.y = 3.0f;
+    }
+
     if (victimPtr) {
         gSwordATVictimCooldown.insert(victimPtr);
     }
