@@ -26,6 +26,11 @@ FuseWeaponView Fuse_GetEquippedSwordView(const PlayState* play);
 
 namespace Fuse {
 
+struct MaterialDebugOverride {
+    int attackBonusDelta = 0;
+    int baseDurabilityOverride = -1;
+};
+
 // Call once on load / init and every frame.
 void OnLoadGame(int32_t fileNum);
 void OnGameFrameUpdate(PlayState* play);
@@ -41,6 +46,18 @@ void SetEnabled(bool enabled);
 const MaterialDef* GetMaterialDef(MaterialId id);
 const MaterialDef* GetMaterialDefs(size_t* count);
 uint16_t GetMaterialBaseDurability(MaterialId id);
+int GetMaterialAttackBonus(MaterialId id);
+int GetMaterialDurabilityOverride(MaterialId id);
+int GetMaterialEffectiveBaseDurability(MaterialId id);
+int GetMaterialAttackBonusDelta(MaterialId id);
+void SetMaterialAttackBonusDelta(MaterialId id, int v);
+void SetMaterialBaseDurabilityOverride(MaterialId id, int v);
+void ResetMaterialOverride(MaterialId id);
+void ResetAllMaterialOverrides();
+void SetUseDebugOverrides(bool enabled);
+bool GetUseDebugOverrides();
+void LoadDebugOverrides();
+void SaveDebugOverrides();
 uint8_t GetSwordModifierLevel(ModifierId id);
 bool SwordHasModifier(ModifierId id);
 

@@ -70,6 +70,32 @@ static const char* MatName(MaterialId m) {
     return def ? def->name : "Unknown";
 }
 
+static int ClampOverride(int v) {
+    return std::clamp(v, -1, 65535);
+}
+
+static void AdjustAttackDelta(MaterialId id, int delta) {
+    const int cur = Fuse::GetMaterialAttackBonusDelta(id);
+    Fuse::SetMaterialAttackBonusDelta(id, cur + delta);
+    Fuse::SaveDebugOverrides();
+}
+
+static void AdjustDurabilityOverride(MaterialId id, int delta) {
+    int cur = Fuse::GetMaterialDurabilityOverride(id);
+    if (cur < 0) {
+        cur = static_cast<int>(Fuse::GetMaterialBaseDurability(id));
+    }
+
+    cur = ClampOverride(cur + delta);
+    Fuse::SetMaterialBaseDurabilityOverride(id, cur);
+    Fuse::SaveDebugOverrides();
+}
+
+static void ResetMaterialOverrideUI(MaterialId id) {
+    Fuse::ResetMaterialOverride(id);
+    Fuse::SaveDebugOverrides();
+}
+
 static std::string MatNameWithCount(MaterialId m) {
     const char* baseName = MatName(m);
     const int count = Fuse::GetMaterialCount(m);
@@ -178,12 +204,189 @@ void FuseMenuWindow::DrawElement() {
     ImGui::Separator();
 
     // ------------------------------------------------------------------------
-    // Fusable items list with dropdowns
+    // Material tuning
     // ------------------------------------------------------------------------
-    ImGui::SeparatorText("Fuse-capable Items");
+    ImGui::SeparatorText("Material Tuning");
+
+    bool useDebugOverrides = Fuse::GetUseDebugOverrides();
+    if (ImGui::Checkbox("Use Debug Overrides", &useDebugOverrides)) {
+        Fuse::SetUseDebugOverrides(useDebugOverrides);
+        Fuse::SaveDebugOverrides();
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Reset All Overrides")) {
+        Fuse::ResetAllMaterialOverrides();
+        Fuse::SaveDebugOverrides();
+    }
 
     size_t materialDefCount = 0;
     const MaterialDef* materialDefs = Fuse::GetMaterialDefs(&materialDefCount);
+
+    ImGui::SeparatorText("Apply to All");
+    if (ImGui::Button("Attack Delta -5")) {
+        for (size_t i = 0; i < materialDefCount; i++) {
+            if (materialDefs[i].id == MaterialId::None) {
+                continue;
+            }
+            AdjustAttackDelta(materialDefs[i].id, -5);
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Attack Delta -1")) {
+        for (size_t i = 0; i < materialDefCount; i++) {
+            if (materialDefs[i].id == MaterialId::None) {
+                continue;
+            }
+            AdjustAttackDelta(materialDefs[i].id, -1);
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Attack Delta +1")) {
+        for (size_t i = 0; i < materialDefCount; i++) {
+            if (materialDefs[i].id == MaterialId::None) {
+                continue;
+            }
+            AdjustAttackDelta(materialDefs[i].id, 1);
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Attack Delta +5")) {
+        for (size_t i = 0; i < materialDefCount; i++) {
+            if (materialDefs[i].id == MaterialId::None) {
+                continue;
+            }
+            AdjustAttackDelta(materialDefs[i].id, 5);
+        }
+    }
+
+    if (ImGui::Button("Durability Override -5")) {
+        for (size_t i = 0; i < materialDefCount; i++) {
+            if (materialDefs[i].id == MaterialId::None) {
+                continue;
+            }
+            AdjustDurabilityOverride(materialDefs[i].id, -5);
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Durability Override -1")) {
+        for (size_t i = 0; i < materialDefCount; i++) {
+            if (materialDefs[i].id == MaterialId::None) {
+                continue;
+            }
+            AdjustDurabilityOverride(materialDefs[i].id, -1);
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Durability Override +1")) {
+        for (size_t i = 0; i < materialDefCount; i++) {
+            if (materialDefs[i].id == MaterialId::None) {
+                continue;
+            }
+            AdjustDurabilityOverride(materialDefs[i].id, 1);
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Durability Override +5")) {
+        for (size_t i = 0; i < materialDefCount; i++) {
+            if (materialDefs[i].id == MaterialId::None) {
+                continue;
+            }
+            AdjustDurabilityOverride(materialDefs[i].id, 5);
+        }
+    }
+
+    if (ImGui::BeginTable("MaterialOverridesTable", 6,
+                          ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("Material");
+        ImGui::TableSetupColumn("Attack Delta");
+        ImGui::TableSetupColumn("Eff. Attack");
+        ImGui::TableSetupColumn("Base Override");
+        ImGui::TableSetupColumn("Eff. Base Dur");
+        ImGui::TableSetupColumn("Controls", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableHeadersRow();
+
+        for (size_t materialIndex = 0; materialIndex < materialDefCount; materialIndex++) {
+            const MaterialDef& def = materialDefs[materialIndex];
+            if (def.id == MaterialId::None) {
+                continue;
+            }
+
+            const int attackDelta = Fuse::GetMaterialAttackBonusDelta(def.id);
+            const int attackEffective = Fuse::GetMaterialAttackBonus(def.id);
+            const int durabilityOverride = Fuse::GetMaterialDurabilityOverride(def.id);
+            const int durabilityEffective = Fuse::GetMaterialEffectiveBaseDurability(def.id);
+
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("%s (id=%d)", def.name, static_cast<int>(def.id));
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::Text("%d", attackDelta);
+
+            ImGui::TableSetColumnIndex(2);
+            ImGui::Text("%d", attackEffective);
+
+            ImGui::TableSetColumnIndex(3);
+            if (durabilityOverride < 0) {
+                ImGui::TextUnformatted("Default");
+            } else {
+                ImGui::Text("%d", durabilityOverride);
+            }
+
+            ImGui::TableSetColumnIndex(4);
+            ImGui::Text("%d", durabilityEffective);
+
+            ImGui::TableSetColumnIndex(5);
+            if (ImGui::SmallButton(("Atk -5##" + std::to_string(materialIndex)).c_str())) {
+                AdjustAttackDelta(def.id, -5);
+            }
+            ImGui::SameLine();
+            if (ImGui::SmallButton(("Atk -1##" + std::to_string(materialIndex)).c_str())) {
+                AdjustAttackDelta(def.id, -1);
+            }
+            ImGui::SameLine();
+            if (ImGui::SmallButton(("Atk +1##" + std::to_string(materialIndex)).c_str())) {
+                AdjustAttackDelta(def.id, 1);
+            }
+            ImGui::SameLine();
+            if (ImGui::SmallButton(("Atk +5##" + std::to_string(materialIndex)).c_str())) {
+                AdjustAttackDelta(def.id, 5);
+            }
+
+            ImGui::SameLine();
+            if (ImGui::SmallButton(("Dur -5##" + std::to_string(materialIndex)).c_str())) {
+                AdjustDurabilityOverride(def.id, -5);
+            }
+            ImGui::SameLine();
+            if (ImGui::SmallButton(("Dur -1##" + std::to_string(materialIndex)).c_str())) {
+                AdjustDurabilityOverride(def.id, -1);
+            }
+            ImGui::SameLine();
+            if (ImGui::SmallButton(("Dur +1##" + std::to_string(materialIndex)).c_str())) {
+                AdjustDurabilityOverride(def.id, 1);
+            }
+            ImGui::SameLine();
+            if (ImGui::SmallButton(("Dur +5##" + std::to_string(materialIndex)).c_str())) {
+                AdjustDurabilityOverride(def.id, 5);
+            }
+
+            ImGui::SameLine();
+            if (ImGui::SmallButton(("Reset##" + std::to_string(materialIndex)).c_str())) {
+                ResetMaterialOverrideUI(def.id);
+            }
+        }
+
+        ImGui::EndTable();
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+
+    // ------------------------------------------------------------------------
+    // Fusable items list with dropdowns
+    // ------------------------------------------------------------------------
+    ImGui::SeparatorText("Fuse-capable Items");
 
     // Table layout looks much cleaner than ad-hoc SameLine calls.
     if (ImGui::BeginTable("FuseItemsTable", 2, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg)) {
