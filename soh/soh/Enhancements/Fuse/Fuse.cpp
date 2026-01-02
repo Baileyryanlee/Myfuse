@@ -168,10 +168,11 @@ void ApplyIceArrowFreeze(PlayState* play, Actor* victim, uint8_t level) {
     constexpr s16 kBaseFreezeDuration = 40;
     const s16 duration = static_cast<s16>(kBaseFreezeDuration * level);
     constexpr s16 kIceColorFlagBlue = 0; // Default flag yields the blue ice arrow tint (see z64actor.h)
+    constexpr s16 kNeutralColorIntensity = 180; // Softer tint to look more snow/white than deep blue
 
     // Apply the same immobilization and visual feedback that Ice Arrows use
     victim->freezeTimer = std::max<s16>(victim->freezeTimer, duration);
-    Actor_SetColorFilter(victim, kIceColorFlagBlue, 255, 0, duration);
+    Actor_SetColorFilter(victim, kIceColorFlagBlue, kNeutralColorIntensity, 0, duration);
 
     if (play != nullptr) {
         constexpr s16 kPrim = 150;

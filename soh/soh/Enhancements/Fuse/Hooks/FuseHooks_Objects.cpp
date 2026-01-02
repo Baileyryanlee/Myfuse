@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <cmath>
+#include <algorithm>
 #include <unordered_set>
 
 // Liftable rock actor
@@ -367,13 +368,26 @@ extern "C" void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollid
         }
 
         const int bonusDamage = static_cast<int>(std::ceil(baseDamage * 0.5f));
+        const int freezeTimer = victimActor->freezeTimer;
 
         if (bonusDamage > 0) {
+            const int hpBefore = victimActor->colChkInfo.health;
             victimActor->colChkInfo.damage = bonusDamage;
             Actor_ApplyDamage(victimActor);
-        }
+            const int hpAfter = victimActor->colChkInfo.health;
 
-        Fuse::Log("[FuseDBG] FreezeShatter: victim=%p base=%d bonus=%d\n", (void*)victimActor, baseDamage, bonusDamage);
+            if (hpAfter == hpBefore && hpBefore > 0 && victimActor->category != ACTORCAT_BOSS) {
+                const int adjustedHealth = std::max(0, hpBefore - bonusDamage);
+                victimActor->colChkInfo.health = static_cast<uint8_t>(adjustedHealth);
+            }
+
+            Fuse::Log("[FuseDBG] FreezeShatter: victim=%p hp=%d->%d base=%d bonus=%d froze=%d\n", (void*)victimActor,
+                      hpBefore, victimActor->colChkInfo.health, baseDamage, bonusDamage, freezeTimer);
+        } else {
+            Fuse::Log("[FuseDBG] FreezeShatter: victim=%p hp=%d->%d base=%d bonus=%d froze=%d\n", (void*)victimActor,
+                      victimActor->colChkInfo.health, victimActor->colChkInfo.health, baseDamage, bonusDamage,
+                      freezeTimer);
+        }
 
         victimActor->freezeTimer = 0;
 
