@@ -8,6 +8,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <array>
+#include <cmath>
 #include <limits>
 #include <unordered_map>
 #include <unordered_set>
@@ -39,6 +40,7 @@ static bool sUseDebugOverrides = false;
 static std::unordered_map<Actor*, s16> sFuseFrozenTimers;
 static std::unordered_map<Actor*, int> sFreezeAppliedFrame;
 static std::unordered_map<Actor*, int> sShatterFrame;
+static std::unordered_map<Actor*, Vec3f> sFuseFrozenPos;
 
 struct SwordFreezeRequest {
     Actor* victim = nullptr;
@@ -66,6 +68,7 @@ static void ClearFuseFreeze(Actor* actor) {
     sFuseFrozenTimers.erase(actor);
     sFreezeAppliedFrame.erase(actor);
     sShatterFrame.erase(actor);
+    sFuseFrozenPos.erase(actor);
     actor->colorFilterTimer = 0;
 }
 
@@ -268,6 +271,7 @@ static void TickFuseFrozenTimers(PlayState* play) {
         if (!IsActorAliveInPlay(play, actor)) {
             sFreezeAppliedFrame.erase(actor);
             sShatterFrame.erase(actor);
+            sFuseFrozenPos.erase(actor);
             it = sFuseFrozenTimers.erase(it);
             continue;
         }
@@ -280,10 +284,24 @@ static void TickFuseFrozenTimers(PlayState* play) {
             ++it;
             ClearFuseFreeze(actor);
         } else {
+            auto shatterIt = sShatterFrame.find(actor);
+            if (play != nullptr && shatterIt != sShatterFrame.end() && shatterIt->second == play->gameplayFrames) {
+                ++it;
+                continue;
+            }
+
             actor->velocity.x = 0.0f;
             actor->velocity.y = 0.0f;
             actor->velocity.z = 0.0f;
             actor->speedXZ = 0.0f;
+            actor->gravity = 0.0f;
+
+            auto posIt = sFuseFrozenPos.find(actor);
+            if (posIt == sFuseFrozenPos.end()) {
+                sFuseFrozenPos[actor] = actor->world.pos;
+            } else {
+                actor->world.pos = posIt->second;
+            }
             ++it;
         }
     }
@@ -883,6 +901,7 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
     sFuseFrozenTimers.clear();
     sFreezeAppliedFrame.clear();
     sShatterFrame.clear();
+    sFuseFrozenPos.clear();
 
     EnsureMaterialInventoryInitialized();
 
@@ -956,6 +975,35 @@ void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim) {
         ClearFuseFreeze(victim);
         Actor_ApplyDamage(victim);
         Fuse::Log("[FuseDBG] FreezeShatter: victim=%p doubleDamage=1\n", (void*)victim);
+
+        if (play != nullptr) {
+            Player* player = GET_PLAYER(play);
+            if (player != nullptr) {
+                Vec3f dir = { victim->world.pos.x - player->actor.world.pos.x, 0.0f,
+                              victim->world.pos.z - player->actor.world.pos.z };
+                float distSq = (dir.x * dir.x) + (dir.z * dir.z);
+
+                if (distSq < 0.0001f) {
+                    dir.x = 0.0f;
+                    dir.z = 1.0f;
+                } else {
+                    const float invLen = 1.0f / sqrtf(distSq);
+                    dir.x *= invLen;
+                    dir.z *= invLen;
+                }
+
+                constexpr float kShatterKnockbackSpeed = 12.0f;
+                constexpr float kShatterUpwardBoost = 6.0f;
+
+                victim->velocity.x = dir.x * kShatterKnockbackSpeed;
+                victim->velocity.y = kShatterUpwardBoost;
+                victim->velocity.z = dir.z * kShatterKnockbackSpeed;
+                victim->speedXZ = kShatterKnockbackSpeed;
+
+                Fuse::Log("[FuseDBG] FreezeShatterKnockback: victim=%p v=(%.2f,%.2f,%.2f)\n", (void*)victim,
+                          victim->velocity.x, victim->velocity.y, victim->velocity.z);
+            }
+        }
         if (frame >= 0) {
             sShatterFrame[victim] = frame;
         }
