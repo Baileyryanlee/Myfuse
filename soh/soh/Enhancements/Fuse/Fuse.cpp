@@ -47,6 +47,24 @@ static std::array<std::vector<SwordFreezeRequest>, kSwordFreezeQueueCount> sSwor
 static std::array<std::unordered_set<Actor*>, kSwordFreezeQueueCount> sSwordFreezeVictims;
 static std::array<int, kSwordFreezeQueueCount> sSwordFreezeQueueFrames = { -1, -1 };
 
+static bool IsFuseFrozen(Actor* actor) {
+    if (actor == nullptr) {
+        return false;
+    }
+
+    auto it = sFuseFrozenTimers.find(actor);
+    return it != sFuseFrozenTimers.end() && it->second > 0;
+}
+
+static void ClearFuseFreeze(Actor* actor) {
+    if (!actor) {
+        return;
+    }
+
+    sFuseFrozenTimers.erase(actor);
+    actor->colorFilterTimer = 0;
+}
+
 static void ResetSavedSwordFuseFields() {
     FusePersistence::WriteSwordStateToContext(FusePersistence::ClearedSwordState());
 }
@@ -234,8 +252,13 @@ static void TickFuseFrozenTimers() {
         }
 
         if (timer <= 0) {
+            ClearFuseFreeze(actor);
             it = sFuseFrozenTimers.erase(it);
         } else {
+            actor->velocity.x = 0.0f;
+            actor->velocity.y = 0.0f;
+            actor->velocity.z = 0.0f;
+            actor->speedXZ = 0.0f;
             ++it;
         }
     }
@@ -897,8 +920,16 @@ void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim) {
         ApplyDekuNutStunVanilla(play, GET_PLAYER(play), victim, stunLevel);
     }
 
+    const bool wasFuseFrozen = IsFuseFrozen(victim);
+    if (wasFuseFrozen) {
+        ClearFuseFreeze(victim);
+        Actor_ApplyDamage(victim);
+        Fuse::Log("[FuseDBG] FreezeShatter: victim=%p doubleDamage=1\n", (void*)victim);
+    }
+
     uint8_t freezeLevel = 0;
-    if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Freeze, &freezeLevel) && freezeLevel > 0) {
+    if (!wasFuseFrozen &&
+        HasModifier(def->modifiers, def->modifierCount, ModifierId::Freeze, &freezeLevel) && freezeLevel > 0) {
         EnqueueSwordFreezeRequest(play, victim, freezeLevel);
     }
 }
