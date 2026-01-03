@@ -35,6 +35,7 @@ static bool sMaterialInventoryInitialized = false;
 static constexpr size_t kSwordFreezeQueueCount = 2;
 static std::unordered_map<MaterialId, MaterialDebugOverride> sMaterialDebugOverrides;
 static bool sUseDebugOverrides = false;
+static std::unordered_map<Actor*, s16> sFuseFrozenTimers;
 
 struct SwordFreezeRequest {
     Actor* victim = nullptr;
@@ -183,7 +184,7 @@ void ApplyIceArrowFreeze(PlayState* play, Actor* victim, uint8_t level) {
     constexpr s16 kNeutralColorIntensity = 180; // Softer tint to look more snow/white than deep blue
 
     // Apply the same immobilization and visual feedback that Ice Arrows use
-    victim->freezeTimer = std::max<s16>(victim->freezeTimer, duration);
+    sFuseFrozenTimers[victim] = std::max<s16>(sFuseFrozenTimers[victim], duration);
     Actor_SetColorFilter(victim, kIceColorFlagBlue, kNeutralColorIntensity, 0, duration);
 
     if (play != nullptr) {
@@ -215,6 +216,28 @@ void ApplyIceArrowFreeze(PlayState* play, Actor* victim, uint8_t level) {
     }
 
     Fuse::Log("[FuseDBG] FreezeApply: victim=%p duration=%d mat=FrozenShard\n", (void*)victim, duration);
+}
+
+static void TickFuseFrozenTimers() {
+    for (auto it = sFuseFrozenTimers.begin(); it != sFuseFrozenTimers.end();) {
+        Actor* actor = it->first;
+        s16& timer = it->second;
+
+        if (actor == nullptr) {
+            it = sFuseFrozenTimers.erase(it);
+            continue;
+        }
+
+        if (timer > 0) {
+            timer--;
+        }
+
+        if (timer <= 0) {
+            it = sFuseFrozenTimers.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 void ResetSwordFreezeQueueInternal() {
@@ -808,6 +831,7 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
     gFuseRuntime.lastEvent = "Loaded";
 
     ResetSwordFreezeQueueInternal();
+    sFuseFrozenTimers.clear();
 
     EnsureMaterialInventoryInitialized();
 
@@ -819,7 +843,7 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
 }
 
 void Fuse::OnGameFrameUpdate(PlayState* /*play*/) {
-    // No per-frame work needed yet
+    TickFuseFrozenTimers();
 }
 
 void Fuse::ProcessDeferredSwordFreezes(PlayState* play) {
