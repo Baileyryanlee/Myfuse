@@ -37,6 +37,8 @@ static constexpr size_t kSwordFreezeQueueCount = 2;
 static std::unordered_map<MaterialId, MaterialDebugOverride> sMaterialDebugOverrides;
 static bool sUseDebugOverrides = false;
 static std::unordered_map<Actor*, s16> sFuseFrozenTimers;
+static std::unordered_map<Actor*, int> sFreezeAppliedFrame;
+static std::unordered_map<Actor*, int> sShatterFrame;
 
 struct SwordFreezeRequest {
     Actor* victim = nullptr;
@@ -62,6 +64,8 @@ static void ClearFuseFreeze(Actor* actor) {
     }
 
     sFuseFrozenTimers.erase(actor);
+    sFreezeAppliedFrame.erase(actor);
+    sShatterFrame.erase(actor);
     actor->colorFilterTimer = 0;
 }
 
@@ -207,6 +211,7 @@ void ApplyIceArrowFreeze(PlayState* play, Actor* victim, uint8_t level) {
     Actor_SetColorFilter(victim, kIceColorFlagBlue, kNeutralColorIntensity, 0, duration);
 
     if (play != nullptr) {
+        sFreezeAppliedFrame[victim] = play->gameplayFrames;
         constexpr s16 kPrim = 150;
         constexpr s16 kEnvPrim = 250;
         constexpr s16 kEnvSecondary = 235;
@@ -237,12 +242,32 @@ void ApplyIceArrowFreeze(PlayState* play, Actor* victim, uint8_t level) {
     Fuse::Log("[FuseDBG] FreezeApply: victim=%p duration=%d mat=FrozenShard\n", (void*)victim, duration);
 }
 
-static void TickFuseFrozenTimers() {
+static bool IsActorAliveInPlay(PlayState* play, Actor* target) {
+    if (!play || !target) {
+        return false;
+    }
+
+    for (int i = 0; i < ACTORCAT_MAX; ++i) {
+        Actor* a = play->actorCtx.actorLists[i].head;
+        while (a != nullptr) {
+            if (a == target) {
+                return true;
+            }
+            a = a->next;
+        }
+    }
+
+    return false;
+}
+
+static void TickFuseFrozenTimers(PlayState* play) {
     for (auto it = sFuseFrozenTimers.begin(); it != sFuseFrozenTimers.end();) {
         Actor* actor = it->first;
         s16& timer = it->second;
 
-        if (actor == nullptr) {
+        if (!IsActorAliveInPlay(play, actor)) {
+            sFreezeAppliedFrame.erase(actor);
+            sShatterFrame.erase(actor);
             it = sFuseFrozenTimers.erase(it);
             continue;
         }
@@ -252,8 +277,8 @@ static void TickFuseFrozenTimers() {
         }
 
         if (timer <= 0) {
+            ++it;
             ClearFuseFreeze(actor);
-            it = sFuseFrozenTimers.erase(it);
         } else {
             actor->velocity.x = 0.0f;
             actor->velocity.y = 0.0f;
@@ -856,6 +881,8 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
 
     ResetSwordFreezeQueueInternal();
     sFuseFrozenTimers.clear();
+    sFreezeAppliedFrame.clear();
+    sShatterFrame.clear();
 
     EnsureMaterialInventoryInitialized();
 
@@ -866,8 +893,8 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
     Fuse::Log("[FuseMVP] MVP: Throw a liftable rock until it BREAKS to acquire ROCK.\n");
 }
 
-void Fuse::OnGameFrameUpdate(PlayState* /*play*/) {
-    TickFuseFrozenTimers();
+void Fuse::OnGameFrameUpdate(PlayState* play) {
+    TickFuseFrozenTimers(play);
 }
 
 void Fuse::ProcessDeferredSwordFreezes(PlayState* play) {
@@ -920,15 +947,24 @@ void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim) {
         ApplyDekuNutStunVanilla(play, GET_PLAYER(play), victim, stunLevel);
     }
 
+    const int frame = play ? play->gameplayFrames : -1;
     const bool wasFuseFrozen = IsFuseFrozen(victim);
-    if (wasFuseFrozen) {
+    const auto applyIt = sFreezeAppliedFrame.find(victim);
+    const bool freezeAppliedThisFrame = (applyIt != sFreezeAppliedFrame.end() && applyIt->second == frame);
+    const bool shouldShatter = wasFuseFrozen && !freezeAppliedThisFrame;
+    if (shouldShatter) {
         ClearFuseFreeze(victim);
         Actor_ApplyDamage(victim);
         Fuse::Log("[FuseDBG] FreezeShatter: victim=%p doubleDamage=1\n", (void*)victim);
+        if (frame >= 0) {
+            sShatterFrame[victim] = frame;
+        }
     }
 
     uint8_t freezeLevel = 0;
-    if (!wasFuseFrozen &&
+    const bool shatteredThisHit = (frame >= 0 && sShatterFrame.find(victim) != sShatterFrame.end() &&
+                                   sShatterFrame[victim] == frame);
+    if (!shatteredThisHit && !wasFuseFrozen &&
         HasModifier(def->modifiers, def->modifierCount, ModifierId::Freeze, &freezeLevel) && freezeLevel > 0) {
         EnqueueSwordFreezeRequest(play, victim, freezeLevel);
     }
