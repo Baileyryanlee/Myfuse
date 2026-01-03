@@ -998,11 +998,7 @@ void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim) {
                 victim->velocity.x = dir.x * kShatterKnockbackSpeed;
                 victim->velocity.z = dir.z * kShatterKnockbackSpeed;
 
-                if (victim->bgCheckFlags & BGCHECKFLAG_GROUND) {
-                    victim->velocity.y = std::max(victim->velocity.y, kShatterUpwardBoost);
-                } else {
-                    victim->velocity.y = std::max(victim->velocity.y, 0.0f);
-                }
+                victim->velocity.y = std::max(victim->velocity.y, kShatterUpwardBoost);
 
                 victim->speedXZ = std::max(victim->speedXZ, kShatterKnockbackSpeed);
                 victim->world.rot.y = Math_Atan2S(dir.x, dir.z);
