@@ -24,6 +24,7 @@ extern "C" {
 #include "macros.h"
 #include "functions.h"
 }
+using Fuse::MaterialDebugOverride;
 
 // -----------------------------------------------------------------------------
 // Module-local state
