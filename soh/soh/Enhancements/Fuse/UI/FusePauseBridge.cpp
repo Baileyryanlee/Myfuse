@@ -27,8 +27,9 @@ constexpr s16 kPromptAnchorY = kPanelY + 20;
 constexpr s16 kPromptLineSpacing = 14;
 constexpr s16 kStatusYOffset = -16;
 
-constexpr s32 kDurabilityBarW = 88;
-constexpr s32 kDurabilityBarH = 8;
+// Fuse Pause UI durability meter dimensions (file-local). Do not use kBarWidth/kBarHeight.
+constexpr s32 kDurabilityBarWidth = 88;
+constexpr s32 kDurabilityBarHeight = 8;
 constexpr s32 kDurabilityBarOffsetX = 12;
 constexpr s32 kDurabilityBarOffsetY = 10;
 
@@ -455,7 +456,7 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp)
         const s32 maxDurability = Fuse::GetSwordFuseMaxDurability();
         const s32 curDurability = Fuse::GetSwordFuseDurability();
         const f32 ratio = (maxDurability > 0) ? CLAMP((f32)curDurability / (f32)maxDurability, 0.0f, 1.0f) : 0.0f;
-        const s32 filled = (s32)(ratio * kBarWidth);
+        const s32 filled = (s32)(ratio * kDurabilityBarWidth);
 
         gDPPipeSync(OPA++);
         Gfx_SetupDL_39Opa(gfxCtx);
@@ -464,10 +465,10 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp)
         gDPSetCycleType(OPA++, G_CYC_FILL);
         gDPSetRenderMode(OPA++, G_RM_NOOP, G_RM_NOOP2);
         gDPSetFillColor(OPA++, (GPACK_RGBA5551(30, 30, 30, 255) << 16) | GPACK_RGBA5551(30, 30, 30, 255));
-        gDPFillRectangle(OPA++, barX, barY, barX + kBarWidth, barY + kBarHeight);
+        gDPFillRectangle(OPA++, barX, barY, barX + kDurabilityBarWidth, barY + kDurabilityBarHeight);
 
         gDPSetFillColor(OPA++, (GPACK_RGBA5551(60, 200, 60, 255) << 16) | GPACK_RGBA5551(60, 200, 60, 255));
-        gDPFillRectangle(OPA++, barX, barY, barX + filled, barY + kBarHeight);
+        gDPFillRectangle(OPA++, barX, barY, barX + filled, barY + kDurabilityBarHeight);
 
         gDPPipeSync(OPA++);
         Gfx_SetupDL_42Opa(gfxCtx);
@@ -697,7 +698,8 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         if (maxDurability > 0) {
             const int curDurability = std::clamp(weaponView.curDurability, 0, maxDurability);
             const f32 ratio = static_cast<f32>(curDurability) / static_cast<f32>(maxDurability);
-            const s32 filled = std::clamp(static_cast<s32>(ratio * kDurabilityBarW), 0, kDurabilityBarW);
+            const s32 filled =
+                std::clamp(static_cast<s32>(ratio * kDurabilityBarWidth), 0, kDurabilityBarWidth);
 
             const s32 durabilityTextY = (kFusePanelLeftY + 2 + yOffsetCells) * 8;
             const s32 barX = kPanelX + kDurabilityBarOffsetX;
@@ -710,10 +712,10 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
             gDPSetCycleType(OPA++, G_CYC_FILL);
             gDPSetRenderMode(OPA++, G_RM_NOOP, G_RM_NOOP2);
             gDPSetFillColor(OPA++, (GPACK_RGBA5551(10, 10, 10, 200) << 16) | GPACK_RGBA5551(10, 10, 10, 200));
-            gDPFillRectangle(OPA++, barX, barY, barX + kDurabilityBarW, barY + kDurabilityBarH);
+            gDPFillRectangle(OPA++, barX, barY, barX + kDurabilityBarWidth, barY + kDurabilityBarHeight);
 
             gDPSetFillColor(OPA++, (GPACK_RGBA5551(220, 240, 220, 255) << 16) | GPACK_RGBA5551(220, 240, 220, 255));
-            gDPFillRectangle(OPA++, barX, barY, barX + filled, barY + kDurabilityBarH);
+            gDPFillRectangle(OPA++, barX, barY, barX + filled, barY + kDurabilityBarHeight);
 
             gDPPipeSync(OPA++);
             Gfx_SetupDL_42Opa(gfxCtx);
