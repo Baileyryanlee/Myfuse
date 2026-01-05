@@ -10,12 +10,6 @@
 #include <vector>
 
 namespace {
-constexpr s16 kPromptYOffset = 0;
-constexpr s16 kPromptPadding = 8;
-constexpr s16 kBarHeight = 4;
-constexpr s16 kBarWidth = 48;
-constexpr s16 kStatusYOffset = -16;
-
 constexpr s32 kPanelX = 40;
 constexpr s32 kPanelY = 40;
 constexpr s32 kPanelW = 240;
@@ -25,6 +19,18 @@ constexpr s32 kListX = kPanelX + 12;
 constexpr s32 kListY = kPanelY + 36;
 constexpr s32 kRowH = 14;
 constexpr s32 kVisibleRows = 8;
+
+constexpr s16 kPromptYOffset = 0;
+constexpr s16 kPromptPadding = 8;
+constexpr s16 kPromptAnchorX = kPanelX + 12;
+constexpr s16 kPromptAnchorY = kPanelY + 20;
+constexpr s16 kPromptLineSpacing = 14;
+constexpr s16 kStatusYOffset = -16;
+
+constexpr s32 kDurabilityBarW = 88;
+constexpr s32 kDurabilityBarH = 8;
+constexpr s32 kDurabilityBarOffsetX = 12;
+constexpr s32 kDurabilityBarOffsetY = 10;
 
 static constexpr int kFusePanelLeftX = 4;
 static constexpr int kFusePanelLeftY = 2;
@@ -89,27 +95,6 @@ static const char* ModifierName(ModifierId id) {
         default:
             return "Unknown";
     }
-}
-
-static std::string Fuse_MakeDurabilityBar(int cur, int max, int width = 10) {
-    if (max <= 0) {
-        return "[----------]";
-    }
-    if (cur < 0) {
-        cur = 0;
-    }
-    if (cur > max) {
-        cur = max;
-    }
-
-    const int filled = (cur * width) / max;
-
-    std::string s = "[";
-    for (int i = 0; i < width; i++) {
-        s += (i < filled) ? '#' : '-';
-    }
-    s += "]";
-    return s;
 }
 
 const char* UiStateName(FuseUiState state) {
@@ -603,7 +588,10 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     const bool locked = sModal.isLocked;
     const bool confirmMode = sModal.uiState == FuseUiState::Confirm;
 
-    GfxPrint_SetPosPx(&printer, kListX, kTitleY + 14 + yOffsetPx);
+    const s32 promptX = kPromptAnchorX;
+    const s32 promptY = kPromptAnchorY + yOffsetPx;
+
+    GfxPrint_SetPosPx(&printer, promptX, promptY);
     if (locked) {
         GfxPrint_SetColor(&printer, 255, 120, 120, 255);
         GfxPrint_Printf(&printer, "ITEM ALREADY FUSED");
@@ -614,11 +602,13 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     }
 
     if (sModal.promptTimer > 0 && sModal.promptType == FusePromptType::AlreadyFused) {
-        GfxPrint_SetPosPx(&printer, kListX, kTitleY + 28 + yOffsetPx);
+        GfxPrint_SetPosPx(&printer, promptX, promptY + kPromptLineSpacing);
         GfxPrint_SetColor(&printer, 255, 120, 120, 255);
         GfxPrint_Printf(&printer, "ITEM ALREADY FUSED");
         GfxPrint_SetColor(&printer, 255, 255, 255, 255);
     }
+
+    GfxPrint_SetColor(&printer, 255, 255, 255, 255);
 
     if (entryCount == 0) {
         GfxPrint_SetPosPx(&printer, kListX, kListY + yOffsetPx);
@@ -696,9 +686,24 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     } else {
         GfxPrint_Printf(&printer, "Durability: %d / %d", weaponView.curDurability, weaponView.maxDurability);
 
-        GfxPrint_SetPos(&printer, kFusePanelLeftX, kFusePanelLeftY + 3 + yOffsetCells);
-        const std::string bar = Fuse_MakeDurabilityBar(weaponView.curDurability, weaponView.maxDurability, 10);
-        GfxPrint_Printf(&printer, "          %s", bar.c_str());
+        const int maxDurability = weaponView.maxDurability;
+        if (maxDurability > 0) {
+            const int curDurability = std::clamp(weaponView.curDurability, 0, maxDurability);
+            const f32 ratio = static_cast<f32>(curDurability) / static_cast<f32>(maxDurability);
+            const s32 filled = std::clamp(static_cast<s32>(ratio * kDurabilityBarW), 0, kDurabilityBarW);
+
+            const s32 durabilityTextY = (kFusePanelLeftY + 2 + yOffsetCells) * 8;
+            const s32 barX = kPanelX + kDurabilityBarOffsetX;
+            const s32 barY = durabilityTextY + kDurabilityBarOffsetY;
+
+            Gfx_SetupDL_39Opa(gfxCtx);
+
+            gDPSetPrimColor(OPA++, 0, 0, 10, 10, 10, 200);
+            gDPFillRectangle(OPA++, barX, barY, barX + kDurabilityBarW, barY + kDurabilityBarH);
+
+            gDPSetPrimColor(OPA++, 0, 0, 220, 240, 220, 255);
+            gDPFillRectangle(OPA++, barX, barY, barX + filled, barY + kDurabilityBarH);
+        }
     }
 
     GfxPrint_SetPos(&printer, kFusePanelRightX, kFusePanelRightY + yOffsetCells);
