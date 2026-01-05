@@ -33,7 +33,7 @@ constexpr s16 kStatusYOffset = -16;
 constexpr s32 kDurabilityBarWidth = 88;
 constexpr s32 kDurabilityBarHeight = 8;
 constexpr s32 kDurabilityBarOffsetX = 12;
-constexpr s32 kDurabilityBarOffsetY = 10;
+constexpr s32 kDurabilityBarOffsetY = 12;
 
 constexpr const char* kDurabilityBarCVar = CVAR_DEVELOPER_TOOLS("Fuse.DurabilityBarEnabled");
 
@@ -520,7 +520,7 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp)
                              255);
 
             if (filled > 0) {
-                DrawSolidRectOpa(gfxCtx, &OPA, barX, barY, filled, kDurabilityBarHeight + 1, 60, 200, 60, 255);
+                DrawSolidRectOpa(gfxCtx, &OPA, barX, barY, filled, kDurabilityBarHeight + 1, 50, 180, 50, 255);
             }
         }
     }
@@ -617,7 +617,7 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
 
     constexpr s32 border = 2;
 
-    DrawSolidRectOpa(gfxCtx, &OPA, kPanelX, kPanelY, kPanelW + 1, kPanelH + 1, 20, 20, 20, 240);
+        DrawSolidRectOpa(gfxCtx, &OPA, kPanelX, kPanelY, kPanelW + 1, kPanelH + 1, 20, 20, 20, 240);
 
     DrawSolidRectOpa(gfxCtx, &OPA, kPanelX, kPanelY, kPanelW + 1, border, 200, 200, 200, 255);
     DrawSolidRectOpa(gfxCtx, &OPA, kPanelX, kPanelY + kPanelH - border + 1, kPanelW + 1, border, 200, 200, 200, 255);
@@ -654,7 +654,7 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         DrawSolidRectOpa(gfxCtx, &OPA, barX, barY, kDurabilityBarWidth + 1, kDurabilityBarHeight + 1, 10, 10, 10, 200);
 
         if (filled > 0) {
-            DrawSolidRectOpa(gfxCtx, &OPA, barX, barY, filled, kDurabilityBarHeight + 1, 220, 240, 220, 255);
+            DrawSolidRectOpa(gfxCtx, &OPA, barX, barY, filled, kDurabilityBarHeight + 1, 190, 220, 190, 255);
         }
     }
 
@@ -674,11 +674,16 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
 
     const s32 promptX = kPromptAnchorX;
     const s32 promptY = kPromptAnchorY + yOffsetPx;
+    s32 nextPromptLineY = promptY + kPromptLineSpacing;
 
     GfxPrint_SetPosPx(&printer, promptX, promptY);
     if (locked) {
         GfxPrint_SetColor(&printer, 255, 120, 120, 255);
         GfxPrint_Printf(&printer, "ITEM ALREADY FUSED");
+        GfxPrint_SetPosPx(&printer, promptX, promptY + kPromptLineSpacing);
+        GfxPrint_SetColor(&printer, 255, 255, 255, 255);
+        GfxPrint_Printf(&printer, "B: Back");
+        nextPromptLineY = promptY + (2 * kPromptLineSpacing);
     } else if (confirmMode) {
         GfxPrint_Printf(&printer, "A: Confirm   B: Cancel");
     } else {
@@ -686,7 +691,7 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     }
 
     if (sModal.promptTimer > 0 && sModal.promptType == FusePromptType::AlreadyFused) {
-        GfxPrint_SetPosPx(&printer, promptX, promptY + kPromptLineSpacing);
+        GfxPrint_SetPosPx(&printer, promptX, nextPromptLineY);
         GfxPrint_SetColor(&printer, 255, 120, 120, 255);
         GfxPrint_Printf(&printer, "ITEM ALREADY FUSED");
         GfxPrint_SetColor(&printer, 255, 255, 255, 255);
