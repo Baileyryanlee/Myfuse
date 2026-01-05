@@ -32,11 +32,29 @@ static constexpr int kFusePanelRightX = 22;
 static constexpr int kFusePanelRightY = 2;
 static constexpr int kFuseModalYOffset = 3;
 
+enum class FuseUiState {
+    Locked,
+    Browse,
+    Preview,
+    Confirm,
+};
+
+enum class FusePromptType {
+    None,
+    AlreadyFused,
+};
+
 struct FuseModalState {
     bool open = false;
     int cursor = 0;
     int scroll = 0;
-    bool pendingSelect = false;
+    FuseUiState uiState = FuseUiState::Browse;
+    bool isLocked = false;
+    MaterialId highlightedMaterialId = MaterialId::None;
+    MaterialId previewMaterialId = MaterialId::None;
+    MaterialId confirmedMaterialId = MaterialId::None;
+    FusePromptType promptType = FusePromptType::None;
+    int promptTimer = 0;
 };
 
 static FuseModalState sModal;
@@ -92,6 +110,34 @@ static std::string Fuse_MakeDurabilityBar(int cur, int max, int width = 10) {
     }
     s += "]";
     return s;
+}
+
+const char* UiStateName(FuseUiState state) {
+    switch (state) {
+        case FuseUiState::Locked:
+            return "LOCKED";
+        case FuseUiState::Browse:
+            return "BROWSE";
+        case FuseUiState::Preview:
+            return "PREVIEW";
+        case FuseUiState::Confirm:
+            return "CONFIRM";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+void SetUiState(FuseUiState next) {
+    if (sModal.uiState == next) {
+        return;
+    }
+    Fuse::Log("[FuseDBG] UI:State %s->%s\n", UiStateName(sModal.uiState), UiStateName(next));
+    sModal.uiState = next;
+}
+
+void TriggerPrompt(FusePromptType type, int duration) {
+    sModal.promptType = type;
+    sModal.promptTimer = duration;
 }
 
 std::vector<MaterialEntry> BuildMaterialList() {
@@ -219,28 +265,68 @@ void FusePause_UpdateModal(PlayState* play) {
 
     if (pauseCtx->state != 6) {
         sModal.open = false;
-        sModal.pendingSelect = false;
-        return;
-    }
-
-    if (!sModal.open) {
-        return;
-    }
-
-    if (pauseCtx->pageIndex != PAUSE_EQUIP) {
-        sModal.open = false;
-        sModal.pendingSelect = false;
         return;
     }
 
     Input* input = &play->state.input[0];
     const u16 pressed = input->press.button;
 
-    if (pressed & (BTN_B | BTN_START)) {
+    FusePromptContext context = BuildPromptContext(play);
+
+    if (!sModal.open) {
+        if (context.shouldShowFusePrompt && (pressed & BTN_A)) {
+            const FuseWeaponView weaponView = Fuse_GetEquippedSwordView(play);
+
+            sModal.open = true;
+            sModal.cursor = 0;
+            sModal.scroll = 0;
+            sModal.isLocked = weaponView.isFused;
+            sModal.confirmedMaterialId = weaponView.materialId;
+            sModal.highlightedMaterialId = MaterialId::None;
+            sModal.previewMaterialId = MaterialId::None;
+            sModal.promptType = FusePromptType::None;
+            sModal.promptTimer = 0;
+            SetUiState(sModal.isLocked ? FuseUiState::Locked : FuseUiState::Browse);
+
+            Fuse::Log("[FuseDBG] UI:Open item=%d confirmedMat=%d locked=%d\n", static_cast<int>(context.hoveredSword),
+                      static_cast<int>(weaponView.materialId), sModal.isLocked ? 1 : 0);
+
+            input->press.button &= ~BTN_A;
+        }
+
+        return;
+    }
+
+    if (pauseCtx->pageIndex != PAUSE_EQUIP) {
         sModal.open = false;
-        sModal.pendingSelect = false;
+        return;
+    }
+
+    if (sModal.promptTimer > 0) {
+        sModal.promptTimer--;
+        if (sModal.promptTimer == 0) {
+            sModal.promptType = FusePromptType::None;
+        }
+    }
+
+    if (pressed & BTN_START) {
+        sModal.open = false;
         input->press.button = 0;
         input->cur.button &= (u16)~(BTN_B | BTN_START);
+        input->press.stick_x = 0;
+        input->press.stick_y = 0;
+        input->rel.stick_x = 0;
+        input->rel.stick_y = 0;
+        return;
+    }
+
+    if ((pressed & BTN_B) && sModal.uiState == FuseUiState::Confirm && !sModal.isLocked) {
+        SetUiState(FuseUiState::Preview);
+        input->press.button &= ~BTN_B;
+    } else if (pressed & BTN_B) {
+        sModal.open = false;
+        input->press.button = 0;
+        input->cur.button &= (u16)~BTN_B;
         input->press.stick_x = 0;
         input->press.stick_y = 0;
         input->rel.stick_x = 0;
@@ -251,18 +337,46 @@ void FusePause_UpdateModal(PlayState* play) {
     std::vector<MaterialEntry> materials = BuildMaterialList();
     const int entryCount = static_cast<int>(materials.size());
 
-    if (entryCount > 0 && (pressed & BTN_DUP || input->rel.stick_y > 30)) {
+    if (!sModal.isLocked && entryCount > 0 && (pressed & BTN_DUP || input->rel.stick_y > 30)) {
         sModal.cursor = MoveCursor(-1, materials);
+        SetUiState(FuseUiState::Preview);
     }
 
-    if (entryCount > 0 && (pressed & BTN_DDOWN || input->rel.stick_y < -30)) {
+    if (!sModal.isLocked && entryCount > 0 && (pressed & BTN_DDOWN || input->rel.stick_y < -30)) {
         sModal.cursor = MoveCursor(1, materials);
+        SetUiState(FuseUiState::Preview);
     }
 
     UpdateModalBounds(materials);
 
+    const bool hasHighlight = entryCount > 0 && sModal.cursor >= 0 && sModal.cursor < entryCount;
+    sModal.highlightedMaterialId = hasHighlight ? materials[sModal.cursor].id : MaterialId::None;
+    const bool highlightEnabled = hasHighlight && materials[sModal.cursor].enabled;
+    sModal.previewMaterialId = (!sModal.isLocked && highlightEnabled) ? sModal.highlightedMaterialId : MaterialId::None;
+
     if (pressed & BTN_A) {
-        sModal.pendingSelect = true;
+        if (sModal.isLocked) {
+            TriggerPrompt(FusePromptType::AlreadyFused, 60);
+        } else if (sModal.previewMaterialId == MaterialId::None) {
+            // Nothing selectable
+        } else if (sModal.uiState != FuseUiState::Confirm) {
+            SetUiState(FuseUiState::Confirm);
+        } else {
+            const Fuse::FuseResult result = Fuse::TryFuseSword(sModal.previewMaterialId);
+            const bool success = result == Fuse::FuseResult::Ok;
+
+            Fuse::Log("[FuseDBG] UI:Confirm item=%d mat=%d result=%d\n", static_cast<int>(context.hoveredSword),
+                      static_cast<int>(sModal.previewMaterialId), success ? 1 : 0);
+
+            if (success) {
+                sModal.isLocked = true;
+                sModal.confirmedMaterialId = sModal.previewMaterialId;
+                sModal.previewMaterialId = MaterialId::None;
+                SetUiState(FuseUiState::Locked);
+            } else {
+                SetUiState(FuseUiState::Preview);
+            }
+        }
     }
 
     input->press.button = 0;
@@ -385,22 +499,10 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     FusePromptContext context = BuildPromptContext(play);
     const bool isPauseOpen = context.isPauseOpen;
     const bool isEquipmentPage = context.isEquipmentPage;
-    const bool swordFused = Fuse::IsSwordFused();
 
     if (!isPauseOpen) {
         sModal.open = false;
-        sModal.pendingSelect = false;
         return;
-    }
-
-    if (!sModal.open && isEquipmentPage && context.shouldShowFusePrompt && !swordFused &&
-        CHECK_BTN_ALL(input->press.button, BTN_A)) {
-        sModal.open = true;
-        sModal.cursor = 0;
-        sModal.scroll = 0;
-        sModal.pendingSelect = false;
-        input->press.button &= ~BTN_A;
-        Fuse::Log("[FuseUI] Modal opened\n");
     }
 
     if (!sModal.open) {
@@ -409,13 +511,11 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
 
     if (pauseCtx->state != 6) {
         sModal.open = false;
-        sModal.pendingSelect = false;
         return;
     }
 
     if (!isEquipmentPage) {
         sModal.open = false;
-        sModal.pendingSelect = false;
         return;
     }
 
@@ -438,25 +538,6 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     std::vector<MaterialEntry> materials = BuildMaterialList();
     UpdateModalBounds(materials);
     const int entryCount = static_cast<int>(materials.size());
-
-    if (sModal.pendingSelect) {
-        if (entryCount > 0) {
-            const MaterialEntry& entry = materials[sModal.cursor];
-            if (!entry.enabled) {
-                Fuse::Log("[FuseUI] Selected material disabled\n");
-            } else {
-                Fuse::FuseResult result = Fuse::TryFuseSword(entry.id);
-                Fuse::Log("[FuseUI] Selected material: %s (qty %d) result=%d\n",
-                          entry.def ? entry.def->name : "Unknown", entry.quantity, (int)result);
-                if (result == Fuse::FuseResult::Ok) {
-                    sModal.open = false;
-                }
-            }
-        } else {
-            Fuse::Log("[FuseUI] Selected material: <none available>\n");
-        }
-        sModal.pendingSelect = false;
-    }
 
     GfxPrint printer;
 
@@ -519,8 +600,25 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     GfxPrint_SetPosPx(&printer, kListX, kTitleY + yOffsetPx);
     GfxPrint_Printf(&printer, "Fuse");
 
+    const bool locked = sModal.isLocked;
+    const bool confirmMode = sModal.uiState == FuseUiState::Confirm;
+
     GfxPrint_SetPosPx(&printer, kListX, kTitleY + 14 + yOffsetPx);
-    GfxPrint_Printf(&printer, "A: Select   B: Back");
+    if (locked) {
+        GfxPrint_SetColor(&printer, 255, 120, 120, 255);
+        GfxPrint_Printf(&printer, "ITEM ALREADY FUSED");
+    } else if (confirmMode) {
+        GfxPrint_Printf(&printer, "A: Confirm   B: Cancel");
+    } else {
+        GfxPrint_Printf(&printer, "A: Select   B: Back");
+    }
+
+    if (sModal.promptTimer > 0 && sModal.promptType == FusePromptType::AlreadyFused) {
+        GfxPrint_SetPosPx(&printer, kListX, kTitleY + 28 + yOffsetPx);
+        GfxPrint_SetColor(&printer, 255, 120, 120, 255);
+        GfxPrint_Printf(&printer, "ITEM ALREADY FUSED");
+        GfxPrint_SetColor(&printer, 255, 255, 255, 255);
+    }
 
     if (entryCount == 0) {
         GfxPrint_SetPosPx(&printer, kListX, kListY + yOffsetPx);
@@ -536,10 +634,16 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
             const bool isSelected = (entryIndex == sModal.cursor);
             const bool enabled = entry.enabled;
 
-            if (!enabled) {
+            if (locked) {
+                GfxPrint_SetColor(&printer, 140, 140, 140, 180);
+            } else if (!enabled) {
                 GfxPrint_SetColor(&printer, 140, 140, 140, 255);
             } else if (isSelected) {
-                GfxPrint_SetColor(&printer, 255, 255, 0, 255);
+                if (confirmMode) {
+                    GfxPrint_SetColor(&printer, 120, 200, 255, 255);
+                } else {
+                    GfxPrint_SetColor(&printer, 255, 255, 0, 255);
+                }
             } else {
                 GfxPrint_SetColor(&printer, 255, 255, 255, 255);
             }
@@ -549,21 +653,28 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         }
     }
 
+    const char* selectedItemName = SwordNameFromEquip(context.hoveredSword);
+    const FuseWeaponView weaponView = Fuse_GetEquippedSwordView(play);
+
     const MaterialEntry* highlightedEntry = nullptr;
     if (entryCount > 0 && sModal.cursor >= 0 && sModal.cursor < entryCount) {
         highlightedEntry = &materials[sModal.cursor];
     }
 
-    const char* selectedItemName = SwordNameFromEquip(context.hoveredSword);
-    const FuseWeaponView weaponView = Fuse_GetEquippedSwordView(play);
+    const MaterialId materialToDisplay = locked
+                                             ? sModal.confirmedMaterialId
+                                             : (sModal.previewMaterialId != MaterialId::None
+                                                    ? sModal.previewMaterialId
+                                                    : (highlightedEntry ? highlightedEntry->id : MaterialId::None));
+    const MaterialDef* displayDef = Fuse::GetMaterialDef(materialToDisplay);
 
-    std::string matName = highlightedEntry && highlightedEntry->def ? highlightedEntry->def->name : "--";
-    int matQty = highlightedEntry ? highlightedEntry->quantity : 0;
+    std::string matName = displayDef ? displayDef->name : "--";
+    int matQty = (materialToDisplay != MaterialId::None) ? Fuse::GetMaterialCount(materialToDisplay) : 0;
     std::string modifierText = "None";
-    if (highlightedEntry && highlightedEntry->def && highlightedEntry->def->modifierCount > 0) {
+    if (displayDef && displayDef->modifierCount > 0) {
         modifierText.clear();
-        for (size_t i = 0; i < highlightedEntry->def->modifierCount; i++) {
-            const ModifierSpec& mod = highlightedEntry->def->modifiers[i];
+        for (size_t i = 0; i < displayDef->modifierCount; i++) {
+            const ModifierSpec& mod = displayDef->modifiers[i];
             if (!modifierText.empty()) {
                 modifierText += ", ";
             }
