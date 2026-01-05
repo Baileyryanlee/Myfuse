@@ -457,13 +457,20 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp)
         const f32 ratio = (maxDurability > 0) ? CLAMP((f32)curDurability / (f32)maxDurability, 0.0f, 1.0f) : 0.0f;
         const s32 filled = (s32)(ratio * kBarWidth);
 
+        gDPPipeSync(OPA++);
         Gfx_SetupDL_39Opa(gfxCtx);
 
-        gDPSetPrimColor(OPA++, 0, 0, 30, 30, 30, 255);
+        gDPPipeSync(OPA++);
+        gDPSetCycleType(OPA++, G_CYC_FILL);
+        gDPSetRenderMode(OPA++, G_RM_NOOP, G_RM_NOOP2);
+        gDPSetFillColor(OPA++, (GPACK_RGBA5551(30, 30, 30, 255) << 16) | GPACK_RGBA5551(30, 30, 30, 255));
         gDPFillRectangle(OPA++, barX, barY, barX + kBarWidth, barY + kBarHeight);
 
-        gDPSetPrimColor(OPA++, 0, 0, 60, 200, 60, 255);
+        gDPSetFillColor(OPA++, (GPACK_RGBA5551(60, 200, 60, 255) << 16) | GPACK_RGBA5551(60, 200, 60, 255));
         gDPFillRectangle(OPA++, barX, barY, barX + filled, barY + kBarHeight);
+
+        gDPPipeSync(OPA++);
+        Gfx_SetupDL_42Opa(gfxCtx);
     }
 }
 
@@ -696,13 +703,20 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
             const s32 barX = kPanelX + kDurabilityBarOffsetX;
             const s32 barY = durabilityTextY + kDurabilityBarOffsetY;
 
+            gDPPipeSync(OPA++);
             Gfx_SetupDL_39Opa(gfxCtx);
 
-            gDPSetPrimColor(OPA++, 0, 0, 10, 10, 10, 200);
+            gDPPipeSync(OPA++);
+            gDPSetCycleType(OPA++, G_CYC_FILL);
+            gDPSetRenderMode(OPA++, G_RM_NOOP, G_RM_NOOP2);
+            gDPSetFillColor(OPA++, (GPACK_RGBA5551(10, 10, 10, 200) << 16) | GPACK_RGBA5551(10, 10, 10, 200));
             gDPFillRectangle(OPA++, barX, barY, barX + kDurabilityBarW, barY + kDurabilityBarH);
 
-            gDPSetPrimColor(OPA++, 0, 0, 220, 240, 220, 255);
+            gDPSetFillColor(OPA++, (GPACK_RGBA5551(220, 240, 220, 255) << 16) | GPACK_RGBA5551(220, 240, 220, 255));
             gDPFillRectangle(OPA++, barX, barY, barX + filled, barY + kDurabilityBarH);
+
+            gDPPipeSync(OPA++);
+            Gfx_SetupDL_42Opa(gfxCtx);
         }
     }
 
