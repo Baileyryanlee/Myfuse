@@ -42,15 +42,30 @@ void DrawSolidRectOpa(GraphicsContext* gfxCtx, Gfx** gfxp, s32 x, s32 y, s32 w, 
         return;
     }
 
-    Vtx* vtx = Graph_Alloc(gfxCtx, 4 * sizeof(Vtx));
+    Vtx* vtx = (Vtx*)Graph_Alloc(gfxCtx, 4 * sizeof(Vtx));
     if (vtx == nullptr) {
         return;
     }
 
-    vtx[0] = VTX(x, y, 0, 0, 0, r, g, b, a);
-    vtx[1] = VTX(x + w, y, 0, 0, 0, r, g, b, a);
-    vtx[2] = VTX(x + w, y + h, 0, 0, 0, r, g, b, a);
-    vtx[3] = VTX(x, y + h, 0, 0, 0, r, g, b, a);
+    vtx[0].v.ob[0] = static_cast<s16>(x);
+    vtx[0].v.ob[1] = static_cast<s16>(y);
+    vtx[1].v.ob[0] = static_cast<s16>(x + w);
+    vtx[1].v.ob[1] = static_cast<s16>(y);
+    vtx[2].v.ob[0] = static_cast<s16>(x + w);
+    vtx[2].v.ob[1] = static_cast<s16>(y + h);
+    vtx[3].v.ob[0] = static_cast<s16>(x);
+    vtx[3].v.ob[1] = static_cast<s16>(y + h);
+
+    for (int i = 0; i < 4; i++) {
+        vtx[i].v.ob[2] = 0;
+        vtx[i].v.flag = 0;
+        vtx[i].v.tc[0] = 0;
+        vtx[i].v.tc[1] = 0;
+        vtx[i].v.cn[0] = r;
+        vtx[i].v.cn[1] = g;
+        vtx[i].v.cn[2] = b;
+        vtx[i].v.cn[3] = a;
+    }
 
     Gfx*& opa = *gfxp;
 
@@ -58,7 +73,7 @@ void DrawSolidRectOpa(GraphicsContext* gfxCtx, Gfx** gfxp, s32 x, s32 y, s32 w, 
     Gfx_SetupDL_39Opa(gfxCtx);
     gDPSetCombineMode(opa++, G_CC_PRIMITIVE, G_CC_PRIMITIVE);
     gDPSetPrimColor(opa++, 0, 0, r, g, b, a);
-    gSPVertex(opa++, vtx, 4, 0);
+    gSPVertex(opa++, (uintptr_t)vtx, 4, 0);
     gSP2Triangles(opa++, 0, 1, 2, 0, 0, 2, 3, 0);
 }
 
