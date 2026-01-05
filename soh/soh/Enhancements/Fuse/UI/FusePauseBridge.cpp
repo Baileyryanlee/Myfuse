@@ -33,6 +33,35 @@ constexpr s32 kDurabilityBarHeight = 8;
 constexpr s32 kDurabilityBarOffsetX = 12;
 constexpr s32 kDurabilityBarOffsetY = 10;
 
+void DrawSolidRectOpa(GraphicsContext* gfxCtx, Gfx** gfxp, s32 x, s32 y, s32 w, s32 h, u8 r, u8 g, u8 b, u8 a) {
+    if (gfxCtx == nullptr || gfxp == nullptr || *gfxp == nullptr) {
+        return;
+    }
+
+    if (w <= 0 || h <= 0) {
+        return;
+    }
+
+    Vtx* vtx = Graph_Alloc(gfxCtx, 4 * sizeof(Vtx));
+    if (vtx == nullptr) {
+        return;
+    }
+
+    vtx[0] = VTX(x, y, 0, 0, 0, r, g, b, a);
+    vtx[1] = VTX(x + w, y, 0, 0, 0, r, g, b, a);
+    vtx[2] = VTX(x + w, y + h, 0, 0, 0, r, g, b, a);
+    vtx[3] = VTX(x, y + h, 0, 0, 0, r, g, b, a);
+
+    Gfx*& opa = *gfxp;
+
+    gDPPipeSync(opa++);
+    Gfx_SetupDL_39Opa(gfxCtx);
+    gDPSetCombineMode(opa++, G_CC_PRIMITIVE, G_CC_PRIMITIVE);
+    gDPSetPrimColor(opa++, 0, 0, r, g, b, a);
+    gSPVertex(opa++, vtx, 4, 0);
+    gSP2Triangles(opa++, 0, 1, 2, 0, 0, 2, 3, 0);
+}
+
 static constexpr int kFusePanelLeftX = 4;
 static constexpr int kFusePanelLeftY = 2;
 static constexpr int kFusePanelRightX = 22;
@@ -454,24 +483,21 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp)
         const s32 barX = pauseCtx->infoPanelVtx[16].v.ob[0];
         const s32 barY = pauseCtx->infoPanelVtx[16].v.ob[1] + kStatusYOffset + 2;
         const s32 maxDurability = Fuse::GetSwordFuseMaxDurability();
-        const s32 curDurability = Fuse::GetSwordFuseDurability();
-        const f32 ratio = (maxDurability > 0) ? CLAMP((f32)curDurability / (f32)maxDurability, 0.0f, 1.0f) : 0.0f;
-        const s32 filled = (s32)(ratio * kDurabilityBarWidth);
 
-        gDPPipeSync(OPA++);
-        Gfx_SetupDL_39Opa(gfxCtx);
+        if (maxDurability > 0) {
+            const s32 curDurability = Fuse::GetSwordFuseDurability();
+            const f32 ratio = CLAMP((f32)curDurability / (f32)maxDurability, 0.0f, 1.0f);
+            const s32 filled = (s32)(ratio * kDurabilityBarWidth);
 
-        gDPPipeSync(OPA++);
-        gDPSetCycleType(OPA++, G_CYC_FILL);
-        gDPSetRenderMode(OPA++, G_RM_NOOP, G_RM_NOOP2);
-        gDPSetFillColor(OPA++, (GPACK_RGBA5551(30, 30, 30, 255) << 16) | GPACK_RGBA5551(30, 30, 30, 255));
-        gDPFillRectangle(OPA++, barX, barY, barX + kDurabilityBarWidth, barY + kDurabilityBarHeight);
+            DrawSolidRectOpa(gfxCtx, &OPA, barX, barY, kDurabilityBarWidth + 1, kDurabilityBarHeight + 1, 30, 30, 30,
+                             255);
 
-        gDPSetFillColor(OPA++, (GPACK_RGBA5551(60, 200, 60, 255) << 16) | GPACK_RGBA5551(60, 200, 60, 255));
-        gDPFillRectangle(OPA++, barX, barY, barX + filled, barY + kDurabilityBarHeight);
+            if (filled > 0) {
+                DrawSolidRectOpa(gfxCtx, &OPA, barX, barY, filled, kDurabilityBarHeight + 1, 60, 200, 60, 255);
+            }
 
-        gDPPipeSync(OPA++);
-        Gfx_SetupDL_42Opa(gfxCtx);
+            Gfx_SetupDL_42Opa(gfxCtx);
+        }
     }
 }
 
@@ -517,8 +543,7 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         // PROOF OVERLAY: if anything draws after this, you will still see it on top.
         gDPPipeSync(OPA++);
         gDPSetScissor(OPA++, G_SC_NON_INTERLACE, 0, 0, 320, 240);
-        gDPSetPrimColor(OPA++, 0, 0, 255, 0, 255, 255); // bright magenta
-        gDPFillRectangle(OPA++, 0, 0, 319, 239);
+        DrawSolidRectOpa(gfxCtx, &OPA, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 255, 0, 255, 255);
         return;
     }
     sLastModalFrame = currentFrame;
@@ -538,28 +563,24 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     gDPSetScissor(OPA++, G_SC_NON_INTERLACE, 0, 0, 320, 240);
     gDPPipeSync(XLU++);
     gDPSetScissor(XLU++, G_SC_NON_INTERLACE, 0, 0, 320, 240);
-    gDPSetPrimColor(OPA++, 0, 0, 0, 0, 0, 200);
     // Cover bottom strip (tune Y if needed)
-    gDPFillRectangle(OPA++, 0, 200, 319, 239);
+    DrawSolidRectOpa(gfxCtx, &OPA, 0, 200, SCREEN_WIDTH, SCREEN_HEIGHT - 200, 0, 0, 0, 200);
 
     Gfx_SetupDL_39Opa(gfxCtx);
 
     gDPPipeSync(OPA++);
     gDPSetScissor(OPA++, G_SC_NON_INTERLACE, 0, 0, 320, 240);
 
-    gDPSetPrimColor(OPA++, 0, 0, 0, 0, 0, 160);
-    gDPFillRectangle(OPA++, 0, 0, SCREEN_WIDTH - 1, SCREEN_HEIGHT - 1);
+    DrawSolidRectOpa(gfxCtx, &OPA, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, 0, 160);
 
     constexpr s32 border = 2;
 
-    gDPSetPrimColor(OPA++, 0, 0, 20, 20, 20, 240);
-    gDPFillRectangle(OPA++, kPanelX, kPanelY, kPanelX + kPanelW, kPanelY + kPanelH);
+    DrawSolidRectOpa(gfxCtx, &OPA, kPanelX, kPanelY, kPanelW + 1, kPanelH + 1, 20, 20, 20, 240);
 
-    gDPSetPrimColor(OPA++, 0, 0, 200, 200, 200, 255);
-    gDPFillRectangle(OPA++, kPanelX, kPanelY, kPanelX + kPanelW, kPanelY + border);
-    gDPFillRectangle(OPA++, kPanelX, kPanelY + kPanelH - border, kPanelX + kPanelW, kPanelY + kPanelH);
-    gDPFillRectangle(OPA++, kPanelX, kPanelY, kPanelX + border, kPanelY + kPanelH);
-    gDPFillRectangle(OPA++, kPanelX + kPanelW - border, kPanelY, kPanelX + kPanelW, kPanelY + kPanelH);
+    DrawSolidRectOpa(gfxCtx, &OPA, kPanelX, kPanelY, kPanelW + 1, border, 200, 200, 200, 255);
+    DrawSolidRectOpa(gfxCtx, &OPA, kPanelX, kPanelY + kPanelH - border + 1, kPanelW + 1, border, 200, 200, 200, 255);
+    DrawSolidRectOpa(gfxCtx, &OPA, kPanelX, kPanelY, border, kPanelH + 1, 200, 200, 200, 255);
+    DrawSolidRectOpa(gfxCtx, &OPA, kPanelX + kPanelW - border + 1, kPanelY, border, kPanelH + 1, 200, 200, 200, 255);
 
     // Temporary: highlight bar disabled in favor of text color cues.
     // for (int i = 0; i < kVisibleRows; i++) {
@@ -575,10 +596,11 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     //         const s32 top = rowY - 4;
     //         const s32 bottom = rowY + kRowH - 1;
     //         Gfx_SetupDL_39Opa(gfxCtx);
-    //         gDPSetPrimColor(OPA++, 0, 0, 60, 120, 255, 255);
-    //         gDPFillRectangle(OPA++, left, top, right, bottom);
+    //         DrawSolidRectOpa(gfxCtx, &OPA, left, top, right - left + 1, bottom - top + 1, 60, 120, 255, 255);
     //     }
     // }
+
+    Gfx_SetupDL_42Opa(gfxCtx);
 
     gDPPipeSync(OPA++);
     gDPSetPrimColor(OPA++, 0, 0, 255, 255, 255, 255);
@@ -705,19 +727,13 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
             const s32 barX = kPanelX + kDurabilityBarOffsetX;
             const s32 barY = durabilityTextY + kDurabilityBarOffsetY;
 
-            gDPPipeSync(OPA++);
-            Gfx_SetupDL_39Opa(gfxCtx);
+            DrawSolidRectOpa(gfxCtx, &OPA, barX, barY, kDurabilityBarWidth + 1, kDurabilityBarHeight + 1, 10, 10, 10,
+                             200);
 
-            gDPPipeSync(OPA++);
-            gDPSetCycleType(OPA++, G_CYC_FILL);
-            gDPSetRenderMode(OPA++, G_RM_NOOP, G_RM_NOOP2);
-            gDPSetFillColor(OPA++, (GPACK_RGBA5551(10, 10, 10, 200) << 16) | GPACK_RGBA5551(10, 10, 10, 200));
-            gDPFillRectangle(OPA++, barX, barY, barX + kDurabilityBarWidth, barY + kDurabilityBarHeight);
+            if (filled > 0) {
+                DrawSolidRectOpa(gfxCtx, &OPA, barX, barY, filled, kDurabilityBarHeight + 1, 220, 240, 220, 255);
+            }
 
-            gDPSetFillColor(OPA++, (GPACK_RGBA5551(220, 240, 220, 255) << 16) | GPACK_RGBA5551(220, 240, 220, 255));
-            gDPFillRectangle(OPA++, barX, barY, barX + filled, barY + kDurabilityBarHeight);
-
-            gDPPipeSync(OPA++);
             Gfx_SetupDL_42Opa(gfxCtx);
         }
     }
