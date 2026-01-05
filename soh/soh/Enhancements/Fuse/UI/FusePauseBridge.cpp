@@ -4,6 +4,8 @@
 #include <libultraship/libultra/gbi.h>
 #include "functions.h"
 #include "soh/Enhancements/Fuse/Fuse.h"
+#include <libultraship/libultraship.h>
+#include "soh/cvar_prefixes.h"
 #include <algorithm>
 #include <cstdio>
 #include <string>
@@ -32,6 +34,8 @@ constexpr s32 kDurabilityBarWidth = 88;
 constexpr s32 kDurabilityBarHeight = 8;
 constexpr s32 kDurabilityBarOffsetX = 12;
 constexpr s32 kDurabilityBarOffsetY = 10;
+
+constexpr const char* kDurabilityBarCVar = CVAR_DEVELOPER_TOOLS("Fuse.DurabilityBarEnabled");
 
 void DrawSolidRectOpa(GraphicsContext* gfxCtx, Gfx** gfxp, s32 x, s32 y, s32 w, s32 h, u8 r, u8 g, u8 b, u8 a) {
     if (gfxCtx == nullptr || gfxp == nullptr || *gfxp == nullptr) {
@@ -75,6 +79,29 @@ void DrawSolidRectOpa(GraphicsContext* gfxCtx, Gfx** gfxp, s32 x, s32 y, s32 w, 
     gDPSetPrimColor(opa++, 0, 0, r, g, b, a);
     gSPVertex(opa++, (uintptr_t)vtx, 4, 0);
     gSP2Triangles(opa++, 0, 1, 2, 0, 0, 2, 3, 0);
+}
+
+void RestorePauseTextState(GraphicsContext* gfxCtx, Gfx** gfxp) {
+    if (gfxCtx == nullptr || gfxp == nullptr || *gfxp == nullptr) {
+        return;
+    }
+
+    Gfx_SetupDL_42Opa(gfxCtx);
+
+    Gfx*& opa = *gfxp;
+
+    gDPPipeSync(opa++);
+    gDPSetTextureLUT(opa++, G_TT_IA16);
+    gDPSetTexturePersp(opa++, G_TP_NONE);
+    gSPClearGeometryMode(opa++, G_LIGHTING | G_CULL_BACK | G_TEXTURE_GEN | G_TEXTURE_GEN_LINEAR);
+    gSPSetGeometryMode(opa++, G_SHADE);
+    gSPTexture(opa++, 0, 0, 0, G_TX_RENDERTILE, G_OFF);
+    gSPTexture(opa++, 0xFFFF, 0xFFFF, 0, G_TX_RENDERTILE, G_ON);
+    gDPSetCombineMode(opa++, G_CC_MODULATEIDECALA_PRIM, G_CC_MODULATEIDECALA_PRIM);
+}
+
+bool IsDurabilityBarEnabled() {
+    return CVarGetInteger(kDurabilityBarCVar, 1) != 0;
 }
 
 static constexpr int kFusePanelLeftX = 4;
@@ -465,17 +492,6 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp)
         return;
     }
 
-    const bool swordFused = Fuse::IsSwordFused();
-
-    GfxPrint printer;
-
-    gDPPipeSync(OPA++);
-    gDPSetPrimColor(OPA++, 0, 0, 255, 255, 255, 255);
-
-    GfxPrint_Init(&printer);
-    GfxPrint_Open(&printer, OPA);
-    GfxPrint_SetColor(&printer, 255, 255, 255, 255);
-
     // TODO: Fine-tune Fuse prompt placement once Fuse modal UI is implemented.
     // Pause UI is image-based; final alignment may change.
     const s32 baseY = pauseCtx->infoPanelVtx[16].v.ob[1];
@@ -487,14 +503,10 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp)
 
     const s32 yCell = CLAMP((baseY + kPromptYOffset) / 8, 0, 29);
 
-    GfxPrint_SetPos(&printer, xCell, yCell);
+    const bool durabilityBarEnabled = IsDurabilityBarEnabled();
+    const bool swordFused = Fuse::IsSwordFused();
 
-    GfxPrint_Printf(&printer, "A: Fuse");
-
-    OPA = GfxPrint_Close(&printer);
-    GfxPrint_Destroy(&printer);
-
-    if (swordFused) {
+    if (swordFused && durabilityBarEnabled) {
         const s32 barX = pauseCtx->infoPanelVtx[16].v.ob[0];
         const s32 barY = pauseCtx->infoPanelVtx[16].v.ob[1] + kStatusYOffset + 2;
         const s32 maxDurability = Fuse::GetSwordFuseMaxDurability();
@@ -510,10 +522,23 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp)
             if (filled > 0) {
                 DrawSolidRectOpa(gfxCtx, &OPA, barX, barY, filled, kDurabilityBarHeight + 1, 60, 200, 60, 255);
             }
-
-            Gfx_SetupDL_42Opa(gfxCtx);
         }
     }
+
+    RestorePauseTextState(gfxCtx, &OPA);
+    gDPSetPrimColor(OPA++, 0, 0, 255, 255, 255, 255);
+
+    GfxPrint printer;
+    GfxPrint_Init(&printer);
+    GfxPrint_Open(&printer, OPA);
+    GfxPrint_SetColor(&printer, 255, 255, 255, 255);
+
+    GfxPrint_SetPos(&printer, xCell, yCell);
+
+    GfxPrint_Printf(&printer, "A: Fuse");
+
+    OPA = GfxPrint_Close(&printer);
+    GfxPrint_Destroy(&printer);
 }
 
 void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) {
@@ -571,8 +596,10 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     std::vector<MaterialEntry> materials = BuildMaterialList();
     UpdateModalBounds(materials);
     const int entryCount = static_cast<int>(materials.size());
-
-    GfxPrint printer;
+    const int yOffsetCells = kFuseModalYOffset;
+    const int yOffsetPx = kFuseModalYOffset * 8;
+    const bool durabilityBarEnabled = IsDurabilityBarEnabled();
+    const FuseWeaponView weaponView = Fuse_GetEquippedSwordView(play);
 
     gDPPipeSync(OPA++);
     gDPSetScissor(OPA++, G_SC_NON_INTERLACE, 0, 0, 320, 240);
@@ -615,17 +642,29 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     //     }
     // }
 
-    Gfx_SetupDL_42Opa(gfxCtx);
+    if (durabilityBarEnabled && weaponView.isFused && weaponView.maxDurability > 0) {
+        const int curDurability = std::clamp(weaponView.curDurability, 0, weaponView.maxDurability);
+        const f32 ratio = static_cast<f32>(curDurability) / static_cast<f32>(weaponView.maxDurability);
+        const s32 filled = std::clamp(static_cast<s32>(ratio * kDurabilityBarWidth), 0, kDurabilityBarWidth);
 
-    gDPPipeSync(OPA++);
+        const s32 durabilityTextY = (kFusePanelLeftY + 2 + yOffsetCells) * 8;
+        const s32 barX = kPanelX + kDurabilityBarOffsetX;
+        const s32 barY = durabilityTextY + kDurabilityBarOffsetY;
+
+        DrawSolidRectOpa(gfxCtx, &OPA, barX, barY, kDurabilityBarWidth + 1, kDurabilityBarHeight + 1, 10, 10, 10, 200);
+
+        if (filled > 0) {
+            DrawSolidRectOpa(gfxCtx, &OPA, barX, barY, filled, kDurabilityBarHeight + 1, 220, 240, 220, 255);
+        }
+    }
+
+    RestorePauseTextState(gfxCtx, &OPA);
     gDPSetPrimColor(OPA++, 0, 0, 255, 255, 255, 255);
 
+    GfxPrint printer;
     GfxPrint_Init(&printer);
     GfxPrint_Open(&printer, OPA);
     GfxPrint_SetColor(&printer, 255, 255, 255, 255);
-
-    const int yOffsetCells = kFuseModalYOffset;
-    const int yOffsetPx = kFuseModalYOffset * 8;
 
     GfxPrint_SetPosPx(&printer, kListX, kTitleY + yOffsetPx);
     GfxPrint_Printf(&printer, "Fuse");
@@ -689,7 +728,6 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     }
 
     const char* selectedItemName = SwordNameFromEquip(context.hoveredSword);
-    const FuseWeaponView weaponView = Fuse_GetEquippedSwordView(play);
 
     const MaterialEntry* highlightedEntry = nullptr;
     if (entryCount > 0 && sModal.cursor >= 0 && sModal.cursor < entryCount) {
@@ -730,27 +768,6 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         GfxPrint_Printf(&printer, "Durability: --");
     } else {
         GfxPrint_Printf(&printer, "Durability: %d / %d", weaponView.curDurability, weaponView.maxDurability);
-
-        const int maxDurability = weaponView.maxDurability;
-        if (maxDurability > 0) {
-            const int curDurability = std::clamp(weaponView.curDurability, 0, maxDurability);
-            const f32 ratio = static_cast<f32>(curDurability) / static_cast<f32>(maxDurability);
-            const s32 filled =
-                std::clamp(static_cast<s32>(ratio * kDurabilityBarWidth), 0, kDurabilityBarWidth);
-
-            const s32 durabilityTextY = (kFusePanelLeftY + 2 + yOffsetCells) * 8;
-            const s32 barX = kPanelX + kDurabilityBarOffsetX;
-            const s32 barY = durabilityTextY + kDurabilityBarOffsetY;
-
-            DrawSolidRectOpa(gfxCtx, &OPA, barX, barY, kDurabilityBarWidth + 1, kDurabilityBarHeight + 1, 10, 10, 10,
-                             200);
-
-            if (filled > 0) {
-                DrawSolidRectOpa(gfxCtx, &OPA, barX, barY, filled, kDurabilityBarHeight + 1, 220, 240, 220, 255);
-            }
-
-            Gfx_SetupDL_42Opa(gfxCtx);
-        }
     }
 
     GfxPrint_SetPos(&printer, kFusePanelRightX, kFusePanelRightY + yOffsetCells);
