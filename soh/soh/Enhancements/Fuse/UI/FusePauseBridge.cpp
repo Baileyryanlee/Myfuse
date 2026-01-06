@@ -5,6 +5,7 @@
 #include "functions.h"
 #include "soh/Enhancements/Fuse/Fuse.h"
 #include "soh/OTRGlobals.h"
+#include <libultraship/controller/controldeck/ControlDeck.h>
 #include <libultraship/libultraship.h>
 #include "soh/cvar_prefixes.h"
 #include <algorithm>
@@ -24,17 +25,16 @@ static bool IsFuseMenuPressed() {
         return false;
     }
 
-    auto controller = deck->GetControllerByPort(0);
-    if (!controller) {
+    auto pads = std::dynamic_pointer_cast<LUS::ControlDeck>(deck)->GetPads();
+    if (!pads) {
         return false;
     }
 
-    auto btn = controller->GetButton(BTN_CUSTOM_FUSE_MENU);
-    if (!btn) {
-        return false;
-    }
-
-    return btn->IsPressed();
+    const bool down = (pads[0].button & BTN_CUSTOM_FUSE_MENU) != 0;
+    static bool sPrevDown = false;
+    const bool pressedThisFrame = down && !sPrevDown;
+    sPrevDown = down;
+    return pressedThisFrame;
 }
 
 // Two-card modal bounds (geometry only; visuals unchanged)
