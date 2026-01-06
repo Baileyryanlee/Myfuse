@@ -415,11 +415,12 @@ void FusePause_UpdateModal(PlayState* play) {
 
     Input* input = &play->state.input[0];
     const u16 pressed = input->press.button;
+    const bool fusePressed = IsFuseMenuPressed();
 
     FusePromptContext context = BuildPromptContext(play);
 
     if (!sModal.open) {
-        if (context.shouldShowFusePrompt && IsFuseMenuPressed()) {
+        if (context.shouldShowFusePrompt && fusePressed) {
             const FuseWeaponView weaponView = Fuse_GetEquippedSwordView(play);
 
             sModal.open = true;
