@@ -12,28 +12,55 @@
 #include <vector>
 
 namespace {
-constexpr s32 kPanelX = 40;
-constexpr s32 kPanelY = 40;
-constexpr s32 kPanelW = 240;
-constexpr s32 kPanelH = 160;
-constexpr s32 kTitleY = kPanelY + 12;
-constexpr s32 kListX = kPanelX + 12;
-constexpr s32 kListY = kPanelY + 36;
+// Two-card modal bounds (geometry only; visuals unchanged)
+constexpr s32 leftCardX = 24;
+constexpr s32 leftCardY = 32;
+constexpr s32 leftCardW = 152;
+constexpr s32 leftCardH = 184;
+
+constexpr s32 rightCardX = 184;
+constexpr s32 rightCardY = leftCardY;
+constexpr s32 rightCardW = 112;
+constexpr s32 rightCardH = leftCardH;
+
+constexpr s32 kCardPaddingX = 12;
+constexpr s32 kCardPaddingY = 8;
+constexpr s32 kInfoLineSpacing = 12;
+
+constexpr s32 kPanelPadding = 8;
+constexpr s32 kPanelX = leftCardX - kPanelPadding;
+constexpr s32 kPanelY = leftCardY - kPanelPadding;
+constexpr s32 kPanelW = (rightCardX + rightCardW + kPanelPadding) - kPanelX;
+constexpr s32 kPanelH = leftCardH + (2 * kPanelPadding);
+
+constexpr s32 kTitleX = leftCardX + kCardPaddingX;
+constexpr s32 kTitleY = leftCardY + kCardPaddingY;
+constexpr s32 kListX = leftCardX + kCardPaddingX;
+constexpr s32 kListOffsetY = 64;
+constexpr s32 kListY = leftCardY + kListOffsetY;
 constexpr s32 kRowH = 14;
 constexpr s32 kVisibleRows = 8;
 
-constexpr s16 kPromptYOffset = 0;
-constexpr s16 kPromptPadding = 8;
-constexpr s16 kPromptAnchorX = kPanelX + 12;
-constexpr s16 kPromptAnchorY = kPanelY + 20;
+constexpr s32 kPromptOffsetY = 52;
+constexpr s32 kPromptAnchorX = leftCardX + kCardPaddingX;
+constexpr s32 kPromptAnchorY = leftCardY + kPromptOffsetY;
 constexpr s16 kPromptLineSpacing = 14;
+constexpr s16 kPromptPadding = 8;
+constexpr s16 kPromptYOffset = 0;
 constexpr s16 kStatusYOffset = -16;
+
+constexpr s32 kHeaderY = leftCardY + kCardPaddingY;
+constexpr s32 kLeftTextX = leftCardX + kCardPaddingX;
+constexpr s32 kRightTextX = rightCardX + kCardPaddingX;
+constexpr s32 kSelectedY = kHeaderY + kInfoLineSpacing;
+constexpr s32 kItemNameY = kSelectedY + kInfoLineSpacing;
+constexpr s32 kDurabilityTextY = kItemNameY + kInfoLineSpacing;
+constexpr s32 kDurabilityBarSpacingY = 10;
+constexpr s32 kDurabilityBarY = kDurabilityTextY + kDurabilityBarSpacingY;
 
 // Fuse Pause UI durability meter dimensions (file-local). Do not use kBarWidth/kBarHeight.
 constexpr s32 kDurabilityBarWidth = 88;
 constexpr s32 kDurabilityBarHeight = 8;
-constexpr s32 kDurabilityBarOffsetX = 12;
-constexpr s32 kDurabilityBarOffsetY = 12;
 
 constexpr const char* kDurabilityBarCVar = CVAR_DEVELOPER_TOOLS("Fuse.DurabilityBarEnabled");
 
@@ -104,10 +131,6 @@ bool IsDurabilityBarEnabled() {
     return CVarGetInteger(kDurabilityBarCVar, 1) != 0;
 }
 
-static constexpr int kFusePanelLeftX = 4;
-static constexpr int kFusePanelLeftY = 2;
-static constexpr int kFusePanelRightX = 22;
-static constexpr int kFusePanelRightY = 2;
 static constexpr int kFuseModalYOffset = 3;
 
 enum class FuseUiState {
@@ -596,7 +619,6 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     std::vector<MaterialEntry> materials = BuildMaterialList();
     UpdateModalBounds(materials);
     const int entryCount = static_cast<int>(materials.size());
-    const int yOffsetCells = kFuseModalYOffset;
     const int yOffsetPx = kFuseModalYOffset * 8;
     const bool durabilityBarEnabled = IsDurabilityBarEnabled();
     const FuseWeaponView weaponView = Fuse_GetEquippedSwordView(play);
@@ -647,9 +669,8 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         const f32 ratio = static_cast<f32>(curDurability) / static_cast<f32>(weaponView.maxDurability);
         const s32 filled = std::clamp(static_cast<s32>(ratio * kDurabilityBarWidth), 0, kDurabilityBarWidth);
 
-        const s32 durabilityTextY = (kFusePanelLeftY + 2 + yOffsetCells) * 8;
-        const s32 barX = kPanelX + kDurabilityBarOffsetX;
-        const s32 barY = durabilityTextY + kDurabilityBarOffsetY;
+        const s32 barX = kLeftTextX;
+        const s32 barY = kDurabilityBarY + yOffsetPx;
 
         DrawSolidRectOpa(gfxCtx, &OPA, barX, barY, kDurabilityBarWidth + 1, kDurabilityBarHeight + 1, 10, 10, 10, 200);
 
@@ -666,7 +687,7 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     GfxPrint_Open(&printer, OPA);
     GfxPrint_SetColor(&printer, 255, 255, 255, 255);
 
-    GfxPrint_SetPosPx(&printer, kListX, kTitleY + yOffsetPx);
+    GfxPrint_SetPosPx(&printer, kTitleX, kTitleY + yOffsetPx);
     GfxPrint_Printf(&printer, "Fuse");
 
     const bool locked = sModal.isLocked;
@@ -762,32 +783,43 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
 
     GfxPrint_SetColor(&printer, 255, 255, 255, 255);
 
-    GfxPrint_SetPos(&printer, kFusePanelLeftX, kFusePanelLeftY + yOffsetCells);
+    const s32 leftHeaderY = kHeaderY + yOffsetPx;
+    const s32 leftSelectedY = kSelectedY + yOffsetPx;
+    const s32 leftItemNameY = kItemNameY + yOffsetPx;
+    const s32 leftDurabilityY = kDurabilityTextY + yOffsetPx;
+
+    GfxPrint_SetPosPx(&printer, kLeftTextX, leftSelectedY);
     GfxPrint_Printf(&printer, "Selected:");
 
-    GfxPrint_SetPos(&printer, kFusePanelLeftX, kFusePanelLeftY + 1 + yOffsetCells);
+    GfxPrint_SetPosPx(&printer, kLeftTextX, leftItemNameY);
     GfxPrint_Printf(&printer, "%s", selectedItemName);
 
-    GfxPrint_SetPos(&printer, kFusePanelLeftX, kFusePanelLeftY + 2 + yOffsetCells);
+    GfxPrint_SetPosPx(&printer, kLeftTextX, leftDurabilityY);
     if (!weaponView.isFused) {
         GfxPrint_Printf(&printer, "Durability: --");
     } else {
         GfxPrint_Printf(&printer, "Durability: %d / %d", weaponView.curDurability, weaponView.maxDurability);
     }
 
-    GfxPrint_SetPos(&printer, kFusePanelRightX, kFusePanelRightY + yOffsetCells);
+    const s32 rightHeaderLineY = leftHeaderY;
+    const s32 rightMaterialY = rightHeaderLineY + kInfoLineSpacing;
+    const s32 rightQtyY = rightMaterialY + kInfoLineSpacing;
+    const s32 rightEffectLabelY = rightQtyY + kInfoLineSpacing;
+    const s32 rightEffectValueY = rightEffectLabelY + kInfoLineSpacing;
+
+    GfxPrint_SetPosPx(&printer, kRightTextX, rightHeaderLineY);
     GfxPrint_Printf(&printer, "Material:");
 
-    GfxPrint_SetPos(&printer, kFusePanelRightX, kFusePanelRightY + 1 + yOffsetCells);
+    GfxPrint_SetPosPx(&printer, kRightTextX, rightMaterialY);
     GfxPrint_Printf(&printer, "%s", matName.c_str());
 
-    GfxPrint_SetPos(&printer, kFusePanelRightX, kFusePanelRightY + 2 + yOffsetCells);
+    GfxPrint_SetPosPx(&printer, kRightTextX, rightQtyY);
     GfxPrint_Printf(&printer, "Qty: %d", matQty);
 
-    GfxPrint_SetPos(&printer, kFusePanelRightX, kFusePanelRightY + 3 + yOffsetCells);
+    GfxPrint_SetPosPx(&printer, kRightTextX, rightEffectLabelY);
     GfxPrint_Printf(&printer, "Effect:");
 
-    GfxPrint_SetPos(&printer, kFusePanelRightX, kFusePanelRightY + 4 + yOffsetCells);
+    GfxPrint_SetPosPx(&printer, kRightTextX, rightEffectValueY);
     GfxPrint_Printf(&printer, "%s", modifierText.c_str());
 
     OPA = GfxPrint_Close(&printer);
