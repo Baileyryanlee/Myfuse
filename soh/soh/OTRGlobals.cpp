@@ -322,8 +322,16 @@ void OTRGlobals::Initialize() {
         BTN_CUSTOM_OCARINA_DISABLE_SONGS,
         BTN_CUSTOM_OCARINA_PITCH_UP,
         BTN_CUSTOM_OCARINA_PITCH_DOWN,
+        BTN_CUSTOM_FUSE_MENU,
     }));
     context->InitControlDeck(controlDeck);
+
+    if (auto controller = context->GetControlDeck()->GetControllerByPort(0)) {
+        auto fuseButton = controller->GetButton(BTN_CUSTOM_FUSE_MENU);
+        for (auto [id, mapping] : controller->GetButton(BTN_L)->GetAllButtonMappings()) {
+            fuseButton->AddButtonMapping(mapping);
+        }
+    }
 
     context->InitCrashHandler();
     context->InitConsole();

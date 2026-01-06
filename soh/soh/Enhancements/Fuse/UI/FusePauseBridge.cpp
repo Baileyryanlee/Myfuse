@@ -4,6 +4,7 @@
 #include <libultraship/libultra/gbi.h>
 #include "functions.h"
 #include "soh/Enhancements/Fuse/Fuse.h"
+#include "soh/OTRGlobals.h"
 #include <libultraship/libultraship.h>
 #include "soh/cvar_prefixes.h"
 #include <algorithm>
@@ -394,7 +395,7 @@ void FusePause_UpdateModal(PlayState* play) {
     FusePromptContext context = BuildPromptContext(play);
 
     if (!sModal.open) {
-        if (context.shouldShowFusePrompt && (pressed & BTN_A)) {
+        if (context.shouldShowFusePrompt && (pressed & BTN_CUSTOM_FUSE_MENU)) {
             const FuseWeaponView weaponView = Fuse_GetEquippedSwordView(play);
 
             sModal.open = true;
@@ -411,7 +412,8 @@ void FusePause_UpdateModal(PlayState* play) {
             Fuse::Log("[FuseDBG] UI:Open item=%d confirmedMat=%d locked=%d\n", static_cast<int>(context.hoveredSword),
                       static_cast<int>(weaponView.materialId), sModal.isLocked ? 1 : 0);
 
-            input->press.button &= ~BTN_A;
+            input->press.button &= ~BTN_CUSTOM_FUSE_MENU;
+            input->press.button &= ~BTN_L;
         }
 
         return;
