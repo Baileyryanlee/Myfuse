@@ -123,10 +123,10 @@ void DrawDurabilityBar(GraphicsContext* gfxCtx, Gfx** gfxp, s32 x, s32 y, s32 wi
     const s32 barWidth = width;
     const s32 barHeight = height;
 
-    DrawSolidRectOpa(gfxCtx, gfxp, x, y, barWidth + 1, barHeight + 1, 10, 10, 10, 200);
+    DrawSolidRectOpa(gfxCtx, gfxp, x, y, barWidth + 1, barHeight + 1, 255, 0, 255, 255);
 
     if (filled > 0) {
-        DrawSolidRectOpa(gfxCtx, gfxp, x, y, filled, barHeight + 1, 190, 220, 190, 255);
+        DrawSolidRectOpa(gfxCtx, gfxp, x, y, filled, barHeight + 1, 0, 255, 255, 255);
     }
 }
 
@@ -675,6 +675,9 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         const s32 barX = leftCardX + kLeftCardInnerPadding;
         const s32 barY = durabilityTextY + kDurabilitySectionSpacing;
 
+        Fuse::Log("[FuseDBG] DurBarDraw barX=%d barY=%d barW=%d barH=%d filled=%d cur=%d max=%d yOff=%d leftX=%d leftY=%d\n",
+                  barX, barY, barWidth, kDurabilityBarHeight, filled, curDurability, weaponView.maxDurability, yOffsetPx,
+                  leftCardX, leftCardY);
         DrawDurabilityBar(gfxCtx, &OPA, barX, barY, barWidth, kDurabilityBarHeight, filled);
     }
 
