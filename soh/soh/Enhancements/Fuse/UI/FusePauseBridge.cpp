@@ -110,6 +110,26 @@ void DrawSolidRectOpa(GraphicsContext* gfxCtx, Gfx** gfxp, s32 x, s32 y, s32 w, 
     gSP2Triangles(opa++, 0, 1, 2, 0, 0, 2, 3, 0);
 }
 
+// Durability bars must render exclusively through this helper to avoid stray duplicates.
+void DrawDurabilityBar(GraphicsContext* gfxCtx, Gfx** gfxp, s32 x, s32 y, s32 width, s32 height, s32 filled) {
+    if (gfxCtx == nullptr || gfxp == nullptr || *gfxp == nullptr) {
+        return;
+    }
+
+    if (width <= 0 || height <= 0) {
+        return;
+    }
+
+    const s32 barWidth = width;
+    const s32 barHeight = height;
+
+    DrawSolidRectOpa(gfxCtx, gfxp, x, y, barWidth + 1, barHeight + 1, 10, 10, 10, 200);
+
+    if (filled > 0) {
+        DrawSolidRectOpa(gfxCtx, gfxp, x, y, filled, barHeight + 1, 190, 220, 190, 255);
+    }
+}
+
 void RestorePauseTextState(GraphicsContext* gfxCtx, Gfx** gfxp) {
     if (gfxCtx == nullptr || gfxp == nullptr || *gfxp == nullptr) {
         return;
@@ -655,11 +675,7 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         const s32 barX = leftCardX + kLeftCardInnerPadding;
         const s32 barY = durabilityTextY + kDurabilitySectionSpacing;
 
-        DrawSolidRectOpa(gfxCtx, &OPA, barX, barY, barWidth + 1, kDurabilityBarHeight + 1, 10, 10, 10, 200);
-
-        if (filled > 0) {
-            DrawSolidRectOpa(gfxCtx, &OPA, barX, barY, filled, kDurabilityBarHeight + 1, 190, 220, 190, 255);
-        }
+        DrawDurabilityBar(gfxCtx, &OPA, barX, barY, barWidth, kDurabilityBarHeight, filled);
     }
 
     RestorePauseTextState(gfxCtx, &OPA);
