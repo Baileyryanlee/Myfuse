@@ -43,6 +43,10 @@ constexpr s32 kListOffsetY = 64;
 constexpr s32 kListY = leftCardY + kListOffsetY;
 constexpr s32 kRowH = 14;
 constexpr s32 kVisibleRows = 8;
+constexpr s32 kRowBgX = kListX - 6;
+constexpr s32 kRowBgYOffset = -2;
+constexpr s32 kRowBgW = (leftCardX + leftCardW - kCardPaddingX) - kRowBgX;
+constexpr s32 kRowBgH = kRowH;
 
 constexpr s32 kHeaderY = leftCardY + kCardPaddingY;
 constexpr s32 kLeftTextX = leftCardX + kCardPaddingX;
@@ -676,6 +680,9 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     //     }
     // }
 
+    const bool locked = sModal.isLocked;
+    const bool confirmMode = sModal.uiState == FuseUiState::Confirm;
+
     const s32 durabilityTextY = kDurabilityTextY + modalYOffsetPx;
     const s32 durabilityBarY = durabilityTextY + kInfoLineSpacing - 2;
 
@@ -696,6 +703,42 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         DrawDurabilityBar(gfxCtx, &OPA, barX, barY, barWidth, barHeight, filled);
     }
 
+    if (entryCount > 0) {
+        const s32 baseY = kListY + modalYOffsetPx + kRowBgYOffset;
+
+        for (int i = 0; i < kVisibleRows; i++) {
+            const int entryIndex = sModal.scroll + i;
+            if (entryIndex >= entryCount) {
+                break;
+            }
+
+            const MaterialEntry& entry = materials[entryIndex];
+            const bool isSelected = (entryIndex == sModal.cursor);
+            const bool enabled = entry.enabled;
+
+            u8 r = 25;
+            u8 g = 25;
+            u8 b = 25;
+            u8 a = 160;
+
+            if (locked || !enabled) {
+                r = 15;
+                g = 15;
+                b = 15;
+                a = 120;
+            } else if (isSelected) {
+                r = 40;
+                g = confirmMode ? 180 : 120;
+                b = 255;
+                a = 200;
+            }
+
+            const s32 rowY = baseY + (i * kRowH);
+
+            DrawSolidRectOpa(gfxCtx, &OPA, kRowBgX, rowY, kRowBgW, kRowBgH, r, g, b, a);
+        }
+    }
+
     RestorePauseTextState(gfxCtx, &OPA);
     gDPSetPrimColor(OPA++, 0, 0, 255, 255, 255, 255);
 
@@ -706,9 +749,6 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
 
     GfxPrint_SetPosPx(&printer, kTitleX, kTitleY + modalYOffsetPx);
     GfxPrint_Printf(&printer, "Fuse");
-
-    const bool locked = sModal.isLocked;
-    const bool confirmMode = sModal.uiState == FuseUiState::Confirm;
 
     const s32 promptX = kPromptAnchorX;
     const s32 promptY = kPromptAnchorY + modalYOffsetPx;
