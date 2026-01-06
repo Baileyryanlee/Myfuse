@@ -651,11 +651,11 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     gDPPipeSync(OPA++);
     gDPSetScissor(OPA++, G_SC_NON_INTERLACE, 0, 0, 320, 240);
 
-    DrawSolidRectOpa(gfxCtx, &OPA, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, 0, 160);
+    DrawSolidRectOpa(gfxCtx, &OPA, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, 0, 96);
 
     constexpr s32 border = 2;
 
-        DrawSolidRectOpa(gfxCtx, &OPA, kPanelX, kPanelY, kPanelW + 1, kPanelH + 1, 20, 20, 20, 240);
+        DrawSolidRectOpa(gfxCtx, &OPA, kPanelX, kPanelY, kPanelW + 1, kPanelH + 1, 25, 25, 25, 170);
 
     DrawSolidRectOpa(gfxCtx, &OPA, kPanelX, kPanelY, kPanelW + 1, border, 200, 200, 200, 255);
     DrawSolidRectOpa(gfxCtx, &OPA, kPanelX, kPanelY + kPanelH - border + 1, kPanelW + 1, border, 200, 200, 200, 255);
@@ -716,16 +716,16 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
             const bool isSelected = (entryIndex == sModal.cursor);
             const bool enabled = entry.enabled;
 
-            u8 r = 25;
-            u8 g = 25;
-            u8 b = 25;
-            u8 a = 160;
+            u8 r = 35;
+            u8 g = 35;
+            u8 b = 35;
+            u8 a = 180;
 
             if (locked || !enabled) {
-                r = 15;
-                g = 15;
-                b = 15;
-                a = 120;
+                r = 20;
+                g = 20;
+                b = 20;
+                a = 130;
             } else if (isSelected) {
                 r = 40;
                 g = confirmMode ? 180 : 120;
