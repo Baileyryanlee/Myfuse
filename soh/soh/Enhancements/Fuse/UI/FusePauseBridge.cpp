@@ -555,17 +555,6 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp)
         return;
     }
 
-    // TODO: Fine-tune Fuse prompt placement once Fuse modal UI is implemented.
-    // Pause UI is image-based; final alignment may change.
-    const s32 baseY = pauseCtx->infoPanelVtx[16].v.ob[1];
-    const s32 toEquipX = pauseCtx->infoPanelVtx[20].v.ob[0];
-    const s32 toEquipW = pauseCtx->infoPanelVtx[21].v.ob[0] - pauseCtx->infoPanelVtx[20].v.ob[0];
-    const s32 baseX = toEquipX + toEquipW + kPromptPadding;
-
-    const s32 xCell = CLAMP(baseX / 8, 0, 39);
-
-    const s32 yCell = CLAMP((baseY + kPromptYOffset) / 8, 0, 29);
-
     RestorePauseTextState(gfxCtx, &OPA);
     gDPSetPrimColor(OPA++, 0, 0, 255, 255, 255, 255);
 
@@ -574,9 +563,12 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp)
     GfxPrint_Open(&printer, OPA);
     GfxPrint_SetColor(&printer, 255, 255, 255, 255);
 
-    GfxPrint_SetPos(&printer, xCell, yCell);
+    const s32 promptXPx = 238;
+    const s32 promptYPx = 196;
 
-    GfxPrint_Printf(&printer, "A: Fuse");
+    GfxPrint_SetPosPx(&printer, promptXPx, promptYPx);
+
+    GfxPrint_Printf(&printer, "LB: FUSE MENU");
 
     OPA = GfxPrint_Close(&printer);
     GfxPrint_Destroy(&printer);
