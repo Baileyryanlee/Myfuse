@@ -36,13 +36,19 @@ constexpr s32 kPanelY = leftCardY - kPanelPadding;
 constexpr s32 kPanelW = (rightCardX + rightCardW + kPanelPadding) - kPanelX;
 constexpr s32 kPanelH = leftCardH + (2 * kPanelPadding);
 
+constexpr s32 kFooterW = 190;
+constexpr s32 kFooterH = 32;
+constexpr s32 kFooterBottomPad = 10;
+constexpr s32 kFooterX = kPanelX + ((kPanelW - kFooterW) / 2);
+constexpr s32 kFooterY = kPanelY + kPanelH - kFooterBottomPad - kFooterH;
+
 constexpr s32 kTitleX = leftCardX + kCardPaddingX;
 constexpr s32 kTitleY = leftCardY + kCardPaddingY;
 constexpr s32 kListX = leftCardX + kCardPaddingX;
 constexpr s32 kListOffsetY = 64;
 constexpr s32 kListY = leftCardY + kListOffsetY;
 constexpr s32 kRowH = 14;
-constexpr s32 kVisibleRows = 8;
+constexpr s32 kVisibleRows = 7;
 constexpr s32 kRowBgX = kListX - 6;
 constexpr s32 kRowBgYOffset = -2;
 constexpr s32 kRowBgW = (leftCardX + leftCardW - kCardPaddingX) - kRowBgX;
@@ -59,10 +65,6 @@ constexpr s32 kDurabilityTextY = kItemNameY + kInfoLineSpacing;
 constexpr s32 kDurabilityBarHeight = 8;
 constexpr s32 kDurabilityBarWidth = leftCardW - (kLeftCardInnerPadding * 2);
 
-constexpr s32 kPromptOffsetY =
-    (kDurabilityTextY - leftCardY) + kDurabilitySectionSpacing + kDurabilityBarHeight + kDurabilitySectionSpacing;
-constexpr s32 kPromptAnchorX = leftCardX + kCardPaddingX;
-constexpr s32 kPromptAnchorY = leftCardY + kPromptOffsetY;
 constexpr s16 kPromptLineSpacing = 14;
 constexpr s16 kPromptPadding = 8;
 constexpr s16 kPromptYOffset = 0;
@@ -750,25 +752,20 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     GfxPrint_SetPosPx(&printer, kTitleX, kTitleY + modalYOffsetPx);
     GfxPrint_Printf(&printer, "Fuse");
 
-    const s32 promptX = kPromptAnchorX;
-    const s32 promptY = kPromptAnchorY + modalYOffsetPx;
-    s32 nextPromptLineY = promptY + kPromptLineSpacing;
+    const s32 promptX = kFooterX;
+    const s32 promptY = kFooterY + modalYOffsetPx;
+    const s32 nextPromptLineY = promptY + kPromptLineSpacing;
 
     GfxPrint_SetPosPx(&printer, promptX, promptY);
     if (locked) {
-        GfxPrint_SetColor(&printer, 255, 120, 120, 255);
-        GfxPrint_Printf(&printer, "ITEM ALREADY FUSED");
-        GfxPrint_SetPosPx(&printer, promptX, promptY + kPromptLineSpacing);
-        GfxPrint_SetColor(&printer, 255, 255, 255, 255);
         GfxPrint_Printf(&printer, "B: Back");
-        nextPromptLineY = promptY + (2 * kPromptLineSpacing);
     } else if (confirmMode) {
         GfxPrint_Printf(&printer, "A: Confirm   B: Cancel");
     } else {
         GfxPrint_Printf(&printer, "A: Select   B: Back");
     }
 
-    if (sModal.promptTimer > 0 && sModal.promptType == FusePromptType::AlreadyFused) {
+    if (locked || (sModal.promptTimer > 0 && sModal.promptType == FusePromptType::AlreadyFused)) {
         GfxPrint_SetPosPx(&printer, promptX, nextPromptLineY);
         GfxPrint_SetColor(&printer, 255, 120, 120, 255);
         GfxPrint_Printf(&printer, "ITEM ALREADY FUSED");
