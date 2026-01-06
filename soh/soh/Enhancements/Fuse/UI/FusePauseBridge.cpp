@@ -34,7 +34,7 @@ static bool IsFuseMenuPressed() {
         return false;
     }
 
-    return btn->WasPressed();
+    return btn->IsPressed();
 }
 
 // Two-card modal bounds (geometry only; visuals unchanged)
