@@ -528,28 +528,6 @@ void FusePause_DrawPrompt(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp)
 
     const s32 yCell = CLAMP((baseY + kPromptYOffset) / 8, 0, 29);
 
-    const bool durabilityBarEnabled = IsDurabilityBarEnabled();
-    const bool swordFused = Fuse::IsSwordFused();
-
-    if (swordFused && durabilityBarEnabled) {
-        const s32 barX = pauseCtx->infoPanelVtx[16].v.ob[0];
-        const s32 barY = pauseCtx->infoPanelVtx[16].v.ob[1] + kStatusYOffset + 2;
-        const s32 maxDurability = Fuse::GetSwordFuseMaxDurability();
-
-        if (maxDurability > 0) {
-            const s32 curDurability = Fuse::GetSwordFuseDurability();
-            const f32 ratio = CLAMP((f32)curDurability / (f32)maxDurability, 0.0f, 1.0f);
-            const s32 filled = (s32)(ratio * kDurabilityBarWidth);
-
-            DrawSolidRectOpa(gfxCtx, &OPA, barX, barY, kDurabilityBarWidth + 1, kDurabilityBarHeight + 1, 30, 30, 30,
-                             255);
-
-            if (filled > 0) {
-                DrawSolidRectOpa(gfxCtx, &OPA, barX, barY, filled, kDurabilityBarHeight + 1, 50, 180, 50, 255);
-            }
-        }
-    }
-
     RestorePauseTextState(gfxCtx, &OPA);
     gDPSetPrimColor(OPA++, 0, 0, 255, 255, 255, 255);
 
