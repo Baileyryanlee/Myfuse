@@ -14,7 +14,7 @@
 
 namespace {
 static bool IsFuseMenuPressed() {
-    auto* ctx = Ship::Context::GetInstance();
+    auto ctx = Ship::Context::GetInstance();
     if (!ctx) {
         return false;
     }
