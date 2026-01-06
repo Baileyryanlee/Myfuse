@@ -27,6 +27,9 @@ constexpr s32 kCardPaddingX = 12;
 constexpr s32 kCardPaddingY = 8;
 constexpr s32 kInfoLineSpacing = 12;
 
+constexpr s32 kLeftCardInnerPadding = kCardPaddingX;
+constexpr s32 kDurabilitySectionSpacing = 4;
+
 constexpr s32 kPanelPadding = 8;
 constexpr s32 kPanelX = leftCardX - kPanelPadding;
 constexpr s32 kPanelY = leftCardY - kPanelPadding;
@@ -41,26 +44,25 @@ constexpr s32 kListY = leftCardY + kListOffsetY;
 constexpr s32 kRowH = 14;
 constexpr s32 kVisibleRows = 8;
 
-constexpr s32 kPromptOffsetY = 52;
-constexpr s32 kPromptAnchorX = leftCardX + kCardPaddingX;
-constexpr s32 kPromptAnchorY = leftCardY + kPromptOffsetY;
-constexpr s16 kPromptLineSpacing = 14;
-constexpr s16 kPromptPadding = 8;
-constexpr s16 kPromptYOffset = 0;
-constexpr s16 kStatusYOffset = -16;
-
 constexpr s32 kHeaderY = leftCardY + kCardPaddingY;
 constexpr s32 kLeftTextX = leftCardX + kCardPaddingX;
 constexpr s32 kRightTextX = rightCardX + kCardPaddingX;
 constexpr s32 kSelectedY = kHeaderY + kInfoLineSpacing;
 constexpr s32 kItemNameY = kSelectedY + kInfoLineSpacing;
 constexpr s32 kDurabilityTextY = kItemNameY + kInfoLineSpacing;
-constexpr s32 kDurabilityBarSpacingY = 10;
-constexpr s32 kDurabilityBarY = kDurabilityTextY + kDurabilityBarSpacingY;
 
 // Fuse Pause UI durability meter dimensions (file-local). Do not use kBarWidth/kBarHeight.
-constexpr s32 kDurabilityBarWidth = 88;
 constexpr s32 kDurabilityBarHeight = 8;
+constexpr s32 kDurabilityBarWidth = leftCardW - (kLeftCardInnerPadding * 2);
+
+constexpr s32 kPromptOffsetY =
+    (kDurabilityTextY - leftCardY) + kDurabilitySectionSpacing + kDurabilityBarHeight + kDurabilitySectionSpacing;
+constexpr s32 kPromptAnchorX = leftCardX + kCardPaddingX;
+constexpr s32 kPromptAnchorY = leftCardY + kPromptOffsetY;
+constexpr s16 kPromptLineSpacing = 14;
+constexpr s16 kPromptPadding = 8;
+constexpr s16 kPromptYOffset = 0;
+constexpr s16 kStatusYOffset = -16;
 
 constexpr const char* kDurabilityBarCVar = CVAR_DEVELOPER_TOOLS("Fuse.DurabilityBarEnabled");
 
@@ -664,15 +666,18 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     //     }
     // }
 
+    const s32 durabilityTextY = kDurabilityTextY + yOffsetPx;
+
     if (durabilityBarEnabled && weaponView.isFused && weaponView.maxDurability > 0) {
         const int curDurability = std::clamp(weaponView.curDurability, 0, weaponView.maxDurability);
         const f32 ratio = static_cast<f32>(curDurability) / static_cast<f32>(weaponView.maxDurability);
-        const s32 filled = std::clamp(static_cast<s32>(ratio * kDurabilityBarWidth), 0, kDurabilityBarWidth);
+        const s32 barWidth = kDurabilityBarWidth;
+        const s32 filled = std::clamp(static_cast<s32>(ratio * barWidth), 0, barWidth);
 
-        const s32 barX = kLeftTextX;
-        const s32 barY = kDurabilityBarY + yOffsetPx;
+        const s32 barX = leftCardX + kLeftCardInnerPadding;
+        const s32 barY = durabilityTextY + kDurabilitySectionSpacing;
 
-        DrawSolidRectOpa(gfxCtx, &OPA, barX, barY, kDurabilityBarWidth + 1, kDurabilityBarHeight + 1, 10, 10, 10, 200);
+        DrawSolidRectOpa(gfxCtx, &OPA, barX, barY, barWidth + 1, kDurabilityBarHeight + 1, 10, 10, 10, 200);
 
         if (filled > 0) {
             DrawSolidRectOpa(gfxCtx, &OPA, barX, barY, filled, kDurabilityBarHeight + 1, 190, 220, 190, 255);
@@ -786,7 +791,7 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     const s32 leftHeaderY = kHeaderY + yOffsetPx;
     const s32 leftSelectedY = kSelectedY + yOffsetPx;
     const s32 leftItemNameY = kItemNameY + yOffsetPx;
-    const s32 leftDurabilityY = kDurabilityTextY + yOffsetPx;
+    const s32 leftDurabilityY = durabilityTextY;
 
     GfxPrint_SetPosPx(&printer, kLeftTextX, leftSelectedY);
     GfxPrint_Printf(&printer, "Selected:");
