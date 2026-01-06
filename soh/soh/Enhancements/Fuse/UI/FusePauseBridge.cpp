@@ -75,19 +75,28 @@ void DrawSolidRectOpa(GraphicsContext* gfxCtx, Gfx** gfxp, s32 x, s32 y, s32 w, 
         return;
     }
 
+    const s32 halfW = SCREEN_WIDTH / 2;
+    const s32 halfH = SCREEN_HEIGHT / 2;
+
+    const s32 x0 = x - halfW;
+    const s32 x1 = (x + w) - halfW;
+
+    const s32 y0 = halfH - y;
+    const s32 y1 = halfH - (y + h);
+
     Vtx* vtx = (Vtx*)Graph_Alloc(gfxCtx, 4 * sizeof(Vtx));
     if (vtx == nullptr) {
         return;
     }
 
-    vtx[0].v.ob[0] = static_cast<s16>(x);
-    vtx[0].v.ob[1] = static_cast<s16>(y);
-    vtx[1].v.ob[0] = static_cast<s16>(x + w);
-    vtx[1].v.ob[1] = static_cast<s16>(y);
-    vtx[2].v.ob[0] = static_cast<s16>(x + w);
-    vtx[2].v.ob[1] = static_cast<s16>(y + h);
-    vtx[3].v.ob[0] = static_cast<s16>(x);
-    vtx[3].v.ob[1] = static_cast<s16>(y + h);
+    vtx[0].v.ob[0] = static_cast<s16>(x0);
+    vtx[0].v.ob[1] = static_cast<s16>(y0);
+    vtx[1].v.ob[0] = static_cast<s16>(x1);
+    vtx[1].v.ob[1] = static_cast<s16>(y0);
+    vtx[2].v.ob[0] = static_cast<s16>(x1);
+    vtx[2].v.ob[1] = static_cast<s16>(y1);
+    vtx[3].v.ob[0] = static_cast<s16>(x0);
+    vtx[3].v.ob[1] = static_cast<s16>(y1);
 
     for (int i = 0; i < 4; i++) {
         vtx[i].v.ob[2] = 0;
