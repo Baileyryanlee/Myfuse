@@ -13,6 +13,30 @@
 #include <vector>
 
 namespace {
+static bool IsFuseMenuPressed() {
+    auto* ctx = Ship::Context::GetInstance();
+    if (!ctx) {
+        return false;
+    }
+
+    auto deck = ctx->GetControlDeck();
+    if (!deck) {
+        return false;
+    }
+
+    auto controller = deck->GetControllerByPort(0);
+    if (!controller) {
+        return false;
+    }
+
+    auto btn = controller->GetButton(BTN_CUSTOM_FUSE_MENU);
+    if (!btn) {
+        return false;
+    }
+
+    return btn->WasPressed();
+}
+
 // Two-card modal bounds (geometry only; visuals unchanged)
 constexpr s32 leftCardX = 24;
 constexpr s32 leftCardY = 32;
@@ -395,7 +419,7 @@ void FusePause_UpdateModal(PlayState* play) {
     FusePromptContext context = BuildPromptContext(play);
 
     if (!sModal.open) {
-        if (context.shouldShowFusePrompt && (pressed & BTN_CUSTOM_FUSE_MENU)) {
+        if (context.shouldShowFusePrompt && IsFuseMenuPressed()) {
             const FuseWeaponView weaponView = Fuse_GetEquippedSwordView(play);
 
             sModal.open = true;
@@ -412,7 +436,6 @@ void FusePause_UpdateModal(PlayState* play) {
             Fuse::Log("[FuseDBG] UI:Open item=%d confirmedMat=%d locked=%d\n", static_cast<int>(context.hoveredSword),
                       static_cast<int>(weaponView.materialId), sModal.isLocked ? 1 : 0);
 
-            input->press.button &= ~BTN_CUSTOM_FUSE_MENU;
             input->press.button &= ~BTN_L;
         }
 
