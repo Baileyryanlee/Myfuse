@@ -2428,7 +2428,6 @@ void KaleidoScope_DrawInfoPanel(PlayState* play) {
                 POLY_OPA_DISP = KaleidoScope_QuadTextureIA8(POLY_OPA_DISP, sToEquipTextures[gSaveContext.language],
                                                             D_8082ADD8[gSaveContext.language], 16, 4);
 
-                FusePause_DrawPrompt(play, &POLY_OPA_DISP, &POLY_XLU_DISP);
             }
         }
     }
@@ -3529,7 +3528,8 @@ void KaleidoScope_Draw(PlayState* play) {
         if (!((pauseCtx->state >= 8) && (pauseCtx->state <= 0x11))) {
             KaleidoScope_DrawInfoPanel(play);
 
-            if (pauseCtx->state == 6 && pauseCtx->pageIndex == PAUSE_EQUIP) {
+            if (pauseCtx->state == 6) {
+                FusePause_DrawPrompt(play, &POLY_OPA_DISP, &POLY_XLU_DISP);
                 FusePause_DrawModal(play, &POLY_OPA_DISP, &POLY_XLU_DISP);
             }
         }
