@@ -59,6 +59,66 @@ void LogPersistenceEvent(const char* prefix, const FuseSwordSaveState& state) {
 
 } // namespace
 
+bool IsSwordEquipValue(int32_t equipValue) {
+    switch (equipValue) {
+        case EQUIP_VALUE_SWORD_KOKIRI:
+        case EQUIP_VALUE_SWORD_MASTER:
+        case EQUIP_VALUE_SWORD_BIGGORON:
+            return true;
+        default:
+            return false;
+    }
+}
+
+SwordSlotKey SwordSlotKeyFromEquipValue(int32_t equipValue) {
+    switch (equipValue) {
+        case EQUIP_VALUE_SWORD_MASTER:
+            return SwordSlotKey::Master;
+        case EQUIP_VALUE_SWORD_BIGGORON:
+            return SwordSlotKey::Biggoron;
+        case EQUIP_VALUE_SWORD_KOKIRI:
+        default:
+            return SwordSlotKey::Kokiri;
+    }
+}
+
+const char* SwordSlotName(SwordSlotKey key) {
+    switch (key) {
+        case SwordSlotKey::Kokiri:
+            return "Kokiri";
+        case SwordSlotKey::Master:
+            return "Master";
+        case SwordSlotKey::Biggoron:
+            return "Biggoron";
+        default:
+            return "Unknown";
+    }
+}
+
+void SwordFuseSlot::Clear() {
+    ResetToUnfused();
+}
+
+void SwordFuseSlot::ResetToUnfused() {
+    materialId = MaterialId::None;
+    durabilityCur = 0;
+    durabilityMax = 0;
+}
+
+SwordFuseSlot& FuseSaveData::GetSwordSlot(SwordSlotKey key) {
+    return swordSlots[static_cast<size_t>(key)];
+}
+
+const SwordFuseSlot& FuseSaveData::GetSwordSlot(SwordSlotKey key) const {
+    return swordSlots[static_cast<size_t>(key)];
+}
+
+SwordFuseSlot& FuseSaveData::GetActiveSwordSlot(const PlayState* play) {
+    const int32_t equipValue =
+        play ? static_cast<int32_t>(CUR_EQUIP_VALUE(EQUIP_TYPE_SWORD)) : static_cast<int32_t>(EQUIP_VALUE_SWORD_KOKIRI);
+    return GetSwordSlot(SwordSlotKeyFromEquipValue(equipValue));
+}
+
 namespace FusePersistence {
 
 FuseSwordSaveState ClearedSwordState() {

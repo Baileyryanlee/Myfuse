@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include <cstdint>
 #include <unordered_map>
 #include <vector>
@@ -8,6 +9,21 @@
 
 struct PlayState;
 class SaveManager;
+
+enum class SwordSlotKey { Kokiri = 0, Master = 1, Biggoron = 2 };
+
+bool IsSwordEquipValue(int32_t equipValue);
+SwordSlotKey SwordSlotKeyFromEquipValue(int32_t equipValue);
+const char* SwordSlotName(SwordSlotKey key);
+
+struct SwordFuseSlot {
+    MaterialId materialId = MaterialId::None;
+    int durabilityCur = 0;
+    int durabilityMax = 0;
+
+    void Clear();
+    void ResetToUnfused();
+};
 
 // Centralized representation of the save data for the currently equipped sword.
 // Invariants:
@@ -39,6 +55,12 @@ struct FuseSaveData {
     // Durability (v0: only Sword+Rock)
     uint16_t swordFuseDurability = 0;    // current (0 = broken/none)
     uint16_t swordFuseMaxDurability = 0; // max
+
+    std::array<SwordFuseSlot, 3> swordSlots{};
+
+    SwordFuseSlot& GetSwordSlot(SwordSlotKey key);
+    const SwordFuseSlot& GetSwordSlot(SwordSlotKey key) const;
+    SwordFuseSlot& GetActiveSwordSlot(const PlayState* play);
 };
 
 struct FuseRuntimeState {
