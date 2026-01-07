@@ -113,10 +113,10 @@ const SwordFuseSlot& FuseSaveData::GetSwordSlot(SwordSlotKey key) const {
     return swordSlots[static_cast<size_t>(key)];
 }
 
-SwordFuseSlot& FuseState::GetActiveSwordSlot([[maybe_unused]] const PlayState* play) {
+SwordFuseSlot& FuseSaveData::GetActiveSwordSlot([[maybe_unused]] const PlayState* play) {
     // Step 2 will route this properly using EquipValueSword
     // For now, return Kokiri by default to avoid behavior changes
-    return swordSlots[static_cast<size_t>(SwordSlotKey::Kokiri)];
+    return this->swordSlots[static_cast<size_t>(SwordSlotKey::Kokiri)];
 }
 
 namespace FusePersistence {
