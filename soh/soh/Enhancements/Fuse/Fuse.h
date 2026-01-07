@@ -1,10 +1,12 @@
 #pragma once
+#include <array>
 #include <cstdint>
 #include <vector>
 
 #include "z64.h"
 #include "soh/Enhancements/Fuse/FuseMaterials.h"
 #include "soh/Enhancements/Fuse/FuseModifiers.h"
+#include "soh/Enhancements/Fuse/FuseState.h"
 
 struct PlayState;
 struct Player;
@@ -96,6 +98,10 @@ void OnSwordFuseBroken(PlayState* play);
 // Debug/testing (safe no-op in shipping later)
 const char* GetLastEvent();
 void SetLastEvent(const char* msg);
+
+std::array<SwordFuseSlot, FusePersistence::kSwordSlotCount> GetSwordSlots();
+void ApplyLoadedSwordSlots(const std::array<SwordFuseSlot, FusePersistence::kSwordSlotCount>& slots);
+bool HasLoadedSwordSlots();
 
 // Simple logger (goes to VS Output on Windows)
 void Log(const char* fmt, ...);
