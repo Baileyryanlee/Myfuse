@@ -724,22 +724,26 @@ void Fuse::ClearMaterialInventory() {
 }
 
 bool Fuse::IsSwordFused() {
-    return gFuseSave.swordFuseMaterialId != MaterialId::None && gFuseSave.swordFuseDurability > 0;
+    const SwordFuseSlot& slot = gFuseSave.GetActiveSwordSlot(nullptr);
+    return slot.materialId != MaterialId::None && slot.durabilityCur > 0;
 }
 
 MaterialId Fuse::GetSwordMaterial() {
-    return gFuseSave.swordFuseMaterialId;
+    const SwordFuseSlot& slot = gFuseSave.GetActiveSwordSlot(nullptr);
+    return slot.materialId;
 }
 
 // -----------------------------------------------------------------------------
 // Durability (v0: only Sword+Rock)
 // -----------------------------------------------------------------------------
 int Fuse::GetSwordFuseDurability() {
-    return (int)gFuseSave.swordFuseDurability;
+    const SwordFuseSlot& slot = gFuseSave.GetActiveSwordSlot(nullptr);
+    return slot.durabilityCur;
 }
 
 int Fuse::GetSwordFuseMaxDurability() {
-    return (int)gFuseSave.swordFuseMaxDurability;
+    const SwordFuseSlot& slot = gFuseSave.GetActiveSwordSlot(nullptr);
+    return slot.durabilityMax;
 }
 
 FuseWeaponView Fuse_GetEquippedSwordView(const PlayState* play) {
@@ -763,32 +767,34 @@ FuseWeaponView Fuse_GetEquippedSwordView(const PlayState* play) {
 
 void Fuse::SetSwordFuseDurability(int v) {
     v = std::clamp(v, 0, 65535);
-    gFuseSave.swordFuseDurability = (uint16_t)v;
+    SwordFuseSlot& slot = gFuseSave.GetActiveSwordSlot(nullptr);
+    slot.durabilityCur = v;
 }
 
 void Fuse::SetSwordFuseMaxDurability(int v) {
     v = std::clamp(v, 0, 65535);
-    gFuseSave.swordFuseMaxDurability = (uint16_t)v;
+    SwordFuseSlot& slot = gFuseSave.GetActiveSwordSlot(nullptr);
+    slot.durabilityMax = v;
 }
 
 void Fuse::ClearSwordFuse() {
-    gFuseSave.swordFuseMaterialId = MaterialId::None;
-    gFuseSave.swordFuseDurability = 0;
-    gFuseSave.swordFuseMaxDurability = 0;
+    SwordFuseSlot& slot = gFuseSave.GetActiveSwordSlot(nullptr);
+    slot.ResetToUnfused();
     gFuseRuntime.swordFuseLoadedFromSave = false;
 }
 
 void Fuse::FuseSwordWithMaterial(MaterialId id, uint16_t maxDurability, bool initializeCurrentDurability,
                                  bool logDurability) {
-    gFuseSave.swordFuseMaterialId = id;
-    gFuseSave.swordFuseMaxDurability = maxDurability;
+    SwordFuseSlot& slot = gFuseSave.GetActiveSwordSlot(nullptr);
+    slot.materialId = id;
+    slot.durabilityMax = maxDurability;
 
     const bool shouldInitialize = initializeCurrentDurability && !gFuseRuntime.swordFuseLoadedFromSave;
 
     if (shouldInitialize) {
-        gFuseSave.swordFuseDurability = maxDurability;
+        slot.durabilityCur = maxDurability;
     } else {
-        gFuseSave.swordFuseDurability = std::clamp<uint16_t>(gFuseSave.swordFuseDurability, 0, maxDurability);
+        slot.durabilityCur = std::clamp<int>(slot.durabilityCur, 0, maxDurability);
     }
 
     gFuseRuntime.swordFuseLoadedFromSave = false;
@@ -802,7 +808,7 @@ void Fuse::FuseSwordWithMaterial(MaterialId id, uint16_t maxDurability, bool ini
 
     if (logDurability) {
         Fuse::Log("[FuseMVP] Sword fused with material=%d (durability %u/%u)\n", static_cast<int>(id),
-                  (unsigned int)gFuseSave.swordFuseDurability, (unsigned int)maxDurability);
+                  static_cast<unsigned int>(slot.durabilityCur), static_cast<unsigned int>(maxDurability));
     }
 }
 
