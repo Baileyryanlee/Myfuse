@@ -9,6 +9,8 @@
 struct PlayState;
 struct Player;
 struct Actor;
+enum class SwordSlotKey;
+struct SwordFuseSlot;
 
 struct FuseWeaponView {
     bool isFused = false;
@@ -20,7 +22,7 @@ struct FuseWeaponView {
 void Fuse_ApplySavedSwordFuse(const PlayState* play, s16 savedMaterialId, s16 savedMaxDurability,
                               bool hasSavedCurDurability, u16 savedCurDurability, s16 legacyCurDurability);
 void Fuse_WriteSwordFuseToSave(const PlayState* play);
-void Fuse_ClearSavedSwordFuse(const PlayState* play);
+void Fuse_ClearSavedSwordFuse(const PlayState* play, const char* reason);
 
 FuseWeaponView Fuse_GetEquippedSwordView(const PlayState* play);
 
@@ -92,6 +94,8 @@ void SetSwordFuseMaxDurability(int v);
 bool DamageSwordFuseDurability(PlayState* play, int amount, const char* reason);
 void ClearSwordFuse();
 void OnSwordFuseBroken(PlayState* play);
+const SwordFuseSlot& GetSwordSlot(SwordSlotKey key);
+uint32_t GetSaveDataVersion();
 
 // Debug/testing (safe no-op in shipping later)
 const char* GetLastEvent();

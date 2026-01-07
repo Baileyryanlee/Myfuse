@@ -9,7 +9,9 @@
 #include "soh/SaveManager.h"
 
 #include <algorithm>
+#include <array>
 #include <memory>
+#include <string>
 
 #include <spdlog/spdlog.h>
 
@@ -32,6 +34,42 @@ static bool sFuseMenuShown = false;
 static constexpr const char* kFuseSaveWriteCVar = CVAR_ENHANCEMENT("Fuse.SaveWrite");
 static constexpr const char* kFuseDebugOverrideSectionName = "enhancements.fuse.debugOverrides";
 
+static std::array<SwordFuseSlot, 3> SnapshotSwordSlots() {
+    return { Fuse::GetSwordSlot(SwordSlotKey::Kokiri), Fuse::GetSwordSlot(SwordSlotKey::Master),
+             Fuse::GetSwordSlot(SwordSlotKey::Biggoron) };
+}
+
+static SwordSlotKey GetEquippedSwordSlotKey() {
+    const int32_t equipValue =
+        (static_cast<int32_t>(gSaveContext.equips.equipment & gEquipMasks[EQUIP_TYPE_SWORD]) >>
+         gEquipShifts[EQUIP_TYPE_SWORD]);
+    return IsSwordEquipValue(equipValue) ? SwordSlotKeyFromEquipValue(equipValue) : SwordSlotKey::Kokiri;
+}
+
+static std::array<SwordFuseSlot, 3> BuildSlotsWithReadState(const FuseSwordSaveState& state) {
+    auto slots = SnapshotSwordSlots();
+    SwordFuseSlot& slot = slots[static_cast<size_t>(GetEquippedSwordSlotKey())];
+    if (state.isFused) {
+        slot.materialId = state.materialId;
+        slot.durabilityCur = state.durabilityCur;
+        slot.durabilityMax = state.durabilityMax;
+    } else {
+        slot.ResetToUnfused();
+    }
+    return slots;
+}
+
+static void LogSwordSlots(const char* action, const std::array<SwordFuseSlot, 3>& slots, uint32_t version) {
+    Fuse::Log("[FuseSave] %s ver=%u slots:\n", action, version);
+    const auto logSlot = [&](const char* label, const SwordFuseSlot& slot) {
+        Fuse::Log("    %s: mat=%d dur=%d/%d\n", label, static_cast<int>(slot.materialId), slot.durabilityCur,
+                  slot.durabilityMax);
+    };
+    logSlot("K", slots[static_cast<size_t>(SwordSlotKey::Kokiri)]);
+    logSlot("M", slots[static_cast<size_t>(SwordSlotKey::Master)]);
+    logSlot("B", slots[static_cast<size_t>(SwordSlotKey::Biggoron)]);
+}
+
 static void SaveFuseWeaponSection(SaveContext* saveContext, int /*sectionID*/, bool /*fullSave*/) {
     (void)saveContext;
 
@@ -48,6 +86,7 @@ static void SaveFuseWeaponSection(SaveContext* saveContext, int /*sectionID*/, b
     }
 
     const FuseSwordSaveState state = FusePersistence::BuildRuntimeSwordState();
+    LogSwordSlots("Write", SnapshotSwordSlots(), Fuse::GetSaveDataVersion());
     FusePersistence::SaveSwordStateToManager(*SaveManager::Instance, state);
 }
 
@@ -73,8 +112,15 @@ static void SaveFuseDebugOverridesSection(SaveContext* /*saveContext*/, int /*se
 }
 
 static void LoadFuseWeaponSection() {
-    const FuseSwordSaveState state = FusePersistence::LoadSwordStateFromManager(*SaveManager::Instance);
+    FuseSwordSaveState state{};
+    std::string failReason;
+    if (!FusePersistence::LoadSwordStateFromManager(*SaveManager::Instance, state, &failReason)) {
+        Fuse::Log("[FuseSave] Read FAIL reason=%s\n", failReason.empty() ? "unknown" : failReason.c_str());
+        return;
+    }
+
     FusePersistence::WriteSwordStateToContext(state);
+    LogSwordSlots("Read OK", BuildSlotsWithReadState(state), Fuse::GetSaveDataVersion());
 }
 
 static void LoadFuseMaterialsSection() {

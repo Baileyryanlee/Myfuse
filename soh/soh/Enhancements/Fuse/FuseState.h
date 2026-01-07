@@ -1,6 +1,7 @@
 #pragma once
 #include <array>
 #include <cstdint>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -94,7 +95,7 @@ void WriteSwordStateToContext(const FuseSwordSaveState& state);
 void ApplySwordStateFromContext(const PlayState* play);
 
 // SaveManager helpers
-FuseSwordSaveState LoadSwordStateFromManager(SaveManager& manager);
+bool LoadSwordStateFromManager(SaveManager& manager, FuseSwordSaveState& outState, std::string* failReason);
 void SaveSwordStateToManager(SaveManager& manager, const FuseSwordSaveState& state);
 std::vector<std::pair<MaterialId, uint16_t>> LoadMaterialInventoryFromManager(SaveManager& manager);
 void SaveMaterialInventoryToManager(

@@ -76,6 +76,10 @@ static void ResetSavedSwordFuseFields() {
     FusePersistence::WriteSwordStateToContext(FusePersistence::ClearedSwordState());
 }
 
+static void LogResetFuseState(const char* reason) {
+    Fuse::Log("[FuseSave] ResetFuseState reason=%s\n", reason ? reason : "unknown");
+}
+
 // -----------------------------------------------------------------------------
 // Modifier helpers (module-local)
 // -----------------------------------------------------------------------------
@@ -365,9 +369,10 @@ void Fuse::Log(const char* fmt, ...) {
 // -----------------------------------------------------------------------------
 // Save synchronization helpers (equipped sword only)
 // -----------------------------------------------------------------------------
-void Fuse_ClearSavedSwordFuse(const PlayState* play) {
+void Fuse_ClearSavedSwordFuse(const PlayState* play, const char* reason) {
     (void)play;
 
+    LogResetFuseState(reason);
     ResetSavedSwordFuseFields();
     Fuse::ClearSwordFuse();
     gFuseRuntime.swordFuseLoadedFromSave = false;
@@ -385,6 +390,7 @@ void Fuse_ApplySavedSwordFuse(const PlayState* play, s16 savedMaterial, s16 save
     (void)play;
 
     if (savedMaterial == FusePersistence::kSwordMaterialIdNone) {
+        LogResetFuseState("SavedMaterialNone");
         Fuse::ClearSwordFuse();
         return;
     }
@@ -393,7 +399,7 @@ void Fuse_ApplySavedSwordFuse(const PlayState* play, s16 savedMaterial, s16 save
     const MaterialDef* def = Fuse::GetMaterialDef(materialId);
 
     if (!def) {
-        Fuse_ClearSavedSwordFuse(play);
+        Fuse_ClearSavedSwordFuse(play, "InvalidMaterialDef");
         return;
     }
 
@@ -403,7 +409,7 @@ void Fuse_ApplySavedSwordFuse(const PlayState* play, s16 savedMaterial, s16 save
     }
 
     if (maxDurability <= 0) {
-        Fuse_ClearSavedSwordFuse(play);
+        Fuse_ClearSavedSwordFuse(play, "InvalidMaxDurability");
         return;
     }
 
@@ -417,7 +423,7 @@ void Fuse_ApplySavedSwordFuse(const PlayState* play, s16 savedMaterial, s16 save
     }
 
     if (targetCur == 0) {
-        Fuse_ClearSavedSwordFuse(play);
+        Fuse_ClearSavedSwordFuse(play, "InvalidTargetCur");
         return;
     }
 
@@ -733,6 +739,14 @@ MaterialId Fuse::GetSwordMaterial() {
     return slot.materialId;
 }
 
+const SwordFuseSlot& Fuse::GetSwordSlot(SwordSlotKey key) {
+    return gFuseSave.GetSwordSlot(key);
+}
+
+uint32_t Fuse::GetSaveDataVersion() {
+    return gFuseSave.version;
+}
+
 // -----------------------------------------------------------------------------
 // Durability (v0: only Sword+Rock)
 // -----------------------------------------------------------------------------
@@ -851,7 +865,7 @@ Fuse::FuseResult Fuse::TryUnfuseSword() {
         return FuseResult::Ok;
     }
 
-    Fuse_ClearSavedSwordFuse(nullptr);
+    Fuse_ClearSavedSwordFuse(nullptr, "ManualUnfuse");
     return FuseResult::Ok;
 }
 
@@ -867,7 +881,7 @@ bool Fuse::DamageSwordFuseDurability(PlayState* play, int amount, const char* re
     SetSwordFuseDurability(cur);
 
     if (cur == 0) {
-        Fuse_ClearSavedSwordFuse(play);
+        Fuse_ClearSavedSwordFuse(play, "FuseBroken");
         const int frame = play ? play->gameplayFrames : -1;
         Log("[FuseMVP] Sword fuse broke at frame=%d; clearing fuse and reverting to vanilla (reason=%s)\n", frame,
             reason ? reason : "unknown");
@@ -911,6 +925,7 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
 
     EnsureMaterialInventoryInitialized();
 
+    LogResetFuseState("OnLoadGame");
     gFuseSave = FuseSaveData{};
     FusePersistence::ApplySwordStateFromContext(nullptr);
 

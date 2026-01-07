@@ -193,7 +193,7 @@ void ApplySwordStateFromContext(const PlayState* play) {
     FuseSwordSaveState state = ReadSwordStateFromContext();
 
     if (!state.isFused) {
-        Fuse_ClearSavedSwordFuse(play);
+        Fuse_ClearSavedSwordFuse(play, "ApplySwordStateUnfused");
         return;
     }
 
@@ -202,15 +202,37 @@ void ApplySwordStateFromContext(const PlayState* play) {
                              static_cast<s16>(state.legacyDurability));
 }
 
-FuseSwordSaveState LoadSwordStateFromManager(SaveManager& manager) {
+bool LoadSwordStateFromManager(SaveManager& manager, FuseSwordSaveState& outState, std::string* failReason) {
+    if (!manager.HasKey(kSwordSaveSectionName)) {
+        if (failReason) {
+            *failReason = "missing key";
+        }
+        return false;
+    }
+
     FuseSwordSaveState state = ClearedSwordState();
     int materialId = kSwordMaterialIdNone;
     int curDurability = -999;
+    bool hasMaterialKey = false;
+    bool hasDurabilityKey = false;
 
     manager.LoadStruct(kSwordSaveSectionName, [&]() {
-        manager.LoadData(kSwordMaterialKey, materialId, static_cast<int>(kSwordMaterialIdNone));
-        manager.LoadData(kSwordDurabilityKey, curDurability, -999);
+        hasMaterialKey = manager.HasKey(kSwordMaterialKey);
+        hasDurabilityKey = manager.HasKey(kSwordDurabilityKey);
+        if (hasMaterialKey) {
+            manager.LoadData(kSwordMaterialKey, materialId, static_cast<int>(kSwordMaterialIdNone));
+        }
+        if (hasDurabilityKey) {
+            manager.LoadData(kSwordDurabilityKey, curDurability, -999);
+        }
     });
+
+    if (!hasMaterialKey || !hasDurabilityKey) {
+        if (failReason) {
+            *failReason = "missing key";
+        }
+        return false;
+    }
 
     state.isFused = !IsNoneMaterialId(materialId);
     state.materialId = state.isFused ? static_cast<MaterialId>(materialId) : MaterialId::None;
@@ -220,7 +242,8 @@ FuseSwordSaveState LoadSwordStateFromManager(SaveManager& manager) {
 
     NormalizeState(state);
     LogPersistenceEvent("Load", state);
-    return state;
+    outState = state;
+    return true;
 }
 
 void SaveSwordStateToManager(SaveManager& manager, const FuseSwordSaveState& state) {

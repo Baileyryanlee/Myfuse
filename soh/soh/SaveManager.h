@@ -146,6 +146,7 @@ class SaveManager {
 
     using LoadStructFunc = std::function<void()>;
     void LoadStruct(const std::string& name, LoadStructFunc func);
+    bool HasKey(const std::string& name) const;
 
     static const int MaxFiles = 3;
     std::array<SaveFileMetaInfo, MaxFiles> fileMetaInfo;
