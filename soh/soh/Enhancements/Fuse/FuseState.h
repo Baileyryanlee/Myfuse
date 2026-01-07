@@ -25,6 +25,8 @@ struct SwordFuseSlot {
     void ResetToUnfused();
 };
 
+using FuseSlot = SwordFuseSlot;
+
 // Centralized representation of the save data for the currently equipped sword.
 // Invariants:
 // * `isFused` determines whether the remaining fields are meaningful; when false, the sword is unfused and
@@ -66,9 +68,14 @@ struct FuseSaveData {
 struct FuseRuntimeState {
     bool enabled = true;
     bool swordFuseLoadedFromSave = false;
+    FuseSlot boomerangSlot{};
 
     // Useful for debugging/testing
     const char* lastEvent = "None";
+
+    FuseSlot& GetBoomerangSlot();
+    const FuseSlot& GetBoomerangSlot() const;
+    FuseSlot& GetActiveBoomerangSlot(const PlayState* play);
 };
 
 namespace FusePersistence {
