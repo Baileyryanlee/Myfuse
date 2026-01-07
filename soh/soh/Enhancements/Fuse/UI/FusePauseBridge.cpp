@@ -210,12 +210,19 @@ enum class FusePromptType {
     AlreadyFused,
 };
 
+enum class FusePauseItem {
+    None,
+    Sword,
+    Boomerang,
+};
+
 struct FuseModalState {
     bool open = false;
     int cursor = 0;
     int scroll = 0;
     FuseUiState uiState = FuseUiState::Browse;
     bool isLocked = false;
+    FusePauseItem activeItem = FusePauseItem::None;
     MaterialId highlightedMaterialId = MaterialId::None;
     MaterialId previewMaterialId = MaterialId::None;
     MaterialId confirmedMaterialId = MaterialId::None;
@@ -243,6 +250,52 @@ static const char* SwordNameFromEquip(EquipValueSword sword) {
             return "Biggoron Sword";
         default:
             return "Selected Sword";
+    }
+}
+
+static const char* PauseItemName(FusePauseItem item, EquipValueSword sword) {
+    switch (item) {
+        case FusePauseItem::Sword:
+            return SwordNameFromEquip(sword);
+        case FusePauseItem::Boomerang:
+            return "Boomerang";
+        case FusePauseItem::None:
+        default:
+            return "Selected Item";
+    }
+}
+
+static FuseWeaponView WeaponViewForPauseItem(FusePauseItem item, PlayState* play) {
+    switch (item) {
+        case FusePauseItem::Sword:
+            return Fuse_GetEquippedSwordView(play);
+        case FusePauseItem::Boomerang: {
+            FuseWeaponView view;
+            view.isFused = Fuse::IsBoomerangFused();
+            view.curDurability = Fuse::GetBoomerangFuseDurability();
+            view.maxDurability = Fuse::GetBoomerangFuseMaxDurability();
+            view.materialId = Fuse::GetBoomerangMaterial();
+            return view;
+        }
+        case FusePauseItem::None:
+        default:
+            return {};
+    }
+}
+
+static bool IsPausePageForItem(const PauseContext* pauseCtx, FusePauseItem item) {
+    if (pauseCtx == nullptr) {
+        return false;
+    }
+
+    switch (item) {
+        case FusePauseItem::Sword:
+            return pauseCtx->pageIndex == PAUSE_EQUIP;
+        case FusePauseItem::Boomerang:
+            return pauseCtx->pageIndex == PAUSE_ITEM;
+        case FusePauseItem::None:
+        default:
+            return false;
     }
 }
 
@@ -362,9 +415,12 @@ struct FusePromptContext {
     bool isEquipmentGridCell = false;
     bool isSwordRow = false;
     bool isOwnedEquip = false;
+    bool isItemsPage = false;
+    bool isBoomerangItem = false;
     EquipValueSword hoveredSword = EQUIP_VALUE_SWORD_NONE;
     EquipValueSword equippedSword = EQUIP_VALUE_SWORD_NONE;
     bool isSwordAlreadyEquippedSlot = false;
+    FusePauseItem activeItem = FusePauseItem::None;
     bool shouldShowFusePrompt = false;
 };
 
@@ -379,6 +435,7 @@ FusePromptContext BuildPromptContext(PlayState* play) {
 
     context.isPauseOpen = pauseCtx->state == 6;
     context.isEquipmentPage = pauseCtx->pageIndex == PAUSE_EQUIP;
+    context.isItemsPage = pauseCtx->pageIndex == PAUSE_ITEM;
     context.isEquipmentGridCell = pauseCtx->cursorX[PAUSE_EQUIP] != 0;
     context.isSwordRow = context.isEquipmentGridCell && pauseCtx->cursorY[PAUSE_EQUIP] == 0;
     context.isOwnedEquip =
@@ -387,8 +444,14 @@ FusePromptContext BuildPromptContext(PlayState* play) {
     context.equippedSword = static_cast<EquipValueSword>(CUR_EQUIP_VALUE(EQUIP_TYPE_SWORD));
     context.isSwordAlreadyEquippedSlot = (context.hoveredSword != EQUIP_VALUE_SWORD_NONE) &&
                                          (context.equippedSword == context.hoveredSword);
-    context.shouldShowFusePrompt = context.isPauseOpen && context.isEquipmentPage && context.isSwordRow && context.isOwnedEquip &&
-                                  (context.hoveredSword != EQUIP_VALUE_SWORD_NONE) && context.isSwordAlreadyEquippedSlot;
+    context.isBoomerangItem = context.isItemsPage && pauseCtx->cursorItem[PAUSE_ITEM] == ITEM_BOOMERANG;
+
+    const bool swordEligible = context.isPauseOpen && context.isEquipmentPage && context.isSwordRow && context.isOwnedEquip &&
+                               (context.hoveredSword != EQUIP_VALUE_SWORD_NONE) && context.isSwordAlreadyEquippedSlot;
+    const bool boomerangEligible = context.isPauseOpen && context.isItemsPage && context.isBoomerangItem;
+
+    context.activeItem = swordEligible ? FusePauseItem::Sword : (boomerangEligible ? FusePauseItem::Boomerang : FusePauseItem::None);
+    context.shouldShowFusePrompt = swordEligible || boomerangEligible;
 
     return context;
 }
@@ -421,12 +484,13 @@ void FusePause_UpdateModal(PlayState* play) {
 
     if (!sModal.open) {
         if (context.shouldShowFusePrompt && fusePressed) {
-            const FuseWeaponView weaponView = Fuse_GetEquippedSwordView(play);
+            const FuseWeaponView weaponView = WeaponViewForPauseItem(context.activeItem, play);
 
             sModal.open = true;
             sModal.cursor = 0;
             sModal.scroll = 0;
             sModal.isLocked = weaponView.isFused;
+            sModal.activeItem = context.activeItem;
             sModal.confirmedMaterialId = weaponView.materialId;
             sModal.highlightedMaterialId = MaterialId::None;
             sModal.previewMaterialId = MaterialId::None;
@@ -434,8 +498,9 @@ void FusePause_UpdateModal(PlayState* play) {
             sModal.promptTimer = 0;
             SetUiState(sModal.isLocked ? FuseUiState::Locked : FuseUiState::Browse);
 
-            Fuse::Log("[FuseDBG] UI:Open item=%d confirmedMat=%d locked=%d\n", static_cast<int>(context.hoveredSword),
-                      static_cast<int>(weaponView.materialId), sModal.isLocked ? 1 : 0);
+            Fuse::Log("[FuseDBG] UI:Open item=%s confirmedMat=%d locked=%d\n",
+                      PauseItemName(sModal.activeItem, context.hoveredSword), static_cast<int>(weaponView.materialId),
+                      sModal.isLocked ? 1 : 0);
 
             input->press.button &= ~BTN_L;
         }
@@ -443,7 +508,7 @@ void FusePause_UpdateModal(PlayState* play) {
         return;
     }
 
-    if (pauseCtx->pageIndex != PAUSE_EQUIP) {
+    if (!IsPausePageForItem(pauseCtx, sModal.activeItem)) {
         sModal.open = false;
         return;
     }
@@ -508,11 +573,14 @@ void FusePause_UpdateModal(PlayState* play) {
         } else if (sModal.uiState != FuseUiState::Confirm) {
             SetUiState(FuseUiState::Confirm);
         } else {
-            const Fuse::FuseResult result = Fuse::TryFuseSword(sModal.previewMaterialId);
+            const Fuse::FuseResult result =
+                (sModal.activeItem == FusePauseItem::Boomerang) ? Fuse::TryFuseBoomerang(sModal.previewMaterialId)
+                                                                : Fuse::TryFuseSword(sModal.previewMaterialId);
             const bool success = result == Fuse::FuseResult::Ok;
 
-            Fuse::Log("[FuseDBG] UI:Confirm item=%d mat=%d result=%d\n", static_cast<int>(context.hoveredSword),
-                      static_cast<int>(sModal.previewMaterialId), success ? 1 : 0);
+            Fuse::Log("[FuseDBG] UI:Confirm item=%s mat=%d result=%d\n",
+                      PauseItemName(sModal.activeItem, context.hoveredSword), static_cast<int>(sModal.previewMaterialId),
+                      success ? 1 : 0);
 
             if (success) {
                 sModal.isLocked = true;
@@ -616,7 +684,6 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
 
     FusePromptContext context = BuildPromptContext(play);
     const bool isPauseOpen = context.isPauseOpen;
-    const bool isEquipmentPage = context.isEquipmentPage;
 
     if (!isPauseOpen) {
         sModal.open = false;
@@ -632,7 +699,7 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         return;
     }
 
-    if (!isEquipmentPage) {
+    if (!IsPausePageForItem(pauseCtx, sModal.activeItem)) {
         sModal.open = false;
         return;
     }
@@ -657,7 +724,7 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     const int entryCount = static_cast<int>(materials.size());
     const s32 modalYOffsetPx = kFuseModalYOffset * 8;
     const bool durabilityBarEnabled = IsDurabilityBarEnabled();
-    const FuseWeaponView weaponView = Fuse_GetEquippedSwordView(play);
+    const FuseWeaponView weaponView = WeaponViewForPauseItem(sModal.activeItem, play);
 
     gDPPipeSync(OPA++);
     gDPSetScissor(OPA++, G_SC_NON_INTERLACE, 0, 0, 320, 240);
@@ -825,7 +892,7 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         }
     }
 
-    const char* selectedItemName = SwordNameFromEquip(context.hoveredSword);
+    const char* selectedItemName = PauseItemName(sModal.activeItem, context.hoveredSword);
 
     const MaterialEntry* highlightedEntry = nullptr;
     if (entryCount > 0 && sModal.cursor >= 0 && sModal.cursor < entryCount) {
