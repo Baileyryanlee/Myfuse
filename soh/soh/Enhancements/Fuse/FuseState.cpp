@@ -114,9 +114,12 @@ const SwordFuseSlot& FuseSaveData::GetSwordSlot(SwordSlotKey key) const {
 }
 
 SwordFuseSlot& FuseSaveData::GetActiveSwordSlot([[maybe_unused]] const PlayState* play) {
-    // Step 2 will route this properly using EquipValueSword
-    // For now, return Kokiri by default to avoid behavior changes
-    return this->swordSlots[static_cast<size_t>(SwordSlotKey::Kokiri)];
+    const int32_t equipValue =
+        (static_cast<int32_t>(gSaveContext.equips.equipment & gEquipMasks[EQUIP_TYPE_SWORD]) >>
+         gEquipShifts[EQUIP_TYPE_SWORD]);
+    const SwordSlotKey key = IsSwordEquipValue(equipValue) ? SwordSlotKeyFromEquipValue(equipValue)
+                                                           : SwordSlotKey::Kokiri;
+    return this->swordSlots[static_cast<size_t>(key)];
 }
 
 namespace FusePersistence {
