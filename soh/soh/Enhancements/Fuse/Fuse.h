@@ -82,6 +82,12 @@ void FuseSwordWithMaterial(MaterialId id, uint16_t maxDurability, bool initializ
 enum class FuseResult { Ok, NotEnoughMaterial, InvalidMaterial, AlreadyFused, NotAllowed };
 FuseResult TryFuseSword(MaterialId id);
 FuseResult TryUnfuseSword();
+bool IsBoomerangFused();
+MaterialId GetBoomerangMaterial();
+void FuseBoomerangWithMaterial(MaterialId id, uint16_t maxDurability, bool initializeCurrentDurability = true,
+                               bool logDurability = true);
+FuseResult TryFuseBoomerang(MaterialId id);
+FuseResult TryUnfuseBoomerang();
 
 // MVP: award rock and (optionally) auto-fuse to sword (runtime for now)
 void AwardRockMaterial();
@@ -94,6 +100,13 @@ void SetSwordFuseMaxDurability(int v);
 bool DamageSwordFuseDurability(PlayState* play, int amount, const char* reason);
 void ClearSwordFuse();
 void OnSwordFuseBroken(PlayState* play);
+int GetBoomerangFuseDurability();
+int GetBoomerangFuseMaxDurability();
+void SetBoomerangFuseDurability(int v);
+void SetBoomerangFuseMaxDurability(int v);
+bool DamageBoomerangFuseDurability(PlayState* play, int amount, const char* reason);
+void ClearBoomerangFuse();
+void OnBoomerangFuseBroken(PlayState* play);
 
 // Debug/testing (safe no-op in shipping later)
 const char* GetLastEvent();

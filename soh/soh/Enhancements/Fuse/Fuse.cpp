@@ -729,8 +729,18 @@ bool Fuse::IsSwordFused() {
     return slot.materialId != MaterialId::None && slot.durabilityCur > 0;
 }
 
+bool Fuse::IsBoomerangFused() {
+    const FuseSlot& slot = gFuseRuntime.GetActiveBoomerangSlot(nullptr);
+    return slot.materialId != MaterialId::None && slot.durabilityCur > 0;
+}
+
 MaterialId Fuse::GetSwordMaterial() {
     const SwordFuseSlot& slot = gFuseSave.GetActiveSwordSlot(nullptr);
+    return slot.materialId;
+}
+
+MaterialId Fuse::GetBoomerangMaterial() {
+    const FuseSlot& slot = gFuseRuntime.GetActiveBoomerangSlot(nullptr);
     return slot.materialId;
 }
 
@@ -744,6 +754,16 @@ int Fuse::GetSwordFuseDurability() {
 
 int Fuse::GetSwordFuseMaxDurability() {
     const SwordFuseSlot& slot = gFuseSave.GetActiveSwordSlot(nullptr);
+    return slot.durabilityMax;
+}
+
+int Fuse::GetBoomerangFuseDurability() {
+    const FuseSlot& slot = gFuseRuntime.GetActiveBoomerangSlot(nullptr);
+    return slot.durabilityCur;
+}
+
+int Fuse::GetBoomerangFuseMaxDurability() {
+    const FuseSlot& slot = gFuseRuntime.GetActiveBoomerangSlot(nullptr);
     return slot.durabilityMax;
 }
 
@@ -794,10 +814,27 @@ void Fuse::SetSwordFuseMaxDurability(int v) {
     slot.durabilityMax = v;
 }
 
+void Fuse::SetBoomerangFuseDurability(int v) {
+    v = std::clamp(v, 0, 65535);
+    FuseSlot& slot = gFuseRuntime.GetActiveBoomerangSlot(nullptr);
+    slot.durabilityCur = v;
+}
+
+void Fuse::SetBoomerangFuseMaxDurability(int v) {
+    v = std::clamp(v, 0, 65535);
+    FuseSlot& slot = gFuseRuntime.GetActiveBoomerangSlot(nullptr);
+    slot.durabilityMax = v;
+}
+
 void Fuse::ClearSwordFuse() {
     SwordFuseSlot& slot = gFuseSave.GetActiveSwordSlot(nullptr);
     slot.ResetToUnfused();
     gFuseRuntime.swordFuseLoadedFromSave = false;
+}
+
+void Fuse::ClearBoomerangFuse() {
+    FuseSlot& slot = gFuseRuntime.GetActiveBoomerangSlot(nullptr);
+    slot.ResetToUnfused();
 }
 
 void Fuse::FuseSwordWithMaterial(MaterialId id, uint16_t maxDurability, bool initializeCurrentDurability,
@@ -825,6 +862,31 @@ void Fuse::FuseSwordWithMaterial(MaterialId id, uint16_t maxDurability, bool ini
 
     if (logDurability) {
         Fuse::Log("[FuseMVP] Sword fused with material=%d (durability %u/%u)\n", static_cast<int>(id),
+                  static_cast<unsigned int>(slot.durabilityCur), static_cast<unsigned int>(maxDurability));
+    }
+}
+
+void Fuse::FuseBoomerangWithMaterial(MaterialId id, uint16_t maxDurability, bool initializeCurrentDurability,
+                                     bool logDurability) {
+    FuseSlot& slot = gFuseRuntime.GetActiveBoomerangSlot(nullptr);
+    slot.materialId = id;
+    slot.durabilityMax = maxDurability;
+
+    if (initializeCurrentDurability) {
+        slot.durabilityCur = maxDurability;
+    } else {
+        slot.durabilityCur = std::clamp<int>(slot.durabilityCur, 0, maxDurability);
+    }
+
+    const MaterialDef* def = Fuse::GetMaterialDef(id);
+    if (def) {
+        Fuse::SetLastEvent(def->name);
+    } else {
+        Fuse::SetLastEvent("Boomerang fused with material");
+    }
+
+    if (logDurability) {
+        Fuse::Log("[FuseMVP] Boomerang fused with material=%d (durability %u/%u)\n", static_cast<int>(id),
                   static_cast<unsigned int>(slot.durabilityCur), static_cast<unsigned int>(maxDurability));
     }
 }
@@ -863,12 +925,48 @@ Fuse::FuseResult Fuse::TryFuseSword(MaterialId id) {
     return FuseResult::Ok;
 }
 
+Fuse::FuseResult Fuse::TryFuseBoomerang(MaterialId id) {
+    if (id == MaterialId::None) {
+        return FuseResult::NotAllowed;
+    }
+
+    if (Fuse::IsBoomerangFused()) {
+        return FuseResult::AlreadyFused;
+    }
+
+    if (!Fuse::HasMaterial(id, 1)) {
+        return FuseResult::NotEnoughMaterial;
+    }
+
+    const MaterialDef* def = Fuse::GetMaterialDef(id);
+    if (!def) {
+        return FuseResult::InvalidMaterial;
+    }
+
+    if (!Fuse::ConsumeMaterial(id, 1)) {
+        return FuseResult::NotEnoughMaterial;
+    }
+
+    Fuse::FuseBoomerangWithMaterial(id, Fuse::GetMaterialEffectiveBaseDurability(id));
+
+    return FuseResult::Ok;
+}
+
 Fuse::FuseResult Fuse::TryUnfuseSword() {
     if (!Fuse::IsSwordFused()) {
         return FuseResult::Ok;
     }
 
     Fuse_ClearSavedSwordFuse(nullptr);
+    return FuseResult::Ok;
+}
+
+Fuse::FuseResult Fuse::TryUnfuseBoomerang() {
+    if (!Fuse::IsBoomerangFused()) {
+        return FuseResult::Ok;
+    }
+
+    Fuse::ClearBoomerangFuse();
     return FuseResult::Ok;
 }
 
@@ -895,9 +993,37 @@ bool Fuse::DamageSwordFuseDurability(PlayState* play, int amount, const char* re
     return false;
 }
 
+bool Fuse::DamageBoomerangFuseDurability(PlayState* play, int amount, const char* reason) {
+    amount = std::max(amount, 0);
+
+    if (!Fuse::IsBoomerangFused()) {
+        return false;
+    }
+
+    int cur = GetBoomerangFuseDurability();
+    cur = std::max(0, cur - amount);
+    SetBoomerangFuseDurability(cur);
+
+    if (cur == 0) {
+        const int frame = play ? play->gameplayFrames : -1;
+        Log("[FuseMVP] Boomerang fuse broke at frame=%d; clearing fuse (reason=%s)\n", frame,
+            reason ? reason : "unknown");
+        OnBoomerangFuseBroken(play);
+        return true;
+    }
+
+    return false;
+}
+
 void Fuse::OnSwordFuseBroken(PlayState* play) {
     SetLastEvent("Sword fuse broke");
     FuseHooks::RestoreSwordHitboxVanillaNow(play);
+}
+
+void Fuse::OnBoomerangFuseBroken(PlayState* play) {
+    (void)play;
+    SetLastEvent("Boomerang fuse broke");
+    ClearBoomerangFuse();
 }
 
 // -----------------------------------------------------------------------------
