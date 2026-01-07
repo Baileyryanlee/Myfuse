@@ -113,10 +113,10 @@ const SwordFuseSlot& FuseSaveData::GetSwordSlot(SwordSlotKey key) const {
     return swordSlots[static_cast<size_t>(key)];
 }
 
-SwordFuseSlot& FuseSaveData::GetActiveSwordSlot(const PlayState* play) {
-    const int32_t equipValue =
-        play ? static_cast<int32_t>(CUR_EQUIP_VALUE(EQUIP_TYPE_SWORD)) : static_cast<int32_t>(EQUIP_VALUE_SWORD_KOKIRI);
-    return GetSwordSlot(SwordSlotKeyFromEquipValue(equipValue));
+SwordFuseSlot& FuseState::GetActiveSwordSlot([[maybe_unused]] const PlayState* play) {
+    // Step 2 will route this properly using EquipValueSword
+    // For now, return Kokiri by default to avoid behavior changes
+    return swordSlots[static_cast<size_t>(SwordSlotKey::Kokiri)];
 }
 
 namespace FusePersistence {
@@ -155,8 +155,8 @@ FuseSwordSaveState ReadSwordStateFromContext() {
     state.materialId = state.isFused ? static_cast<MaterialId>(rawMat) : MaterialId::None;
     state.durabilityMax = gSaveContext.ship.fuseSwordMaxDur;
     state.hasExplicitCur = gSaveContext.ship.fuseSwordCurDurabilityPresent;
-    state.durabilityCur = state.hasExplicitCur ? gSaveContext.ship.fuseSwordCurrentDurability
-                                               : gSaveContext.ship.fuseSwordCurDur;
+    state.durabilityCur =
+        state.hasExplicitCur ? gSaveContext.ship.fuseSwordCurrentDurability : gSaveContext.ship.fuseSwordCurDur;
     state.legacyDurability = gSaveContext.ship.fuseSwordCurDur;
 
     NormalizeState(state);
@@ -177,12 +177,12 @@ void WriteSwordStateToContext(const FuseSwordSaveState& state) {
     }
 
     gSaveContext.ship.fuseSwordMaterialId = static_cast<s16>(normalizedState.materialId);
-    gSaveContext.ship.fuseSwordCurDur = static_cast<s16>(std::clamp(
-        normalizedState.legacyDurability, 0, static_cast<int>(std::numeric_limits<int16_t>::max())));
-    gSaveContext.ship.fuseSwordMaxDur = static_cast<s16>(std::clamp(
-        normalizedState.durabilityMax, 0, static_cast<int>(std::numeric_limits<int16_t>::max())));
-    gSaveContext.ship.fuseSwordCurrentDurability = static_cast<uint16_t>(std::clamp(
-        normalizedState.durabilityCur, 0, static_cast<int>(std::numeric_limits<uint16_t>::max())));
+    gSaveContext.ship.fuseSwordCurDur = static_cast<s16>(
+        std::clamp(normalizedState.legacyDurability, 0, static_cast<int>(std::numeric_limits<int16_t>::max())));
+    gSaveContext.ship.fuseSwordMaxDur = static_cast<s16>(
+        std::clamp(normalizedState.durabilityMax, 0, static_cast<int>(std::numeric_limits<int16_t>::max())));
+    gSaveContext.ship.fuseSwordCurrentDurability = static_cast<uint16_t>(
+        std::clamp(normalizedState.durabilityCur, 0, static_cast<int>(std::numeric_limits<uint16_t>::max())));
     gSaveContext.ship.fuseSwordCurDurabilityPresent = normalizedState.hasExplicitCur;
 }
 
@@ -227,7 +227,8 @@ void SaveSwordStateToManager(SaveManager& manager, const FuseSwordSaveState& sta
         return copy;
     }();
 
-    const int materialId = normalizedState.isFused ? static_cast<int>(normalizedState.materialId) : kSwordMaterialIdNone;
+    const int materialId =
+        normalizedState.isFused ? static_cast<int>(normalizedState.materialId) : kSwordMaterialIdNone;
     const int durabilityCur = normalizedState.isFused ? normalizedState.durabilityCur : 0;
 
     manager.SaveStruct(kSwordSaveSectionName, [&]() {
