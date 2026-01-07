@@ -74,7 +74,14 @@ struct FuseRuntimeState {
 namespace FusePersistence {
 
 constexpr s16 kSwordMaterialIdNone = static_cast<s16>(MaterialId::None);
+constexpr uint32_t kSwordSaveVersion = 2;
+constexpr size_t kSwordSlotCount = 3;
 constexpr const char* kSwordSaveSectionName = "enhancements.fuse";
+constexpr const char* kSwordSaveVersionKey = "version";
+constexpr const char* kSwordSlotsKey = "slots";
+constexpr const char* kSwordSlotMaterialKey = "matId";
+constexpr const char* kSwordSlotDurabilityCurKey = "curDurability";
+constexpr const char* kSwordSlotDurabilityMaxKey = "maxDurability";
 constexpr const char* kSwordMaterialKey = "matId";
 constexpr const char* kSwordDurabilityKey = "curDurability";
 
@@ -86,6 +93,12 @@ constexpr const char* kMaterialArrayKey = "materials";
 constexpr const char* kMaterialEntryIdKey = "id";
 constexpr const char* kMaterialEntryQtyKey = "qty";
 
+struct FuseSwordSlotsSaveState {
+    uint32_t version = kSwordSaveVersion;
+    std::array<SwordFuseSlot, kSwordSlotCount> swordSlots{};
+    bool migratedFromLegacy = false;
+};
+
 // Core helpers
 FuseSwordSaveState ClearedSwordState();
 FuseSwordSaveState BuildRuntimeSwordState();
@@ -94,8 +107,8 @@ void WriteSwordStateToContext(const FuseSwordSaveState& state);
 void ApplySwordStateFromContext(const PlayState* play);
 
 // SaveManager helpers
-FuseSwordSaveState LoadSwordStateFromManager(SaveManager& manager);
-void SaveSwordStateToManager(SaveManager& manager, const FuseSwordSaveState& state);
+FuseSwordSlotsSaveState LoadSwordSlotsFromManager(SaveManager& manager);
+void SaveSwordSlotsToManager(SaveManager& manager, const std::array<SwordFuseSlot, kSwordSlotCount>& slots);
 std::vector<std::pair<MaterialId, uint16_t>> LoadMaterialInventoryFromManager(SaveManager& manager);
 void SaveMaterialInventoryToManager(
     SaveManager& manager, const std::vector<std::pair<MaterialId, uint16_t>>& inventoryEntries);

@@ -32,6 +32,7 @@ using Fuse::MaterialDebugOverride;
 // -----------------------------------------------------------------------------
 static FuseSaveData gFuseSave; // persistent-ready (not serialized yet)
 static FuseRuntimeState gFuseRuntime;
+static bool sSwordSlotsLoadedFromSaveManager = false;
 static std::unordered_map<MaterialId, uint16_t> sMaterialInventory;
 static bool sMaterialInventoryInitialized = false;
 static constexpr size_t kSwordFreezeQueueCount = 2;
@@ -746,6 +747,22 @@ int Fuse::GetSwordFuseMaxDurability() {
     return slot.durabilityMax;
 }
 
+std::array<SwordFuseSlot, FusePersistence::kSwordSlotCount> Fuse::GetSwordSlots() {
+    return gFuseSave.swordSlots;
+}
+
+void Fuse::ApplyLoadedSwordSlots(const std::array<SwordFuseSlot, FusePersistence::kSwordSlotCount>& slots) {
+    gFuseSave.swordSlots = slots;
+    gFuseSave.version = FusePersistence::kSwordSaveVersion;
+    sSwordSlotsLoadedFromSaveManager = true;
+    const SwordFuseSlot& slot = gFuseSave.GetActiveSwordSlot(nullptr);
+    gFuseRuntime.swordFuseLoadedFromSave = slot.materialId != MaterialId::None;
+}
+
+bool Fuse::HasLoadedSwordSlots() {
+    return sSwordSlotsLoadedFromSaveManager;
+}
+
 FuseWeaponView Fuse_GetEquippedSwordView(const PlayState* play) {
     (void)play;
 
@@ -911,8 +928,13 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
 
     EnsureMaterialInventoryInitialized();
 
-    gFuseSave = FuseSaveData{};
-    FusePersistence::ApplySwordStateFromContext(nullptr);
+    if (!sSwordSlotsLoadedFromSaveManager) {
+        gFuseSave = FuseSaveData{};
+        FusePersistence::ApplySwordStateFromContext(nullptr);
+    } else {
+        const SwordFuseSlot& slot = gFuseSave.GetActiveSwordSlot(nullptr);
+        gFuseRuntime.swordFuseLoadedFromSave = slot.materialId != MaterialId::None;
+    }
 
     Fuse::Log("[FuseMVP] Save loaded -> Fuse ACTIVE (always enabled)\n");
     Fuse::Log("[FuseMVP] MVP: Throw a liftable rock until it BREAKS to acquire ROCK.\n");

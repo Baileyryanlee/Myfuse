@@ -47,8 +47,8 @@ static void SaveFuseWeaponSection(SaveContext* saveContext, int /*sectionID*/, b
         return;
     }
 
-    const FuseSwordSaveState state = FusePersistence::BuildRuntimeSwordState();
-    FusePersistence::SaveSwordStateToManager(*SaveManager::Instance, state);
+    const auto slots = Fuse::GetSwordSlots();
+    FusePersistence::SaveSwordSlotsToManager(*SaveManager::Instance, slots);
 }
 
 static void SaveFuseMaterialsSection(SaveContext* /*saveContext*/, int /*sectionID*/, bool /*fullSave*/) {
@@ -73,8 +73,12 @@ static void SaveFuseDebugOverridesSection(SaveContext* /*saveContext*/, int /*se
 }
 
 static void LoadFuseWeaponSection() {
-    const FuseSwordSaveState state = FusePersistence::LoadSwordStateFromManager(*SaveManager::Instance);
-    FusePersistence::WriteSwordStateToContext(state);
+    const FusePersistence::FuseSwordSlotsSaveState state =
+        FusePersistence::LoadSwordSlotsFromManager(*SaveManager::Instance);
+    Fuse::ApplyLoadedSwordSlots(state.swordSlots);
+    if (state.migratedFromLegacy) {
+        FusePersistence::WriteSwordStateToContext(FusePersistence::ClearedSwordState());
+    }
 }
 
 static void LoadFuseMaterialsSection() {

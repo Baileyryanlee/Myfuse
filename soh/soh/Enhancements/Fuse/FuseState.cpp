@@ -33,6 +33,18 @@ void NormalizeState(FuseSwordSaveState& state) {
     }
 }
 
+void NormalizeSlot(SwordFuseSlot& slot) {
+    slot.durabilityCur = std::max(slot.durabilityCur, 0);
+    slot.durabilityMax = std::max(slot.durabilityMax, 0);
+
+    if (slot.materialId == MaterialId::None || slot.durabilityMax <= 0 || slot.durabilityCur <= 0) {
+        slot.ResetToUnfused();
+        return;
+    }
+
+    slot.durabilityCur = std::clamp(slot.durabilityCur, 0, slot.durabilityMax);
+}
+
 bool IsNoneMaterialId(int matId) {
     constexpr int kMaterialIdMin = static_cast<int>(MaterialId::None);
     constexpr int kMaterialIdMax = static_cast<int>(MaterialId::DekuNut);
@@ -44,17 +56,45 @@ bool IsNoneMaterialId(int matId) {
     return matId < kMaterialIdMin || matId > kMaterialIdMax;
 }
 
-void LogPersistenceEvent(const char* prefix, const FuseSwordSaveState& state) {
-    const int material = state.isFused ? static_cast<int>(state.materialId) : FusePersistence::kSwordMaterialIdNone;
-    const int durabilityCur = state.isFused ? state.durabilityCur : 0;
-    const int durabilityMax = state.isFused ? state.durabilityMax : 0;
-    // The persisted save data does not track the equipped sword item ID. Use a sentinel to avoid
-    // misreporting unrelated inventory state in persistence logs.
-    constexpr int kSwordItemIdUnknown = -1;
-    const int swordItemId = kSwordItemIdUnknown;
-
-    Fuse::Log("[FuseDBG] %s: sword=%d material=%d dura=%d/%d\n", prefix, swordItemId, material, durabilityCur,
+void LogSlotPersistenceEvent(const char* prefix, SwordSlotKey slotKey, const SwordFuseSlot& slot) {
+    const int material = static_cast<int>(slot.materialId);
+    const int durabilityCur = slot.durabilityCur;
+    const int durabilityMax = slot.durabilityMax;
+    Fuse::Log("[FuseDBG] %s: slot=%s material=%d dura=%d/%d\n", prefix, SwordSlotName(slotKey), material, durabilityCur,
               durabilityMax);
+}
+
+SwordFuseSlot BuildSlotFromLegacy(int materialId, int curDurability, bool hasCurDurability) {
+    SwordFuseSlot slot{};
+
+    if (IsNoneMaterialId(materialId)) {
+        return slot;
+    }
+
+    const MaterialId material = static_cast<MaterialId>(std::max(0, materialId));
+    const MaterialDef* def = Fuse::GetMaterialDef(material);
+    if (!def) {
+        return slot;
+    }
+
+    int maxDurability = Fuse::GetMaterialEffectiveBaseDurability(material);
+    if (maxDurability <= 0) {
+        return slot;
+    }
+
+    int targetCur = 0;
+    if (hasCurDurability) {
+        targetCur = curDurability;
+    } else {
+        targetCur = maxDurability;
+    }
+
+    slot.materialId = material;
+    slot.durabilityMax = maxDurability;
+    slot.durabilityCur = std::clamp(targetCur, 0, maxDurability);
+
+    NormalizeSlot(slot);
+    return slot;
 }
 
 } // namespace
@@ -202,44 +242,88 @@ void ApplySwordStateFromContext(const PlayState* play) {
                              static_cast<s16>(state.legacyDurability));
 }
 
-FuseSwordSaveState LoadSwordStateFromManager(SaveManager& manager) {
-    FuseSwordSaveState state = ClearedSwordState();
-    int materialId = kSwordMaterialIdNone;
-    int curDurability = -999;
+FuseSwordSlotsSaveState LoadSwordSlotsFromManager(SaveManager& manager) {
+    FuseSwordSlotsSaveState state{};
+    int32_t version = 0;
+    int legacyMaterialId = kSwordMaterialIdNone;
+    constexpr int kLegacyDurabilityMissing = -999;
+    int legacyCurDurability = kLegacyDurabilityMissing;
 
     manager.LoadStruct(kSwordSaveSectionName, [&]() {
-        manager.LoadData(kSwordMaterialKey, materialId, static_cast<int>(kSwordMaterialIdNone));
-        manager.LoadData(kSwordDurabilityKey, curDurability, -999);
+        manager.LoadData(kSwordSaveVersionKey, version, 0);
+        if (version >= static_cast<int32_t>(kSwordSaveVersion)) {
+            manager.LoadArray(kSwordSlotsKey, kSwordSlotCount, [&](size_t i) {
+                int32_t materialId = static_cast<int32_t>(MaterialId::None);
+                int32_t durabilityCur = 0;
+                int32_t durabilityMax = 0;
+
+                manager.LoadStruct("", [&]() {
+                    manager.LoadData(kSwordSlotMaterialKey, materialId, static_cast<int32_t>(MaterialId::None));
+                    manager.LoadData(kSwordSlotDurabilityCurKey, durabilityCur, 0);
+                    manager.LoadData(kSwordSlotDurabilityMaxKey, durabilityMax, 0);
+                });
+
+                SwordFuseSlot slot{};
+                slot.materialId = static_cast<MaterialId>(materialId);
+                slot.durabilityCur = durabilityCur;
+                slot.durabilityMax = durabilityMax;
+                NormalizeSlot(slot);
+                state.swordSlots[i] = slot;
+            });
+        } else {
+            manager.LoadData(kSwordMaterialKey, legacyMaterialId, static_cast<int>(kSwordMaterialIdNone));
+            manager.LoadData(kSwordDurabilityKey, legacyCurDurability, kLegacyDurabilityMissing);
+        }
     });
 
-    state.isFused = !IsNoneMaterialId(materialId);
-    state.materialId = state.isFused ? static_cast<MaterialId>(materialId) : MaterialId::None;
-    state.hasExplicitCur = curDurability != -999;
-    state.durabilityCur = state.hasExplicitCur ? curDurability : 0;
-    state.legacyDurability = 0;
+    if (version >= static_cast<int32_t>(kSwordSaveVersion)) {
+        state.version = static_cast<uint32_t>(version);
+        for (size_t i = 0; i < kSwordSlotCount; ++i) {
+            LogSlotPersistenceEvent("Load", static_cast<SwordSlotKey>(i), state.swordSlots[i]);
+        }
+        return state;
+    }
 
-    NormalizeState(state);
-    LogPersistenceEvent("Load", state);
+    state.migratedFromLegacy = true;
+    const bool hasCurDurability = legacyCurDurability != kLegacyDurabilityMissing;
+    SwordFuseSlot migratedSlot = BuildSlotFromLegacy(legacyMaterialId, legacyCurDurability, hasCurDurability);
+
+    if (migratedSlot.materialId != MaterialId::None) {
+        const int32_t equipValue =
+            (static_cast<int32_t>(gSaveContext.equips.equipment & gEquipMasks[EQUIP_TYPE_SWORD]) >>
+             gEquipShifts[EQUIP_TYPE_SWORD]);
+        const SwordSlotKey targetSlot =
+            IsSwordEquipValue(equipValue) ? SwordSlotKeyFromEquipValue(equipValue) : SwordSlotKey::Kokiri;
+        state.swordSlots[static_cast<size_t>(targetSlot)] = migratedSlot;
+    }
+
+    for (size_t i = 0; i < kSwordSlotCount; ++i) {
+        LogSlotPersistenceEvent("LoadLegacy", static_cast<SwordSlotKey>(i), state.swordSlots[i]);
+    }
+
     return state;
 }
 
-void SaveSwordStateToManager(SaveManager& manager, const FuseSwordSaveState& state) {
-    const FuseSwordSaveState normalizedState = [&]() {
-        FuseSwordSaveState copy = state;
-        NormalizeState(copy);
-        return copy;
-    }();
-
-    const int materialId =
-        normalizedState.isFused ? static_cast<int>(normalizedState.materialId) : kSwordMaterialIdNone;
-    const int durabilityCur = normalizedState.isFused ? normalizedState.durabilityCur : 0;
-
+void SaveSwordSlotsToManager(SaveManager& manager, const std::array<SwordFuseSlot, kSwordSlotCount>& slots) {
     manager.SaveStruct(kSwordSaveSectionName, [&]() {
-        manager.SaveData(kSwordMaterialKey, materialId);
-        manager.SaveData(kSwordDurabilityKey, durabilityCur);
-    });
+        manager.SaveData(kSwordSaveVersionKey, static_cast<int32_t>(kSwordSaveVersion));
+        manager.SaveArray(kSwordSlotsKey, kSwordSlotCount, [&](size_t i) {
+            SwordFuseSlot slot = slots[i];
+            NormalizeSlot(slot);
 
-    LogPersistenceEvent("Save", normalizedState);
+            const int32_t materialId = static_cast<int32_t>(slot.materialId);
+            const int32_t durabilityCur = slot.durabilityCur;
+            const int32_t durabilityMax = slot.durabilityMax;
+
+            manager.SaveStruct("", [&]() {
+                manager.SaveData(kSwordSlotMaterialKey, materialId);
+                manager.SaveData(kSwordSlotDurabilityCurKey, durabilityCur);
+                manager.SaveData(kSwordSlotDurabilityMaxKey, durabilityMax);
+            });
+
+            LogSlotPersistenceEvent("Save", static_cast<SwordSlotKey>(i), slot);
+        });
+    });
 }
 
 std::vector<std::pair<MaterialId, uint16_t>> LoadMaterialInventoryFromManager(SaveManager& manager) {
