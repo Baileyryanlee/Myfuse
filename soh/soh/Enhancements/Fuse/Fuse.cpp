@@ -1249,12 +1249,12 @@ void Fuse::ResetSwordFreezeQueue() {
     ResetSwordFreezeQueueInternal();
 }
 
-void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim) {
-    if (!Fuse::IsSwordFused() || !victim) {
+static void ApplyMeleeHitMaterialEffects(PlayState* play, Actor* victim, MaterialId materialId) {
+    if (!victim) {
         return;
     }
 
-    const MaterialDef* def = Fuse::GetMaterialDef(Fuse::GetSwordMaterial());
+    const MaterialDef* def = Fuse::GetMaterialDef(materialId);
     if (!def) {
         return;
     }
@@ -1318,4 +1318,20 @@ void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim) {
         HasModifier(def->modifiers, def->modifierCount, ModifierId::Freeze, &freezeLevel) && freezeLevel > 0) {
         EnqueueSwordFreezeRequest(play, victim, freezeLevel);
     }
+}
+
+void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim) {
+    if (!Fuse::IsSwordFused()) {
+        return;
+    }
+
+    ApplyMeleeHitMaterialEffects(play, victim, Fuse::GetSwordMaterial());
+}
+
+void Fuse::OnHammerMeleeHit(PlayState* play, Actor* victim) {
+    if (!Fuse::IsHammerFused()) {
+        return;
+    }
+
+    ApplyMeleeHitMaterialEffects(play, victim, Fuse::GetHammerMaterial());
 }

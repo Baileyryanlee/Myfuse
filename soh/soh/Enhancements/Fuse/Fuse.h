@@ -37,6 +37,7 @@ struct MaterialDebugOverride {
 void OnLoadGame(int32_t fileNum);
 void OnGameFrameUpdate(PlayState* play);
 void OnSwordMeleeHit(PlayState* play, Actor* victim);
+void OnHammerMeleeHit(PlayState* play, Actor* victim);
 void ProcessDeferredSwordFreezes(PlayState* play);
 void ResetSwordFreezeQueue();
 

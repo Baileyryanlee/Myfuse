@@ -79,6 +79,10 @@ static bool IsPlayerSwingingSword(const Player* player) {
     return player && player->meleeWeaponState != 0;
 }
 
+static bool IsPlayerHammerAttack(const Player* player) {
+    return player && (player->heldItemAction == PLAYER_IA_HAMMER || player->itemAction == PLAYER_IA_HAMMER);
+}
+
 static bool IsAnyLiftableRockNearPlayer(PlayState* play, Player* player) {
     if (!play || !player)
         return false;
@@ -323,27 +327,29 @@ extern "C" void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollid
         victimPtr = (void*)acInfo;
     }
 
-    const bool fused = Fuse::IsSwordFused();
-    const int before = Fuse::GetSwordFuseDurability();
+    const bool isHammerAttack = IsPlayerHammerAttack(player);
+    const bool fused = isHammerAttack ? Fuse::IsHammerFused() : Fuse::IsSwordFused();
+    const int before = isHammerAttack ? Fuse::GetHammerFuseDurability() : Fuse::GetSwordFuseDurability();
 
     if (victimPtr && gSwordATVictimCooldown.count(victimPtr) > 0) {
         Fuse::Log(
-            "[FuseMVP] Sword AT collision DRAIN frame=%d fused=%d victim=%p durability=%d->%d reason=victim-cooldown\n",
-            curFrame, fused ? 1 : 0, victimPtr, before, before);
+            "[FuseMVP] %s AT collision DRAIN frame=%d fused=%d victim=%p durability=%d->%d reason=victim-cooldown\n",
+            isHammerAttack ? "Hammer" : "Sword", curFrame, fused ? 1 : 0, victimPtr, before, before);
         return;
     }
 
     if (!fused) {
         Fuse::Log(
-            "[FuseMVP] Sword AT collision DRAIN frame=%d fused=%d victim=%p durability=%d->%d reason=fuse-inactive\n",
-            curFrame, 0, victimPtr, before, before);
+            "[FuseMVP] %s AT collision DRAIN frame=%d fused=%d victim=%p durability=%d->%d reason=fuse-inactive\n",
+            isHammerAttack ? "Hammer" : "Sword", curFrame, 0, victimPtr, before, before);
         return;
     }
 
-    const bool broke = Fuse::DamageSwordFuseDurability(play, 1, "AT collision");
-    const int after = Fuse::GetSwordFuseDurability();
-    Fuse::Log("[FuseMVP] Sword AT collision DRAIN frame=%d fused=%d victim=%p durability=%d->%d%s\n", curFrame, 1,
-              victimPtr, before, after, broke ? " (broke)" : "");
+    const bool broke = isHammerAttack ? Fuse::DamageHammerFuseDurability(play, 1, "Hammer hit actor")
+                                      : Fuse::DamageSwordFuseDurability(play, 1, "AT collision");
+    const int after = isHammerAttack ? Fuse::GetHammerFuseDurability() : Fuse::GetSwordFuseDurability();
+    Fuse::Log("[FuseMVP] %s AT collision DRAIN frame=%d fused=%d victim=%p durability=%d->%d%s\n",
+              isHammerAttack ? "Hammer" : "Sword", curFrame, 1, victimPtr, before, after, broke ? " (broke)" : "");
 
     if (victimActor && victimActor->freezeTimer > 0 && victimPtr && gSwordATVictimCooldown.count(victimPtr) == 0) {
         int baseDamage = 0;
@@ -411,7 +417,11 @@ extern "C" void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollid
     }
 
     if (victimActor) {
-        Fuse::OnSwordMeleeHit(play, victimActor);
+        if (isHammerAttack) {
+            Fuse::OnHammerMeleeHit(play, victimActor);
+        } else {
+            Fuse::OnSwordMeleeHit(play, victimActor);
+        }
     }
 }
 
