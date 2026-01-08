@@ -263,7 +263,7 @@ FuseSwordSlotsSaveState LoadSwordSlotsFromManager(SaveManager& manager) {
 
     manager.LoadStruct(kSwordSaveSectionName, [&]() {
         manager.LoadData(kSwordSaveVersionKey, version, 0);
-        if (version >= static_cast<int32_t>(kSwordSaveVersion)) {
+        if (version >= static_cast<int32_t>(kSwordSlotsSaveVersion)) {
             manager.LoadArray(kSwordSlotsKey, kSwordSlotCount, [&](size_t i) {
                 int32_t materialId = static_cast<int32_t>(MaterialId::None);
                 int32_t durabilityCur = 0;
@@ -282,16 +282,55 @@ FuseSwordSlotsSaveState LoadSwordSlotsFromManager(SaveManager& manager) {
                 NormalizeSlot(slot);
                 state.swordSlots[i] = slot;
             });
+            if (version >= static_cast<int32_t>(kSwordSaveVersion)) {
+                manager.LoadStruct(kBoomerangSlotKey, [&]() {
+                    int32_t materialId = static_cast<int32_t>(MaterialId::None);
+                    int32_t durabilityCur = 0;
+                    int32_t durabilityMax = 0;
+
+                    manager.LoadData(kBoomerangSlotMaterialKey, materialId, static_cast<int32_t>(MaterialId::None));
+                    manager.LoadData(kBoomerangSlotDurabilityCurKey, durabilityCur, 0);
+                    manager.LoadData(kBoomerangSlotDurabilityMaxKey, durabilityMax, 0);
+
+                    SwordFuseSlot slot{};
+                    slot.materialId = static_cast<MaterialId>(materialId);
+                    slot.durabilityCur = durabilityCur;
+                    slot.durabilityMax = durabilityMax;
+                    NormalizeSlot(slot);
+                    state.boomerangSlot = slot;
+                    state.boomerangSlotLoaded = true;
+                });
+            }
         } else {
             manager.LoadData(kSwordMaterialKey, legacyMaterialId, static_cast<int>(kSwordMaterialIdNone));
             manager.LoadData(kSwordDurabilityKey, legacyCurDurability, kLegacyDurabilityMissing);
         }
     });
 
-    if (version >= static_cast<int32_t>(kSwordSaveVersion)) {
+    if (version >= static_cast<int32_t>(kSwordSlotsSaveVersion)) {
         state.version = static_cast<uint32_t>(version);
         for (size_t i = 0; i < kSwordSlotCount; ++i) {
             LogSlotPersistenceEvent("Load", static_cast<SwordSlotKey>(i), state.swordSlots[i]);
+        }
+        if (!state.boomerangSlotLoaded && version < static_cast<int32_t>(kSwordSaveVersion)) {
+            const bool anySwordFused = std::any_of(state.swordSlots.begin(), state.swordSlots.end(),
+                                                   [](const SwordFuseSlot& slot) {
+                                                       return slot.materialId != MaterialId::None;
+                                                   });
+            if (!anySwordFused) {
+                const FuseSwordSaveState legacyState = ReadSwordStateFromContext();
+                if (legacyState.isFused) {
+                    SwordFuseSlot slot{};
+                    slot.materialId = legacyState.materialId;
+                    slot.durabilityCur = legacyState.durabilityCur;
+                    slot.durabilityMax = legacyState.durabilityMax;
+                    NormalizeSlot(slot);
+                    if (slot.materialId != MaterialId::None) {
+                        state.boomerangSlot = slot;
+                        state.boomerangSlotLoaded = true;
+                    }
+                }
+            }
         }
         return state;
     }
@@ -316,7 +355,8 @@ FuseSwordSlotsSaveState LoadSwordSlotsFromManager(SaveManager& manager) {
     return state;
 }
 
-void SaveSwordSlotsToManager(SaveManager& manager, const std::array<SwordFuseSlot, kSwordSlotCount>& slots) {
+void SaveSwordSlotsToManager(SaveManager& manager, const std::array<SwordFuseSlot, kSwordSlotCount>& slots,
+                             const FuseSlot& boomerangSlot) {
     manager.SaveStruct(kSwordSaveSectionName, [&]() {
         manager.SaveData(kSwordSaveVersionKey, static_cast<int32_t>(kSwordSaveVersion));
         manager.SaveArray(kSwordSlotsKey, kSwordSlotCount, [&](size_t i) {
@@ -334,6 +374,13 @@ void SaveSwordSlotsToManager(SaveManager& manager, const std::array<SwordFuseSlo
             });
 
             LogSlotPersistenceEvent("Save", static_cast<SwordSlotKey>(i), slot);
+        });
+        SwordFuseSlot slot = boomerangSlot;
+        NormalizeSlot(slot);
+        manager.SaveStruct(kBoomerangSlotKey, [&]() {
+            manager.SaveData(kBoomerangSlotMaterialKey, static_cast<int32_t>(slot.materialId));
+            manager.SaveData(kBoomerangSlotDurabilityCurKey, slot.durabilityCur);
+            manager.SaveData(kBoomerangSlotDurabilityMaxKey, slot.durabilityMax);
         });
     });
 }

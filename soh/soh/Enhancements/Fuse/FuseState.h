@@ -81,7 +81,8 @@ struct FuseRuntimeState {
 namespace FusePersistence {
 
 constexpr s16 kSwordMaterialIdNone = static_cast<s16>(MaterialId::None);
-constexpr uint32_t kSwordSaveVersion = 2;
+constexpr uint32_t kSwordSlotsSaveVersion = 2;
+constexpr uint32_t kSwordSaveVersion = 3;
 constexpr size_t kSwordSlotCount = 3;
 constexpr const char* kSwordSaveSectionName = "enhancements.fuse";
 constexpr const char* kSwordSaveVersionKey = "version";
@@ -89,6 +90,10 @@ constexpr const char* kSwordSlotsKey = "slots";
 constexpr const char* kSwordSlotMaterialKey = "matId";
 constexpr const char* kSwordSlotDurabilityCurKey = "curDurability";
 constexpr const char* kSwordSlotDurabilityMaxKey = "maxDurability";
+constexpr const char* kBoomerangSlotKey = "boomerang";
+constexpr const char* kBoomerangSlotMaterialKey = "matId";
+constexpr const char* kBoomerangSlotDurabilityCurKey = "curDurability";
+constexpr const char* kBoomerangSlotDurabilityMaxKey = "maxDurability";
 constexpr const char* kSwordMaterialKey = "matId";
 constexpr const char* kSwordDurabilityKey = "curDurability";
 
@@ -103,6 +108,8 @@ constexpr const char* kMaterialEntryQtyKey = "qty";
 struct FuseSwordSlotsSaveState {
     uint32_t version = kSwordSaveVersion;
     std::array<SwordFuseSlot, kSwordSlotCount> swordSlots{};
+    FuseSlot boomerangSlot{};
+    bool boomerangSlotLoaded = false;
     bool migratedFromLegacy = false;
 };
 
@@ -115,7 +122,8 @@ void ApplySwordStateFromContext(const PlayState* play);
 
 // SaveManager helpers
 FuseSwordSlotsSaveState LoadSwordSlotsFromManager(SaveManager& manager);
-void SaveSwordSlotsToManager(SaveManager& manager, const std::array<SwordFuseSlot, kSwordSlotCount>& slots);
+void SaveSwordSlotsToManager(SaveManager& manager, const std::array<SwordFuseSlot, kSwordSlotCount>& slots,
+                             const FuseSlot& boomerangSlot);
 std::vector<std::pair<MaterialId, uint16_t>> LoadMaterialInventoryFromManager(SaveManager& manager);
 void SaveMaterialInventoryToManager(
     SaveManager& manager, const std::vector<std::pair<MaterialId, uint16_t>>& inventoryEntries);
