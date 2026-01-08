@@ -214,6 +214,7 @@ enum class FusePauseItem {
     None,
     Sword,
     Boomerang,
+    Hammer,
 };
 
 struct FuseModalState {
@@ -259,6 +260,8 @@ static const char* PauseItemName(FusePauseItem item, EquipValueSword sword) {
             return SwordNameFromEquip(sword);
         case FusePauseItem::Boomerang:
             return "Boomerang";
+        case FusePauseItem::Hammer:
+            return "Megaton Hammer";
         case FusePauseItem::None:
         default:
             return "Selected Item";
@@ -277,6 +280,14 @@ static FuseWeaponView WeaponViewForPauseItem(FusePauseItem item, PlayState* play
             view.materialId = Fuse::GetBoomerangMaterial();
             return view;
         }
+        case FusePauseItem::Hammer: {
+            FuseWeaponView view;
+            view.isFused = Fuse::IsHammerFused();
+            view.curDurability = Fuse::GetHammerFuseDurability();
+            view.maxDurability = Fuse::GetHammerFuseMaxDurability();
+            view.materialId = Fuse::GetHammerMaterial();
+            return view;
+        }
         case FusePauseItem::None:
         default:
             return {};
@@ -292,6 +303,7 @@ static bool IsPausePageForItem(const PauseContext* pauseCtx, FusePauseItem item)
         case FusePauseItem::Sword:
             return pauseCtx->pageIndex == PAUSE_EQUIP;
         case FusePauseItem::Boomerang:
+        case FusePauseItem::Hammer:
             return pauseCtx->pageIndex == PAUSE_ITEM;
         case FusePauseItem::None:
         default:
@@ -417,6 +429,7 @@ struct FusePromptContext {
     bool isOwnedEquip = false;
     bool isItemsPage = false;
     bool isBoomerangItem = false;
+    bool isHammerItem = false;
     EquipValueSword hoveredSword = EQUIP_VALUE_SWORD_NONE;
     EquipValueSword equippedSword = EQUIP_VALUE_SWORD_NONE;
     bool isSwordAlreadyEquippedSlot = false;
@@ -445,13 +458,18 @@ FusePromptContext BuildPromptContext(PlayState* play) {
     context.isSwordAlreadyEquippedSlot = (context.hoveredSword != EQUIP_VALUE_SWORD_NONE) &&
                                          (context.equippedSword == context.hoveredSword);
     context.isBoomerangItem = context.isItemsPage && pauseCtx->cursorItem[PAUSE_ITEM] == ITEM_BOOMERANG;
+    context.isHammerItem = context.isItemsPage && pauseCtx->cursorItem[PAUSE_ITEM] == ITEM_HAMMER;
 
     const bool swordEligible = context.isPauseOpen && context.isEquipmentPage && context.isSwordRow && context.isOwnedEquip &&
                                (context.hoveredSword != EQUIP_VALUE_SWORD_NONE) && context.isSwordAlreadyEquippedSlot;
     const bool boomerangEligible = context.isPauseOpen && context.isItemsPage && context.isBoomerangItem;
+    const bool hammerEligible = context.isPauseOpen && context.isItemsPage && context.isHammerItem;
 
-    context.activeItem = swordEligible ? FusePauseItem::Sword : (boomerangEligible ? FusePauseItem::Boomerang : FusePauseItem::None);
-    context.shouldShowFusePrompt = swordEligible || boomerangEligible;
+    context.activeItem =
+        swordEligible ? FusePauseItem::Sword
+                      : (boomerangEligible ? FusePauseItem::Boomerang
+                                           : (hammerEligible ? FusePauseItem::Hammer : FusePauseItem::None));
+    context.shouldShowFusePrompt = swordEligible || boomerangEligible || hammerEligible;
 
     return context;
 }
@@ -574,8 +592,10 @@ void FusePause_UpdateModal(PlayState* play) {
             SetUiState(FuseUiState::Confirm);
         } else {
             const Fuse::FuseResult result =
-                (sModal.activeItem == FusePauseItem::Boomerang) ? Fuse::TryFuseBoomerang(sModal.previewMaterialId)
-                                                                : Fuse::TryFuseSword(sModal.previewMaterialId);
+                (sModal.activeItem == FusePauseItem::Hammer)
+                    ? Fuse::TryFuseHammer(sModal.previewMaterialId)
+                    : ((sModal.activeItem == FusePauseItem::Boomerang) ? Fuse::TryFuseBoomerang(sModal.previewMaterialId)
+                                                                      : Fuse::TryFuseSword(sModal.previewMaterialId));
             const bool success = result == Fuse::FuseResult::Ok;
 
             Fuse::Log("[FuseDBG] UI:Confirm item=%s mat=%d result=%d\n",
