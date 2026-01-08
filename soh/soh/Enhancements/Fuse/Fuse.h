@@ -130,6 +130,8 @@ void ApplyLoadedSwordSlots(const std::array<SwordFuseSlot, FusePersistence::kSwo
 bool HasLoadedSwordSlots();
 FuseSlot GetBoomerangSlot();
 void ApplyLoadedBoomerangSlot(const FuseSlot& slot);
+FuseSlot GetHammerSlot();
+void ApplyLoadedHammerSlot(const FuseSlot& slot);
 
 // Simple logger (goes to VS Output on Windows)
 void Log(const char* fmt, ...);

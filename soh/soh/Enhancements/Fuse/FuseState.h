@@ -98,6 +98,10 @@ constexpr const char* kBoomerangSlotKey = "boomerang";
 constexpr const char* kBoomerangSlotMaterialKey = "matId";
 constexpr const char* kBoomerangSlotDurabilityCurKey = "curDurability";
 constexpr const char* kBoomerangSlotDurabilityMaxKey = "maxDurability";
+constexpr const char* kHammerSlotKey = "hammer";
+constexpr const char* kHammerSlotMaterialKey = "matId";
+constexpr const char* kHammerSlotDurabilityCurKey = "curDurability";
+constexpr const char* kHammerSlotDurabilityMaxKey = "maxDurability";
 constexpr const char* kSwordMaterialKey = "matId";
 constexpr const char* kSwordDurabilityKey = "curDurability";
 
@@ -114,6 +118,8 @@ struct FuseSwordSlotsSaveState {
     std::array<SwordFuseSlot, kSwordSlotCount> swordSlots{};
     FuseSlot boomerangSlot{};
     bool boomerangSlotLoaded = false;
+    FuseSlot hammerSlot{};
+    bool hammerSlotLoaded = false;
     bool migratedFromLegacy = false;
 };
 
@@ -127,7 +133,7 @@ void ApplySwordStateFromContext(const PlayState* play);
 // SaveManager helpers
 FuseSwordSlotsSaveState LoadFuseStateFromManager(SaveManager& manager);
 void SaveFuseStateToManager(SaveManager& manager, const std::array<SwordFuseSlot, kSwordSlotCount>& slots,
-                            const FuseSlot& boomerangSlot);
+                            const FuseSlot& boomerangSlot, const FuseSlot& hammerSlot);
 std::vector<std::pair<MaterialId, uint16_t>> LoadMaterialInventoryFromManager(SaveManager& manager);
 void SaveMaterialInventoryToManager(
     SaveManager& manager, const std::vector<std::pair<MaterialId, uint16_t>>& inventoryEntries);
