@@ -162,15 +162,15 @@ SwordFuseSlot& FuseSaveData::GetActiveSwordSlot([[maybe_unused]] const PlayState
     return this->swordSlots[static_cast<size_t>(key)];
 }
 
-FuseSlot& FuseRuntimeState::GetBoomerangSlot() {
+FuseSlot& FuseSaveData::GetBoomerangSlot() {
     return boomerangSlot;
 }
 
-const FuseSlot& FuseRuntimeState::GetBoomerangSlot() const {
+const FuseSlot& FuseSaveData::GetBoomerangSlot() const {
     return boomerangSlot;
 }
 
-FuseSlot& FuseRuntimeState::GetActiveBoomerangSlot([[maybe_unused]] const PlayState* play) {
+FuseSlot& FuseSaveData::GetActiveBoomerangSlot([[maybe_unused]] const PlayState* play) {
     return boomerangSlot;
 }
 
