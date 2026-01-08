@@ -268,30 +268,33 @@ static const char* PauseItemName(FusePauseItem item, EquipValueSword sword) {
     }
 }
 
-static FuseWeaponView WeaponViewForPauseItem(FusePauseItem item, PlayState* play) {
+static FuseSlot ResolveSlotForPauseItem(FusePauseItem item, PlayState* play) {
+    (void)play;
     switch (item) {
         case FusePauseItem::Sword:
-            return Fuse_GetEquippedSwordView(play);
-        case FusePauseItem::Boomerang: {
-            FuseWeaponView view;
-            view.isFused = Fuse::IsBoomerangFused();
-            view.curDurability = Fuse::GetBoomerangFuseDurability();
-            view.maxDurability = Fuse::GetBoomerangFuseMaxDurability();
-            view.materialId = Fuse::GetBoomerangMaterial();
-            return view;
-        }
-        case FusePauseItem::Hammer: {
-            FuseWeaponView view;
-            view.isFused = Fuse::IsHammerFused();
-            view.curDurability = Fuse::GetHammerFuseDurability();
-            view.maxDurability = Fuse::GetHammerFuseMaxDurability();
-            view.materialId = Fuse::GetHammerMaterial();
-            return view;
-        }
+            return Fuse::GetActiveSwordSlot();
+        case FusePauseItem::Boomerang:
+            return Fuse::GetActiveBoomerangSlot();
+        case FusePauseItem::Hammer:
+            return Fuse::GetActiveHammerSlot();
         case FusePauseItem::None:
         default:
             return {};
     }
+}
+
+static FuseWeaponView WeaponViewFromSlot(const FuseSlot& slot) {
+    FuseWeaponView view{};
+    view.materialId = slot.materialId;
+    view.curDurability = slot.durabilityCur;
+    view.maxDurability = slot.durabilityMax;
+    view.isFused = slot.materialId != MaterialId::None && slot.durabilityCur > 0;
+    return view;
+}
+
+static FuseWeaponView WeaponViewForPauseItem(FusePauseItem item, PlayState* play) {
+    const FuseSlot slot = ResolveSlotForPauseItem(item, play);
+    return WeaponViewFromSlot(slot);
 }
 
 static bool IsPausePageForItem(const PauseContext* pauseCtx, FusePauseItem item) {
@@ -502,7 +505,8 @@ void FusePause_UpdateModal(PlayState* play) {
 
     if (!sModal.open) {
         if (context.shouldShowFusePrompt && fusePressed) {
-            const FuseWeaponView weaponView = WeaponViewForPauseItem(context.activeItem, play);
+            const FuseSlot resolvedSlot = ResolveSlotForPauseItem(context.activeItem, play);
+            const FuseWeaponView weaponView = WeaponViewFromSlot(resolvedSlot);
 
             sModal.open = true;
             sModal.cursor = 0;
@@ -516,6 +520,9 @@ void FusePause_UpdateModal(PlayState* play) {
             sModal.promptTimer = 0;
             SetUiState(sModal.isLocked ? FuseUiState::Locked : FuseUiState::Browse);
 
+            Fuse::Log("[FuseDBG] UI:ResolvedSlot item=%s mat=%d dur=%d/%d\n",
+                      PauseItemName(sModal.activeItem, context.hoveredSword),
+                      static_cast<int>(resolvedSlot.materialId), resolvedSlot.durabilityCur, resolvedSlot.durabilityMax);
             Fuse::Log("[FuseDBG] UI:Open item=%s confirmedMat=%d locked=%d\n",
                       PauseItemName(sModal.activeItem, context.hoveredSword), static_cast<int>(weaponView.materialId),
                       sModal.isLocked ? 1 : 0);

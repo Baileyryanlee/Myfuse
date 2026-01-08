@@ -791,6 +791,18 @@ std::array<SwordFuseSlot, FusePersistence::kSwordSlotCount> Fuse::GetSwordSlots(
     return gFuseSave.swordSlots;
 }
 
+FuseSlot Fuse::GetActiveSwordSlot() {
+    return gFuseSave.GetActiveSwordSlot(nullptr);
+}
+
+FuseSlot Fuse::GetActiveBoomerangSlot() {
+    return gFuseSave.GetActiveBoomerangSlot(nullptr);
+}
+
+FuseSlot Fuse::GetActiveHammerSlot() {
+    return gFuseRuntime.GetActiveHammerSlot(nullptr);
+}
+
 void Fuse::ApplyLoadedSwordSlots(const std::array<SwordFuseSlot, FusePersistence::kSwordSlotCount>& slots) {
     gFuseSave.swordSlots = slots;
     gFuseSave.version = FusePersistence::kFuseSaveVersion;
