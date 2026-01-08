@@ -817,6 +817,8 @@ FuseSlot Fuse::GetHammerSlot() {
 
 void Fuse::ApplyLoadedHammerSlot(const FuseSlot& slot) {
     gFuseRuntime.hammerSlot = slot;
+    Fuse::Log("[FuseSave] ApplyHammer mat=%d dur=%d/%d\n", static_cast<int>(slot.materialId), slot.durabilityCur,
+              slot.durabilityMax);
 }
 
 FuseWeaponView Fuse_GetEquippedSwordView(const PlayState* play) {
