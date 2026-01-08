@@ -82,7 +82,7 @@ namespace FusePersistence {
 
 constexpr s16 kSwordMaterialIdNone = static_cast<s16>(MaterialId::None);
 constexpr uint32_t kSwordSlotsSaveVersion = 2;
-constexpr uint32_t kSwordSaveVersion = 3;
+constexpr uint32_t kFuseSaveVersion = 4;
 constexpr size_t kSwordSlotCount = 3;
 constexpr const char* kSwordSaveSectionName = "enhancements.fuse";
 constexpr const char* kSwordSaveVersionKey = "version";
@@ -106,7 +106,7 @@ constexpr const char* kMaterialEntryIdKey = "id";
 constexpr const char* kMaterialEntryQtyKey = "qty";
 
 struct FuseSwordSlotsSaveState {
-    uint32_t version = kSwordSaveVersion;
+    uint32_t version = kFuseSaveVersion;
     std::array<SwordFuseSlot, kSwordSlotCount> swordSlots{};
     FuseSlot boomerangSlot{};
     bool boomerangSlotLoaded = false;

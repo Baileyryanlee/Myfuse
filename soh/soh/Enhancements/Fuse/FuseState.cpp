@@ -282,7 +282,7 @@ FuseSwordSlotsSaveState LoadSwordSlotsFromManager(SaveManager& manager) {
                 NormalizeSlot(slot);
                 state.swordSlots[i] = slot;
             });
-            if (version >= static_cast<int32_t>(kSwordSaveVersion)) {
+            if (version >= static_cast<int32_t>(kFuseSaveVersion)) {
                 manager.LoadStruct(kBoomerangSlotKey, [&]() {
                     int32_t materialId = static_cast<int32_t>(MaterialId::None);
                     int32_t durabilityCur = 0;
@@ -300,6 +300,9 @@ FuseSwordSlotsSaveState LoadSwordSlotsFromManager(SaveManager& manager) {
                     state.boomerangSlot = slot;
                     state.boomerangSlotLoaded = true;
                 });
+            } else {
+                state.boomerangSlot = FuseSlot{};
+                state.boomerangSlotLoaded = true;
             }
         } else {
             manager.LoadData(kSwordMaterialKey, legacyMaterialId, static_cast<int>(kSwordMaterialIdNone));
@@ -312,25 +315,9 @@ FuseSwordSlotsSaveState LoadSwordSlotsFromManager(SaveManager& manager) {
         for (size_t i = 0; i < kSwordSlotCount; ++i) {
             LogSlotPersistenceEvent("Load", static_cast<SwordSlotKey>(i), state.swordSlots[i]);
         }
-        if (!state.boomerangSlotLoaded && version < static_cast<int32_t>(kSwordSaveVersion)) {
-            const bool anySwordFused = std::any_of(state.swordSlots.begin(), state.swordSlots.end(),
-                                                   [](const SwordFuseSlot& slot) {
-                                                       return slot.materialId != MaterialId::None;
-                                                   });
-            if (!anySwordFused) {
-                const FuseSwordSaveState legacyState = ReadSwordStateFromContext();
-                if (legacyState.isFused) {
-                    SwordFuseSlot slot{};
-                    slot.materialId = legacyState.materialId;
-                    slot.durabilityCur = legacyState.durabilityCur;
-                    slot.durabilityMax = legacyState.durabilityMax;
-                    NormalizeSlot(slot);
-                    if (slot.materialId != MaterialId::None) {
-                        state.boomerangSlot = slot;
-                        state.boomerangSlotLoaded = true;
-                    }
-                }
-            }
+        if (state.boomerangSlotLoaded) {
+            Fuse::Log("[FuseSave] ReadBoom mat=%d dur=%d/%d\n", static_cast<int>(state.boomerangSlot.materialId),
+                      state.boomerangSlot.durabilityCur, state.boomerangSlot.durabilityMax);
         }
         return state;
     }
@@ -352,13 +339,18 @@ FuseSwordSlotsSaveState LoadSwordSlotsFromManager(SaveManager& manager) {
         LogSlotPersistenceEvent("LoadLegacy", static_cast<SwordSlotKey>(i), state.swordSlots[i]);
     }
 
+    state.boomerangSlot = FuseSlot{};
+    state.boomerangSlotLoaded = true;
+    Fuse::Log("[FuseSave] ReadBoom mat=%d dur=%d/%d\n", static_cast<int>(state.boomerangSlot.materialId),
+              state.boomerangSlot.durabilityCur, state.boomerangSlot.durabilityMax);
+
     return state;
 }
 
 void SaveSwordSlotsToManager(SaveManager& manager, const std::array<SwordFuseSlot, kSwordSlotCount>& slots,
                              const FuseSlot& boomerangSlot) {
     manager.SaveStruct(kSwordSaveSectionName, [&]() {
-        manager.SaveData(kSwordSaveVersionKey, static_cast<int32_t>(kSwordSaveVersion));
+        manager.SaveData(kSwordSaveVersionKey, static_cast<int32_t>(kFuseSaveVersion));
         manager.SaveArray(kSwordSlotsKey, kSwordSlotCount, [&](size_t i) {
             SwordFuseSlot slot = slots[i];
             NormalizeSlot(slot);
@@ -377,6 +369,8 @@ void SaveSwordSlotsToManager(SaveManager& manager, const std::array<SwordFuseSlo
         });
         SwordFuseSlot slot = boomerangSlot;
         NormalizeSlot(slot);
+        Fuse::Log("[FuseSave] WriteBoom mat=%d dur=%d/%d\n", static_cast<int>(slot.materialId), slot.durabilityCur,
+                  slot.durabilityMax);
         manager.SaveStruct(kBoomerangSlotKey, [&]() {
             manager.SaveData(kBoomerangSlotMaterialKey, static_cast<int32_t>(slot.materialId));
             manager.SaveData(kBoomerangSlotDurabilityCurKey, slot.durabilityCur);
