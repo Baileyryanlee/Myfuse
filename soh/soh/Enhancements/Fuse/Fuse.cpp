@@ -783,6 +783,14 @@ bool Fuse::HasLoadedSwordSlots() {
     return sSwordSlotsLoadedFromSaveManager;
 }
 
+FuseSlot Fuse::GetBoomerangSlot() {
+    return gFuseRuntime.GetBoomerangSlot();
+}
+
+void Fuse::ApplyLoadedBoomerangSlot(const FuseSlot& slot) {
+    gFuseRuntime.boomerangSlot = slot;
+}
+
 FuseWeaponView Fuse_GetEquippedSwordView(const PlayState* play) {
     (void)play;
 

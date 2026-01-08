@@ -115,6 +115,8 @@ void SetLastEvent(const char* msg);
 std::array<SwordFuseSlot, FusePersistence::kSwordSlotCount> GetSwordSlots();
 void ApplyLoadedSwordSlots(const std::array<SwordFuseSlot, FusePersistence::kSwordSlotCount>& slots);
 bool HasLoadedSwordSlots();
+FuseSlot GetBoomerangSlot();
+void ApplyLoadedBoomerangSlot(const FuseSlot& slot);
 
 // Simple logger (goes to VS Output on Windows)
 void Log(const char* fmt, ...);
