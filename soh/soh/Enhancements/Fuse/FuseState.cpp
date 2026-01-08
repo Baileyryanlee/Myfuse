@@ -312,9 +312,32 @@ FuseSwordSlotsSaveState LoadFuseStateFromManager(SaveManager& manager) {
                     state.boomerangSlot = slot;
                     state.boomerangSlotLoaded = true;
                 });
+                manager.LoadStruct(kHammerSlotKey, [&]() {
+                    int32_t materialId = static_cast<int32_t>(MaterialId::None);
+                    int32_t durabilityCur = 0;
+                    int32_t durabilityMax = 0;
+
+                    manager.LoadData(kHammerSlotMaterialKey, materialId, static_cast<int32_t>(MaterialId::None));
+                    manager.LoadData(kHammerSlotDurabilityCurKey, durabilityCur, 0);
+                    manager.LoadData(kHammerSlotDurabilityMaxKey, durabilityMax, 0);
+
+                    SwordFuseSlot slot{};
+                    slot.materialId = static_cast<MaterialId>(materialId);
+                    slot.durabilityCur = durabilityCur;
+                    slot.durabilityMax = durabilityMax;
+                    NormalizeSlot(slot);
+                    state.hammerSlot = slot;
+                    state.hammerSlotLoaded = true;
+                });
+                if (!state.hammerSlotLoaded) {
+                    state.hammerSlot = FuseSlot{};
+                    state.hammerSlotLoaded = true;
+                }
             } else {
                 state.boomerangSlot = FuseSlot{};
                 state.boomerangSlotLoaded = true;
+                state.hammerSlot = FuseSlot{};
+                state.hammerSlotLoaded = true;
             }
         } else {
             manager.LoadData(kSwordMaterialKey, legacyMaterialId, static_cast<int>(kSwordMaterialIdNone));
@@ -330,6 +353,10 @@ FuseSwordSlotsSaveState LoadFuseStateFromManager(SaveManager& manager) {
         if (state.boomerangSlotLoaded) {
             Fuse::Log("[FuseSave] ReadBoom mat=%d dur=%d/%d\n", static_cast<int>(state.boomerangSlot.materialId),
                       state.boomerangSlot.durabilityCur, state.boomerangSlot.durabilityMax);
+        }
+        if (state.hammerSlotLoaded) {
+            Fuse::Log("[FuseSave] ReadHammer mat=%d dur=%d/%d\n", static_cast<int>(state.hammerSlot.materialId),
+                      state.hammerSlot.durabilityCur, state.hammerSlot.durabilityMax);
         }
         return state;
     }
@@ -355,12 +382,16 @@ FuseSwordSlotsSaveState LoadFuseStateFromManager(SaveManager& manager) {
     state.boomerangSlotLoaded = true;
     Fuse::Log("[FuseSave] ReadBoom mat=%d dur=%d/%d\n", static_cast<int>(state.boomerangSlot.materialId),
               state.boomerangSlot.durabilityCur, state.boomerangSlot.durabilityMax);
+    state.hammerSlot = FuseSlot{};
+    state.hammerSlotLoaded = true;
+    Fuse::Log("[FuseSave] ReadHammer mat=%d dur=%d/%d\n", static_cast<int>(state.hammerSlot.materialId),
+              state.hammerSlot.durabilityCur, state.hammerSlot.durabilityMax);
 
     return state;
 }
 
 void SaveFuseStateToManager(SaveManager& manager, const std::array<SwordFuseSlot, kSwordSlotCount>& slots,
-                            const FuseSlot& boomerangSlot) {
+                            const FuseSlot& boomerangSlot, const FuseSlot& hammerSlot) {
     manager.SaveStruct(kSwordSaveSectionName, [&]() {
         manager.SaveData(kSwordSaveVersionKey, static_cast<int32_t>(kFuseSaveVersion));
         manager.SaveArray(kSwordSlotsKey, kSwordSlotCount, [&](size_t i) {
@@ -387,6 +418,15 @@ void SaveFuseStateToManager(SaveManager& manager, const std::array<SwordFuseSlot
             manager.SaveData(kBoomerangSlotMaterialKey, static_cast<int32_t>(slot.materialId));
             manager.SaveData(kBoomerangSlotDurabilityCurKey, slot.durabilityCur);
             manager.SaveData(kBoomerangSlotDurabilityMaxKey, slot.durabilityMax);
+        });
+        slot = hammerSlot;
+        NormalizeSlot(slot);
+        Fuse::Log("[FuseSave] WriteHammer mat=%d dur=%d/%d\n", static_cast<int>(slot.materialId), slot.durabilityCur,
+                  slot.durabilityMax);
+        manager.SaveStruct(kHammerSlotKey, [&]() {
+            manager.SaveData(kHammerSlotMaterialKey, static_cast<int32_t>(slot.materialId));
+            manager.SaveData(kHammerSlotDurabilityCurKey, slot.durabilityCur);
+            manager.SaveData(kHammerSlotDurabilityMaxKey, slot.durabilityMax);
         });
     });
 }

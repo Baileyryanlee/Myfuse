@@ -811,6 +811,14 @@ void Fuse::ApplyLoadedBoomerangSlot(const FuseSlot& slot) {
     gFuseSave.boomerangSlot = slot;
 }
 
+FuseSlot Fuse::GetHammerSlot() {
+    return gFuseRuntime.GetHammerSlot();
+}
+
+void Fuse::ApplyLoadedHammerSlot(const FuseSlot& slot) {
+    gFuseRuntime.hammerSlot = slot;
+}
+
 FuseWeaponView Fuse_GetEquippedSwordView(const PlayState* play) {
     (void)play;
 
