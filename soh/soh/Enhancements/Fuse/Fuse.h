@@ -88,6 +88,12 @@ void FuseBoomerangWithMaterial(MaterialId id, uint16_t maxDurability, bool initi
                                bool logDurability = true);
 FuseResult TryFuseBoomerang(MaterialId id);
 FuseResult TryUnfuseBoomerang();
+bool IsHammerFused();
+MaterialId GetHammerMaterial();
+void FuseHammerWithMaterial(MaterialId id, uint16_t maxDurability, bool initializeCurrentDurability = true,
+                            bool logDurability = true);
+FuseResult TryFuseHammer(MaterialId id);
+FuseResult TryUnfuseHammer();
 
 // MVP: award rock and (optionally) auto-fuse to sword (runtime for now)
 void AwardRockMaterial();
@@ -107,6 +113,13 @@ void SetBoomerangFuseMaxDurability(int v);
 bool DamageBoomerangFuseDurability(PlayState* play, int amount, const char* reason);
 void ClearBoomerangFuse();
 void OnBoomerangFuseBroken(PlayState* play);
+int GetHammerFuseDurability();
+int GetHammerFuseMaxDurability();
+void SetHammerFuseDurability(int v);
+void SetHammerFuseMaxDurability(int v);
+bool DamageHammerFuseDurability(PlayState* play, int amount, const char* reason);
+void ClearHammerFuse();
+void OnHammerFuseBroken(PlayState* play);
 
 // Debug/testing (safe no-op in shipping later)
 const char* GetLastEvent();

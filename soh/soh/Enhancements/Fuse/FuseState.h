@@ -72,9 +72,14 @@ struct FuseSaveData {
 struct FuseRuntimeState {
     bool enabled = true;
     bool swordFuseLoadedFromSave = false;
+    FuseSlot hammerSlot{};
 
     // Useful for debugging/testing
     const char* lastEvent = "None";
+
+    FuseSlot& GetHammerSlot();
+    const FuseSlot& GetHammerSlot() const;
+    FuseSlot& GetActiveHammerSlot(const PlayState* play);
 };
 
 namespace FusePersistence {

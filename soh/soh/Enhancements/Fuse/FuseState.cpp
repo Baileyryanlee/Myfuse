@@ -174,6 +174,18 @@ FuseSlot& FuseSaveData::GetActiveBoomerangSlot([[maybe_unused]] const PlayState*
     return boomerangSlot;
 }
 
+FuseSlot& FuseRuntimeState::GetHammerSlot() {
+    return hammerSlot;
+}
+
+const FuseSlot& FuseRuntimeState::GetHammerSlot() const {
+    return hammerSlot;
+}
+
+FuseSlot& FuseRuntimeState::GetActiveHammerSlot([[maybe_unused]] const PlayState* play) {
+    return hammerSlot;
+}
+
 namespace FusePersistence {
 
 FuseSwordSaveState ClearedSwordState() {
