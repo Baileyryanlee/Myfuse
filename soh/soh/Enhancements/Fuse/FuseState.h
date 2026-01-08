@@ -59,23 +59,22 @@ struct FuseSaveData {
     uint16_t swordFuseMaxDurability = 0; // max
 
     std::array<SwordFuseSlot, 3> swordSlots{};
+    FuseSlot boomerangSlot{};
 
     SwordFuseSlot& GetSwordSlot(SwordSlotKey key);
     const SwordFuseSlot& GetSwordSlot(SwordSlotKey key) const;
     SwordFuseSlot& GetActiveSwordSlot(const PlayState* play);
+    FuseSlot& GetBoomerangSlot();
+    const FuseSlot& GetBoomerangSlot() const;
+    FuseSlot& GetActiveBoomerangSlot(const PlayState* play);
 };
 
 struct FuseRuntimeState {
     bool enabled = true;
     bool swordFuseLoadedFromSave = false;
-    FuseSlot boomerangSlot{};
 
     // Useful for debugging/testing
     const char* lastEvent = "None";
-
-    FuseSlot& GetBoomerangSlot();
-    const FuseSlot& GetBoomerangSlot() const;
-    FuseSlot& GetActiveBoomerangSlot(const PlayState* play);
 };
 
 namespace FusePersistence {

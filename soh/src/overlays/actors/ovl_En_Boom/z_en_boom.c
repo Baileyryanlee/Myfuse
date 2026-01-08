@@ -6,6 +6,7 @@
 
 #include "z_en_boom.h"
 #include "objects/gameplay_keep/gameplay_keep.h"
+#include "soh/Enhancements/Fuse/Fuse.h"
 
 #define FLAGS (ACTOR_FLAG_UPDATE_CULLING_DISABLED | ACTOR_FLAG_DRAW_CULLING_DISABLED)
 
@@ -158,9 +159,13 @@ void EnBoom_Fly(EnBoom* this, PlayState* play) {
     collided = this->collider.base.atFlags & AT_HIT;
     collided = !!(collided);
     if (collided) {
-        if (((this->collider.base.at->id == ACTOR_EN_ITEM00) || (this->collider.base.at->id == ACTOR_EN_SI))) {
-            this->grabbed = this->collider.base.at;
-            if (this->collider.base.at->id == ACTOR_EN_SI) {
+        Actor* hitActor = this->collider.base.at;
+        if (hitActor != NULL && hitActor->id != ACTOR_EN_ITEM00 && hitActor->id != ACTOR_EN_SI) {
+            Fuse::DamageBoomerangFuseDurability(play, 1, "Boomerang hit");
+        }
+        if (hitActor != NULL && ((hitActor->id == ACTOR_EN_ITEM00) || (hitActor->id == ACTOR_EN_SI))) {
+            this->grabbed = hitActor;
+            if (hitActor->id == ACTOR_EN_SI) {
                 this->collider.base.at->flags |= ACTOR_FLAG_HOOKSHOT_ATTACHED;
             }
         }

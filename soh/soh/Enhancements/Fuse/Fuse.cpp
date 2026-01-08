@@ -730,7 +730,7 @@ bool Fuse::IsSwordFused() {
 }
 
 bool Fuse::IsBoomerangFused() {
-    const FuseSlot& slot = gFuseRuntime.GetActiveBoomerangSlot(nullptr);
+    const FuseSlot& slot = gFuseSave.GetActiveBoomerangSlot(nullptr);
     return slot.materialId != MaterialId::None && slot.durabilityCur > 0;
 }
 
@@ -740,7 +740,7 @@ MaterialId Fuse::GetSwordMaterial() {
 }
 
 MaterialId Fuse::GetBoomerangMaterial() {
-    const FuseSlot& slot = gFuseRuntime.GetActiveBoomerangSlot(nullptr);
+    const FuseSlot& slot = gFuseSave.GetActiveBoomerangSlot(nullptr);
     return slot.materialId;
 }
 
@@ -758,12 +758,12 @@ int Fuse::GetSwordFuseMaxDurability() {
 }
 
 int Fuse::GetBoomerangFuseDurability() {
-    const FuseSlot& slot = gFuseRuntime.GetActiveBoomerangSlot(nullptr);
+    const FuseSlot& slot = gFuseSave.GetActiveBoomerangSlot(nullptr);
     return slot.durabilityCur;
 }
 
 int Fuse::GetBoomerangFuseMaxDurability() {
-    const FuseSlot& slot = gFuseRuntime.GetActiveBoomerangSlot(nullptr);
+    const FuseSlot& slot = gFuseSave.GetActiveBoomerangSlot(nullptr);
     return slot.durabilityMax;
 }
 
@@ -784,11 +784,11 @@ bool Fuse::HasLoadedSwordSlots() {
 }
 
 FuseSlot Fuse::GetBoomerangSlot() {
-    return gFuseRuntime.GetBoomerangSlot();
+    return gFuseSave.GetBoomerangSlot();
 }
 
 void Fuse::ApplyLoadedBoomerangSlot(const FuseSlot& slot) {
-    gFuseRuntime.boomerangSlot = slot;
+    gFuseSave.boomerangSlot = slot;
 }
 
 FuseWeaponView Fuse_GetEquippedSwordView(const PlayState* play) {
@@ -824,13 +824,13 @@ void Fuse::SetSwordFuseMaxDurability(int v) {
 
 void Fuse::SetBoomerangFuseDurability(int v) {
     v = std::clamp(v, 0, 65535);
-    FuseSlot& slot = gFuseRuntime.GetActiveBoomerangSlot(nullptr);
+    FuseSlot& slot = gFuseSave.GetActiveBoomerangSlot(nullptr);
     slot.durabilityCur = v;
 }
 
 void Fuse::SetBoomerangFuseMaxDurability(int v) {
     v = std::clamp(v, 0, 65535);
-    FuseSlot& slot = gFuseRuntime.GetActiveBoomerangSlot(nullptr);
+    FuseSlot& slot = gFuseSave.GetActiveBoomerangSlot(nullptr);
     slot.durabilityMax = v;
 }
 
@@ -841,7 +841,7 @@ void Fuse::ClearSwordFuse() {
 }
 
 void Fuse::ClearBoomerangFuse() {
-    FuseSlot& slot = gFuseRuntime.GetActiveBoomerangSlot(nullptr);
+    FuseSlot& slot = gFuseSave.GetActiveBoomerangSlot(nullptr);
     slot.ResetToUnfused();
 }
 
@@ -876,7 +876,7 @@ void Fuse::FuseSwordWithMaterial(MaterialId id, uint16_t maxDurability, bool ini
 
 void Fuse::FuseBoomerangWithMaterial(MaterialId id, uint16_t maxDurability, bool initializeCurrentDurability,
                                      bool logDurability) {
-    FuseSlot& slot = gFuseRuntime.GetActiveBoomerangSlot(nullptr);
+    FuseSlot& slot = gFuseSave.GetActiveBoomerangSlot(nullptr);
     slot.materialId = id;
     slot.durabilityMax = maxDurability;
 
