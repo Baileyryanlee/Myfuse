@@ -79,7 +79,9 @@ static void LoadFuseWeaponSection() {
         FusePersistence::LoadFuseStateFromManager(*SaveManager::Instance);
     Fuse::ApplyLoadedSwordSlots(state.swordSlots);
     Fuse::ApplyLoadedBoomerangSlot(state.boomerangSlot);
-    Fuse::ApplyLoadedHammerSlot(state.hammerSlot);
+    if (state.hammerSlotLoaded) {
+        Fuse::ApplyLoadedHammerSlot(state.hammerSlot);
+    }
     if (state.migratedFromLegacy) {
         FusePersistence::WriteSwordStateToContext(FusePersistence::ClearedSwordState());
     }
