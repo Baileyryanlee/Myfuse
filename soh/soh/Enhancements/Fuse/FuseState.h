@@ -121,9 +121,9 @@ void WriteSwordStateToContext(const FuseSwordSaveState& state);
 void ApplySwordStateFromContext(const PlayState* play);
 
 // SaveManager helpers
-FuseSwordSlotsSaveState LoadSwordSlotsFromManager(SaveManager& manager);
-void SaveSwordSlotsToManager(SaveManager& manager, const std::array<SwordFuseSlot, kSwordSlotCount>& slots,
-                             const FuseSlot& boomerangSlot);
+FuseSwordSlotsSaveState LoadFuseStateFromManager(SaveManager& manager);
+void SaveFuseStateToManager(SaveManager& manager, const std::array<SwordFuseSlot, kSwordSlotCount>& slots,
+                            const FuseSlot& boomerangSlot);
 std::vector<std::pair<MaterialId, uint16_t>> LoadMaterialInventoryFromManager(SaveManager& manager);
 void SaveMaterialInventoryToManager(
     SaveManager& manager, const std::vector<std::pair<MaterialId, uint16_t>>& inventoryEntries);

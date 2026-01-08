@@ -49,7 +49,7 @@ static void SaveFuseWeaponSection(SaveContext* saveContext, int /*sectionID*/, b
 
     const auto slots = Fuse::GetSwordSlots();
     const FuseSlot boomerangSlot = Fuse::GetBoomerangSlot();
-    FusePersistence::SaveSwordSlotsToManager(*SaveManager::Instance, slots, boomerangSlot);
+    FusePersistence::SaveFuseStateToManager(*SaveManager::Instance, slots, boomerangSlot);
 }
 
 static void SaveFuseMaterialsSection(SaveContext* /*saveContext*/, int /*sectionID*/, bool /*fullSave*/) {
@@ -75,11 +75,9 @@ static void SaveFuseDebugOverridesSection(SaveContext* /*saveContext*/, int /*se
 
 static void LoadFuseWeaponSection() {
     const FusePersistence::FuseSwordSlotsSaveState state =
-        FusePersistence::LoadSwordSlotsFromManager(*SaveManager::Instance);
+        FusePersistence::LoadFuseStateFromManager(*SaveManager::Instance);
     Fuse::ApplyLoadedSwordSlots(state.swordSlots);
-    if (state.boomerangSlotLoaded) {
-        Fuse::ApplyLoadedBoomerangSlot(state.boomerangSlot);
-    }
+    Fuse::ApplyLoadedBoomerangSlot(state.boomerangSlot);
     if (state.migratedFromLegacy) {
         FusePersistence::WriteSwordStateToContext(FusePersistence::ClearedSwordState());
     }

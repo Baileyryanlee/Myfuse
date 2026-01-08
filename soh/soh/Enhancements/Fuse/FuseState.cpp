@@ -254,7 +254,7 @@ void ApplySwordStateFromContext(const PlayState* play) {
                              static_cast<s16>(state.legacyDurability));
 }
 
-FuseSwordSlotsSaveState LoadSwordSlotsFromManager(SaveManager& manager) {
+FuseSwordSlotsSaveState LoadFuseStateFromManager(SaveManager& manager) {
     FuseSwordSlotsSaveState state{};
     int32_t version = 0;
     int legacyMaterialId = kSwordMaterialIdNone;
@@ -347,8 +347,8 @@ FuseSwordSlotsSaveState LoadSwordSlotsFromManager(SaveManager& manager) {
     return state;
 }
 
-void SaveSwordSlotsToManager(SaveManager& manager, const std::array<SwordFuseSlot, kSwordSlotCount>& slots,
-                             const FuseSlot& boomerangSlot) {
+void SaveFuseStateToManager(SaveManager& manager, const std::array<SwordFuseSlot, kSwordSlotCount>& slots,
+                            const FuseSlot& boomerangSlot) {
     manager.SaveStruct(kSwordSaveSectionName, [&]() {
         manager.SaveData(kSwordSaveVersionKey, static_cast<int32_t>(kFuseSaveVersion));
         manager.SaveArray(kSwordSlotsKey, kSwordSlotCount, [&](size_t i) {
