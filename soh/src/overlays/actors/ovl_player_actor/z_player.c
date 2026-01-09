@@ -318,6 +318,8 @@ void Player_Action_8084E368(Player* this, PlayState* play);
 void Player_Action_8084E3C4(Player* this, PlayState* play);
 void Player_Action_8084E604(Player* this, PlayState* play);
 void Player_Action_8084E6D4(Player* this, PlayState* play);
+
+static void Player_SetupShieldBash(Player* this, PlayState* play);
 void Player_Action_8084E9AC(Player* this, PlayState* play);
 void Player_Action_8084EAC0(Player* this, PlayState* play);
 void Player_Action_SwingBottle(Player* this, PlayState* play);
@@ -413,6 +415,7 @@ static s32 D_80858AA0;
 static s32 sSavedCurrentMask;
 static Vec3f sInteractWallCheckResult;
 static Input* sControlInput;
+static s32 sGuardActionLogArmed;
 
 // .data
 
@@ -2756,16 +2759,20 @@ LinkAnimationHeader* func_808346C4(PlayState* play, Player* this) {
 s32 func_80834758(PlayState* play, Player* this) {
     LinkAnimationHeader* anim;
     f32 frame;
+    s32 isChildHylian = Player_IsChildWithHylianShield(this);
+    s32 isZTargeting = Player_IsZTargeting(this);
+    s32 isShieldHeld = CHECK_BTN_ALL(sControlInput->cur.button, BTN_R);
 
     if (!(this->stateFlags1 & (PLAYER_STATE1_SHIELDING | PLAYER_STATE1_ON_HORSE | PLAYER_STATE1_IN_CUTSCENE)) &&
         (play->shootingGalleryStatus == 0) && (this->heldItemAction == this->itemAction) &&
-        (this->currentShield != PLAYER_SHIELD_NONE) && !Player_IsChildWithHylianShield(this) &&
-        Player_IsZTargeting(this) && CHECK_BTN_ALL(sControlInput->cur.button, BTN_R)) {
+        (this->currentShield != PLAYER_SHIELD_NONE) && !isChildHylian && isZTargeting && isShieldHeld) {
 
         anim = func_808346C4(play, this);
         frame = Animation_GetLastFrame(anim);
         LinkAnimation_Change(play, &this->upperSkelAnime, anim, 1.0f, frame, frame, ANIMMODE_ONCE, 0.0f);
         Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
+        osSyncPrintf("[FuseDBG] PostureStart: zTarget=%d R=%d childHylian=%d\n", isZTargeting, isShieldHeld,
+                     isChildHylian);
 
         return 1;
     } else {
@@ -2773,12 +2780,27 @@ s32 func_80834758(PlayState* play, Player* this) {
     }
 }
 
-s32 func_8083485C(Player* this, PlayState* play) {
-    if (func_80834758(play, this)) {
-        return true;
-    } else {
-        return false;
+static s32 Player_TryShieldBashFromPosture(Player* this, PlayState* play, s32 postureTriggered) {
+    s32 pressedA = CHECK_BTN_ALL(sControlInput->press.button, BTN_A);
+
+    if (postureTriggered && pressedA && CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) && Player_IsZTargeting(this) &&
+        Player_CheckHostileLockOn(this) && !Player_IsChildWithHylianShield(this)) {
+        osSyncPrintf("[FuseDBG] BashStart(Posture): target=%d\n", (this->focusActor != NULL) ? this->focusActor->id : -1);
+        Player_SetupShieldBash(this, play);
+        return 1;
     }
+
+    return 0;
+}
+
+s32 func_8083485C(Player* this, PlayState* play) {
+    s32 postureTriggered = func_80834758(play, this);
+
+    if (Player_TryShieldBashFromPosture(this, play, postureTriggered)) {
+        return true;
+    }
+
+    return postureTriggered ? true : false;
 }
 
 void func_80834894(Player* this) {
@@ -2821,7 +2843,13 @@ s32 func_8083499C(Player* this, PlayState* play) {
  * This upper body action allows for shielding or changing held items while a sword is in hand.
  */
 s32 Player_UpperAction_Sword(Player* this, PlayState* play) {
-    if (func_80834758(play, this) || func_8083499C(this, play)) {
+    s32 postureTriggered = func_80834758(play, this);
+
+    if (Player_TryShieldBashFromPosture(this, play, postureTriggered)) {
+        return true;
+    }
+
+    if (postureTriggered || func_8083499C(this, play)) {
         return true;
     } else {
         return false;
@@ -2977,11 +3005,17 @@ s32 func_80834FBC(Player* this) {
 }
 
 s32 func_8083501C(Player* this, PlayState* play) {
+    s32 postureTriggered = func_80834758(play, this);
+
+    if (Player_TryShieldBashFromPosture(this, play, postureTriggered)) {
+        return true;
+    }
+
     if (this->unk_860 >= 0) {
         this->unk_860 = -this->unk_860;
     }
 
-    if ((!Player_HoldsHookshot(this) || func_80834FBC(this)) && !func_80834758(play, this) &&
+    if ((!Player_HoldsHookshot(this) || func_80834FBC(this)) && !postureTriggered &&
         !func_80834F2C(this, play)) {
         return false;
     } else if (this->rideActor != NULL) {
@@ -3084,13 +3118,20 @@ s32 func_808351D4(Player* this, PlayState* play) {
 }
 
 s32 func_808353D8(Player* this, PlayState* play) {
+    s32 postureTriggered;
+
     LinkAnimation_Update(play, &this->upperSkelAnime);
 
     if (Player_HoldsHookshot(this) && !func_80834FBC(this)) {
         return true;
     }
 
-    if (!func_80834758(play, this) &&
+    postureTriggered = func_80834758(play, this);
+    if (Player_TryShieldBashFromPosture(this, play, postureTriggered)) {
+        return true;
+    }
+
+    if (!postureTriggered &&
         (sUseHeldItem || ((this->unk_860 < 0) && sHeldItemButtonIsHeldDown) || func_80834E44(play))) {
         this->unk_860 = ABS(this->unk_860);
 
@@ -3166,12 +3207,18 @@ void func_80835688(Player* this, PlayState* play) {
 
 s32 Player_UpperAction_CarryActor(Player* this, PlayState* play) {
     Actor* heldActor = this->heldActor;
+    s32 postureTriggered;
 
     if (heldActor == NULL) {
         func_80834644(play, this);
     }
 
-    if (func_80834758(play, this)) {
+    postureTriggered = func_80834758(play, this);
+    if (Player_TryShieldBashFromPosture(this, play, postureTriggered)) {
+        return true;
+    }
+
+    if (postureTriggered) {
         return true;
     }
 
@@ -3201,7 +3248,13 @@ void func_808357E8(Player* this, Gfx** dLists) {
 }
 
 s32 func_80835800(Player* this, PlayState* play) {
-    if (func_80834758(play, this)) {
+    s32 postureTriggered = func_80834758(play, this);
+
+    if (Player_TryShieldBashFromPosture(this, play, postureTriggered)) {
+        return true;
+    }
+
+    if (postureTriggered) {
         return true;
     }
 
@@ -3284,7 +3337,13 @@ s32 func_808359FC(Player* this, PlayState* play) {
 }
 
 s32 func_80835B60(Player* this, PlayState* play) {
-    if (func_80834758(play, this)) {
+    s32 postureTriggered = func_80834758(play, this);
+
+    if (Player_TryShieldBashFromPosture(this, play, postureTriggered)) {
+        return true;
+    }
+
+    if (postureTriggered) {
         return true;
     }
 
@@ -3326,6 +3385,9 @@ s32 Player_SetupAction(PlayState* play, Player* this, PlayerActionFunc actionFun
     }
 
     this->actionFunc = actionFunc;
+    if (actionFunc == Player_Action_80843188) {
+        sGuardActionLogArmed = 1;
+    }
 
     if ((this->itemAction != this->heldItemAction) &&
         (!(flags & 1) || !(this->stateFlags1 & PLAYER_STATE1_SHIELDING))) {
@@ -9349,6 +9411,14 @@ static void Player_Action_ShieldBash(Player* this, PlayState* play) {
 }
 
 void Player_Action_80843188(Player* this, PlayState* play) {
+    s32 aDown = CHECK_BTN_ALL(sControlInput->cur.button, BTN_A);
+    s32 pressedA = CHECK_BTN_ALL(sControlInput->press.button, BTN_A);
+
+    if (sGuardActionLogArmed) {
+        osSyncPrintf("[FuseDBG] GuardActionEnter\n");
+        sGuardActionLogArmed = 0;
+    }
+
     if (LinkAnimation_Update(play, &this->skelAnime)) {
         if (!Player_IsChildWithHylianShield(this)) {
             Player_AnimPlayLoop(play, this, GET_PLAYER_ANIM(PLAYER_ANIMGROUP_defense_wait, this->modelAnimType));
@@ -9365,13 +9435,18 @@ void Player_Action_80843188(Player* this, PlayState* play) {
 
     Player_DecelerateToZero(this);
 
-    if (CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) && CHECK_BTN_ALL(sControlInput->press.button, BTN_A) &&
+    if (pressedA) {
+        osSyncPrintf("[FuseDBG] GuardActionA: down=%d\n", aDown);
+    }
+
+    if (CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) && pressedA &&
         Player_IsZTargeting(this) && Player_CheckHostileLockOn(this) && !Player_IsChildWithHylianShield(this)) {
+        osSyncPrintf("[FuseDBG] BashStart(Guard): target=%d\n", (this->focusActor != NULL) ? this->focusActor->id : -1);
         Player_SetupShieldBash(this, play);
         return;
     }
 
-    if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A)) {
+    if (pressedA) {
         sControlInput->press.button &= ~BTN_A;
     }
 
