@@ -523,6 +523,11 @@ void FusePause_UpdateModal(PlayState* play) {
             Fuse::Log("[FuseDBG] UI:ResolvedSlot item=%s mat=%d dur=%d/%d\n",
                       PauseItemName(sModal.activeItem, context.hoveredSword),
                       static_cast<int>(resolvedSlot.materialId), resolvedSlot.durabilityCur, resolvedSlot.durabilityMax);
+            if (sModal.activeItem == FusePauseItem::Hammer) {
+                const FuseSlot rawHammerSlot = Fuse::GetLoadedHammerSlot();
+                Fuse::Log("[FuseDBG] UI:RawHammerSave mat=%d dur=%d/%d\n", static_cast<int>(rawHammerSlot.materialId),
+                          rawHammerSlot.durabilityCur, rawHammerSlot.durabilityMax);
+            }
             Fuse::Log("[FuseDBG] UI:Open item=%s confirmedMat=%d locked=%d\n",
                       PauseItemName(sModal.activeItem, context.hoveredSword), static_cast<int>(weaponView.materialId),
                       sModal.isLocked ? 1 : 0);

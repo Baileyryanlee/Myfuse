@@ -136,6 +136,8 @@ FuseSlot GetBoomerangSlot();
 void ApplyLoadedBoomerangSlot(const FuseSlot& slot);
 FuseSlot GetHammerSlot();
 void ApplyLoadedHammerSlot(const FuseSlot& slot);
+bool HasLoadedHammerSlot();
+FuseSlot GetLoadedHammerSlot();
 
 // Simple logger (goes to VS Output on Windows)
 void Log(const char* fmt, ...);
