@@ -95,6 +95,13 @@ void FuseHammerWithMaterial(MaterialId id, uint16_t maxDurability, bool initiali
                             bool logDurability = true);
 FuseResult TryFuseHammer(MaterialId id);
 FuseResult TryUnfuseHammer();
+bool HammerDrainedThisSwing();
+bool HammerHitActorThisSwing();
+s16 GetHammerSwingId();
+void ResetHammerSwingTracking(s16 swingId);
+void SetHammerDrainedThisSwing(bool drained);
+void SetHammerHitActorThisSwing(bool hit);
+void IncrementHammerSwingId();
 
 // MVP: award rock and (optionally) auto-fuse to sword (runtime for now)
 void AwardRockMaterial();
