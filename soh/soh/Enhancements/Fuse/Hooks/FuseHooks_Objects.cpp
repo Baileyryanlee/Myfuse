@@ -30,6 +30,7 @@ static Actor* gTrackedThrownRock = nullptr;
 static int gFramesUntilThrownRockCheck = 0;
 static int gLastImpactDrainFrame = -1;
 static int gSwordATVictimCooldownFrame = -1;
+static bool gWasHammerAttacking = false;
 static std::unordered_set<void*> gSwordATVictimCooldown;
 static std::unordered_set<void*> gAwardedFrozenShards;
 static uint32_t gSwordBaseDmgFlags[4];
@@ -81,6 +82,30 @@ static bool IsPlayerSwingingSword(const Player* player) {
 
 static bool IsPlayerHammerAttack(const Player* player) {
     return player && (player->heldItemAction == PLAYER_IA_HAMMER || player->itemAction == PLAYER_IA_HAMMER);
+}
+
+static bool IsHammerAttackActive(const Player* player) {
+    return IsPlayerHammerAttack(player) && player->meleeWeaponState != 0;
+}
+
+static bool IsHammerGroundImpactFrame(Player* player) {
+    if (!player) {
+        return false;
+    }
+
+    if (player->meleeWeaponAnimation == PLAYER_MWA_HAMMER_FORWARD) {
+        return LinkAnimation_OnFrame(&player->skelAnime, 7.0f);
+    }
+
+    if (player->meleeWeaponAnimation == PLAYER_MWA_HAMMER_SIDE) {
+        return LinkAnimation_OnFrame(&player->skelAnime, 7.0f);
+    }
+
+    if (player->meleeWeaponAnimation == PLAYER_MWA_JUMPSLASH_FINISH) {
+        return LinkAnimation_OnFrame(&player->skelAnime, 2.0f);
+    }
+
+    return false;
 }
 
 static bool IsAnyLiftableRockNearPlayer(PlayState* play, Player* player) {
@@ -350,6 +375,10 @@ extern "C" void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollid
     const int after = isHammerAttack ? Fuse::GetHammerFuseDurability() : Fuse::GetSwordFuseDurability();
     Fuse::Log("[FuseMVP] %s AT collision DRAIN frame=%d fused=%d victim=%p durability=%d->%d%s\n",
               isHammerAttack ? "Hammer" : "Sword", curFrame, 1, victimPtr, before, after, broke ? " (broke)" : "");
+    if (isHammerAttack) {
+        Fuse::SetHammerHitActorThisSwing(true);
+        Fuse::SetHammerDrainedThisSwing(true);
+    }
 
     if (victimActor && victimActor->freezeTimer > 0 && victimPtr && gSwordATVictimCooldown.count(victimPtr) == 0) {
         int baseDamage = 0;
@@ -501,6 +530,7 @@ void OnLoadGame_ResetObjects() {
     gFramesUntilThrownRockCheck = 0;
     gLastImpactDrainFrame = -1;
     gSwordATVictimCooldownFrame = -1;
+    gWasHammerAttacking = false;
     gSwordATVictimCooldown.clear();
     gAwardedFrozenShards.clear();
     gSwordBaseValid = false;
@@ -556,6 +586,32 @@ void OnPlayerUpdate(PlayState* play) {
         return;
 
     Player* player = GetPlayerSafe(play);
+    if (!player)
+        return;
+
+    const bool isHammerAttacking = IsHammerAttackActive(player);
+    if (isHammerAttacking && !gWasHammerAttacking) {
+        Fuse::IncrementHammerSwingId();
+        const s16 swingId = Fuse::GetHammerSwingId();
+        Fuse::ResetHammerSwingTracking(swingId);
+        Fuse::Log("[FuseMVP] Hammer swing start id=%d frame=%d\n", swingId, play ? play->gameplayFrames : -1);
+    }
+
+    gWasHammerAttacking = isHammerAttacking;
+
+    if (isHammerAttacking && IsHammerGroundImpactFrame(player)) {
+        const bool fused = Fuse::IsHammerFused();
+        const int before = Fuse::GetHammerFuseDurability();
+
+        if (!Fuse::HammerDrainedThisSwing() && fused && before > 0) {
+            const bool broke = Fuse::DamageHammerFuseDurability(play, 1, "Hammer ground impact");
+            const int after = Fuse::GetHammerFuseDurability();
+            Fuse::SetHammerDrainedThisSwing(true);
+            Fuse::Log("[FuseMVP] Hammer GROUND impact DRAIN frame=%d durability=%d->%d%s\n",
+                      play ? play->gameplayFrames : -1, before, after, broke ? " (broke)" : "");
+        }
+    }
+
     if (!IsPlayerSwingingSword(player))
         return;
 

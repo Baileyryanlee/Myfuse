@@ -1110,6 +1110,40 @@ Fuse::FuseResult Fuse::TryUnfuseHammer() {
     return FuseResult::Ok;
 }
 
+bool Fuse::HammerDrainedThisSwing() {
+    return gFuseRuntime.hammerDrainedThisSwing;
+}
+
+bool Fuse::HammerHitActorThisSwing() {
+    return gFuseRuntime.hammerHitActorThisSwing;
+}
+
+s16 Fuse::GetHammerSwingId() {
+    return gFuseRuntime.hammerSwingId;
+}
+
+void Fuse::ResetHammerSwingTracking(s16 swingId) {
+    gFuseRuntime.hammerDrainedThisSwing = false;
+    gFuseRuntime.hammerHitActorThisSwing = false;
+    gFuseRuntime.hammerSwingId = swingId;
+}
+
+void Fuse::SetHammerDrainedThisSwing(bool drained) {
+    gFuseRuntime.hammerDrainedThisSwing = drained;
+}
+
+void Fuse::SetHammerHitActorThisSwing(bool hit) {
+    gFuseRuntime.hammerHitActorThisSwing = hit;
+}
+
+void Fuse::IncrementHammerSwingId() {
+    if (gFuseRuntime.hammerSwingId == std::numeric_limits<s16>::max()) {
+        gFuseRuntime.hammerSwingId = 0;
+    } else {
+        gFuseRuntime.hammerSwingId++;
+    }
+}
+
 bool Fuse::DamageSwordFuseDurability(PlayState* play, int amount, const char* reason) {
     amount = std::max(amount, 0);
 

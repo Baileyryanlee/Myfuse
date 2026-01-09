@@ -73,6 +73,9 @@ struct FuseRuntimeState {
     bool enabled = true;
     bool swordFuseLoadedFromSave = false;
     FuseSlot hammerSlot{};
+    bool hammerDrainedThisSwing = false;
+    bool hammerHitActorThisSwing = false;
+    s16 hammerSwingId = 0;
 
     // Useful for debugging/testing
     const char* lastEvent = "None";
