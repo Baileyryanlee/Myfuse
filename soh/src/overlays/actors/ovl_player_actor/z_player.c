@@ -9254,6 +9254,100 @@ s32 func_80842DF4(PlayState* play, Player* this) {
     return 0;
 }
 
+static void Player_Action_ShieldBash(Player* this, PlayState* play);
+
+static void Player_SetupShieldBash(Player* this, PlayState* play) {
+    LinkAnimationHeader* anim = GET_PLAYER_ANIM(PLAYER_ANIMGROUP_defense, this->modelAnimType);
+
+    Player_SetupAction(play, this, Player_Action_ShieldBash, 0);
+    Player_AnimPlayOnce(play, this, anim);
+    this->av2.actionVar2 = 16;
+    this->av1.actionVar1 = 0;
+    this->shieldQuad.info.toucher.dmgFlags = 0;
+    this->shieldQuad.info.toucher.damage = 0;
+
+    osSyncPrintf("[FuseDBG] BashStart: target=%d\n", (this->focusActor != NULL) ? this->focusActor->id : -1);
+}
+
+static void Player_Action_ShieldBash(Player* this, PlayState* play) {
+    static const f32 kShieldBashKnockback = 4.0f;
+    static const f32 kShieldBashVelocity = 4.0f;
+    static const f32 kShieldBashStartFrame = 3.0f;
+    static const f32 kShieldBashActiveStart = 4.0f;
+    static const f32 kShieldBashActiveEnd = 10.0f;
+    s32 animDone;
+    f32 curFrame;
+
+    animDone = LinkAnimation_Update(play, &this->skelAnime);
+    if (this->av2.actionVar2 > 0) {
+        this->av2.actionVar2--;
+    }
+
+    this->stateFlags1 |= PLAYER_STATE1_SHIELDING;
+    Player_SetModelsForHoldingShield(this);
+
+    curFrame = this->skelAnime.curFrame;
+    if (curFrame <= kShieldBashStartFrame) {
+        this->linearVelocity = kShieldBashVelocity;
+    } else {
+        Player_DecelerateToZero(this);
+    }
+
+    if (!this->av1.actionVar1 && (curFrame >= kShieldBashActiveStart) && (curFrame <= kShieldBashActiveEnd) &&
+        (this->shieldQuad.base.atFlags & AT_HIT)) {
+        Actor* target = this->shieldQuad.base.at;
+        s16 knockbackYaw = 0;
+        s32 stunFrames = 0;
+
+        if (target != NULL) {
+            knockbackYaw = Actor_WorldYawTowardActor(&this->actor, target);
+            target->speedXZ = kShieldBashKnockback;
+            target->velocity.x = Math_SinS(knockbackYaw) * kShieldBashKnockback;
+            target->velocity.z = Math_CosS(knockbackYaw) * kShieldBashKnockback;
+            target->world.rot.y = knockbackYaw;
+        }
+
+        // TODO: find a reliable stun API for shield bash targets.
+        osSyncPrintf("[FuseDBG] BashHit: target=%d knockback=%.2f stun=%d\n",
+                     (target != NULL) ? target->id : -1, kShieldBashKnockback, stunFrames);
+        this->av1.actionVar1 = 1;
+    }
+
+    if ((this->av2.actionVar2 == 0) || animDone) {
+        if (CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) && !Player_IsChildWithHylianShield(this)) {
+            LinkAnimationHeader* anim = GET_PLAYER_ANIM(PLAYER_ANIMGROUP_defense, this->modelAnimType);
+            f32 frames = Animation_GetLastFrame(anim);
+
+            Player_SetupAction(play, this, Player_Action_80843188, 1);
+            this->stateFlags1 |= PLAYER_STATE1_SHIELDING;
+            Player_SetModelsForHoldingShield(this);
+            LinkAnimation_Change(play, &this->skelAnime, anim, 1.0f, frames, frames, ANIMMODE_ONCE, 0.0f);
+            osSyncPrintf("[FuseDBG] BashEnd: return=guard\n");
+        } else {
+            this->stateFlags1 &= ~PLAYER_STATE1_SHIELDING;
+            func_80832318(this);
+
+            if (Player_IsChildWithHylianShield(this)) {
+                func_8083A060(this, play);
+                LinkAnimation_Change(play, &this->skelAnime, &gPlayerAnim_clink_normal_defense_ALL, 1.0f,
+                                     Animation_GetLastFrame(&gPlayerAnim_clink_normal_defense_ALL), 0.0f, ANIMMODE_ONCE,
+                                     0.0f);
+                Player_StartAnimMovement(play, this, 4);
+            } else {
+                if (this->itemAction < 0) {
+                    func_8008EC70(this);
+                }
+                func_8083A098(this, GET_PLAYER_ANIM(PLAYER_ANIMGROUP_defense_end, this->modelAnimType), play);
+            }
+
+            Player_PlaySfx(this, NA_SE_IT_SHIELD_REMOVE);
+            osSyncPrintf("[FuseDBG] BashEnd: return=neutral\n");
+        }
+
+        return;
+    }
+}
+
 void Player_Action_80843188(Player* this, PlayState* play) {
     if (LinkAnimation_Update(play, &this->skelAnime)) {
         if (!Player_IsChildWithHylianShield(this)) {
@@ -9270,6 +9364,16 @@ void Player_Action_80843188(Player* this, PlayState* play) {
     }
 
     Player_DecelerateToZero(this);
+
+    if (CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) && CHECK_BTN_ALL(sControlInput->press.button, BTN_A) &&
+        Player_IsZTargeting(this) && Player_CheckHostileLockOn(this) && !Player_IsChildWithHylianShield(this)) {
+        Player_SetupShieldBash(this, play);
+        return;
+    }
+
+    if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A)) {
+        sControlInput->press.button &= ~BTN_A;
+    }
 
     if (this->av2.actionVar2 != 0) {
         f32 sp54;
