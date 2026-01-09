@@ -5,6 +5,7 @@
 
 #include "soh/Enhancements/Fuse/Fuse.h"
 #include "soh/Enhancements/Fuse/FuseState.h"
+#include "soh/Enhancements/Fuse/Hooks/FuseHooks_Objects.h"
 #include "soh/Enhancements/Fuse/UI/FuseMenuWindow.h"
 #include "soh/SaveManager.h"
 
@@ -18,14 +19,6 @@ extern "C" {
 #include "variables.h"
 extern PlayState* gPlayState;
 }
-
-// Forward declarations from hooks cpp
-namespace FuseHooks {
-void OnLoadGame_ResetObjects();
-void OnFrame_Objects_Pre(PlayState* play);
-void OnFrame_Objects_Post(PlayState* play);
-void OnPlayerUpdate(PlayState* play);
-} // namespace FuseHooks
 
 static std::shared_ptr<FuseMenuWindow> sFuseMenuWindow;
 static bool sFuseMenuShown = false;
