@@ -33,6 +33,8 @@ using Fuse::MaterialDebugOverride;
 static FuseSaveData gFuseSave; // persistent-ready (not serialized yet)
 static FuseRuntimeState gFuseRuntime;
 static bool sSwordSlotsLoadedFromSaveManager = false;
+static bool sHammerSlotLoadedFromSaveManager = false;
+static FuseSlot sLoadedHammerSlot;
 static std::unordered_map<MaterialId, uint16_t> sMaterialInventory;
 static bool sMaterialInventoryInitialized = false;
 static constexpr size_t kSwordFreezeQueueCount = 2;
@@ -829,8 +831,18 @@ FuseSlot Fuse::GetHammerSlot() {
 
 void Fuse::ApplyLoadedHammerSlot(const FuseSlot& slot) {
     gFuseRuntime.hammerSlot = slot;
+    sLoadedHammerSlot = slot;
+    sHammerSlotLoadedFromSaveManager = true;
     Fuse::Log("[FuseSave] ApplyHammer mat=%d dur=%d/%d\n", static_cast<int>(slot.materialId), slot.durabilityCur,
               slot.durabilityMax);
+}
+
+bool Fuse::HasLoadedHammerSlot() {
+    return sHammerSlotLoadedFromSaveManager;
+}
+
+FuseSlot Fuse::GetLoadedHammerSlot() {
+    return sLoadedHammerSlot;
 }
 
 FuseWeaponView Fuse_GetEquippedSwordView(const PlayState* play) {
@@ -1201,6 +1213,9 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
     gFuseRuntime = FuseRuntimeState{};
     gFuseRuntime.enabled = true;
     gFuseRuntime.lastEvent = "Loaded";
+    if (sHammerSlotLoadedFromSaveManager) {
+        gFuseRuntime.hammerSlot = sLoadedHammerSlot;
+    }
 
     ResetSwordFreezeQueueInternal();
     sFuseFrozenTimers.clear();
