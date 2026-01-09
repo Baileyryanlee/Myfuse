@@ -489,6 +489,10 @@ void RestoreSwordHitboxVanillaNow(PlayState* play) {
     gHammerizeAppliedFrame = -1;
 }
 
+void OnSwordFuseBroken(PlayState* play) {
+    Fuse::OnSwordFuseBroken(play);
+}
+
 void OnLoadGame_ResetObjects() {
     gHammerizeAppliedFrame = -1;
     gPrevHeldActor = nullptr;

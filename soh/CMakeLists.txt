@@ -133,6 +133,8 @@ list(APPEND soh__
     ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/UI/FusePauseBridge.cpp
 )
 
+list(REMOVE_DUPLICATES soh__)
+
 
 
 # Add specific files that don't match the pattern
