@@ -6400,9 +6400,13 @@ static void Player_Action_ShieldBash(Player* this, PlayState* play) {
     }
 
     if (bashActive) {
-        Vec3f bashCenter;
         Actor* target;
-        f32 forwardDist = 22.0f;
+        const f32 forwardDist = 22.0f;
+        const s16 radius = 22;
+        const s16 height = 50;
+        const f32 bottomOffsetY = 8.0f;
+        f32 fx;
+        f32 fz;
 
         if (!(this->av1.actionVar1 & PLAYER_BASH_AT_LOGGED)) {
             osSyncPrintf("[FuseDBG] BashATOn: frame=%.1f\n", frame);
@@ -6415,19 +6419,10 @@ static void Player_Action_ShieldBash(Player* this, PlayState* play) {
             sShieldBashOCInit = 1;
         }
 
-        Collider_UpdateCylinder(&this->actor, &sShieldBashOC);
-
-        bashCenter.x = this->actor.world.pos.x + (Math_SinS(this->actor.shape.rot.y) * forwardDist);
-        bashCenter.z = this->actor.world.pos.z + (Math_CosS(this->actor.shape.rot.y) * forwardDist);
-        bashCenter.y = this->actor.world.pos.y + 20.0f;
-        sShieldBashOC.dim.pos.x = bashCenter.x;
-        sShieldBashOC.dim.pos.y = bashCenter.y;
-        sShieldBashOC.dim.pos.z = bashCenter.z;
-
-        CollisionCheck_SetOC(play, &play->colChkCtx, &sShieldBashOC.base);
-
         if (!(this->av1.actionVar1 & PLAYER_BASH_HIT) && (sShieldBashOC.base.ocFlags1 & OC1_HIT)) {
             target = sShieldBashOC.base.oc;
+            sShieldBashOC.base.ocFlags1 &= ~OC1_HIT;
+            sShieldBashOC.base.oc = NULL;
             if ((target != NULL) && (target->category == ACTORCAT_ENEMY)) {
                 s16 pushYaw = Actor_WorldYawTowardActor(&this->actor, target);
                 f32 knockback = 4.0f;
@@ -6438,12 +6433,21 @@ static void Player_Action_ShieldBash(Player* this, PlayState* play) {
                 target->speedXZ = knockback;
                 target->freezeTimer = 8;
                 Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
-                osSyncPrintf("[FuseDBG] BashHit(enemy): id=%d\n", target->id);
                 this->av1.actionVar1 |= PLAYER_BASH_HIT;
             }
-            sShieldBashOC.base.ocFlags1 &= ~OC1_HIT;
-            sShieldBashOC.base.oc = NULL;
         }
+
+        Collider_UpdateCylinder(&this->actor, &sShieldBashOC);
+
+        fx = Math_SinS(this->actor.shape.rot.y) * forwardDist;
+        fz = Math_CosS(this->actor.shape.rot.y) * forwardDist;
+        sShieldBashOC.dim.radius = radius;
+        sShieldBashOC.dim.height = height;
+        sShieldBashOC.dim.pos.x = this->actor.world.pos.x + fx;
+        sShieldBashOC.dim.pos.z = this->actor.world.pos.z + fz;
+        sShieldBashOC.dim.pos.y = (s16)(this->actor.world.pos.y + bottomOffsetY + (height * 0.5f));
+
+        CollisionCheck_SetOC(play, &play->colChkCtx, &sShieldBashOC.base);
     }
 
     if ((this->av2.actionVar2 <= 0) || animDone) {
