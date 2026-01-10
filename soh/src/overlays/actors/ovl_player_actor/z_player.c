@@ -319,7 +319,6 @@ void Player_Action_8084E3C4(Player* this, PlayState* play);
 void Player_Action_8084E604(Player* this, PlayState* play);
 void Player_Action_8084E6D4(Player* this, PlayState* play);
 
-static void Player_SetupShieldBash(Player* this, PlayState* play);
 void Player_Action_8084E9AC(Player* this, PlayState* play);
 void Player_Action_8084EAC0(Player* this, PlayState* play);
 void Player_Action_SwingBottle(Player* this, PlayState* play);
@@ -415,7 +414,6 @@ static s32 D_80858AA0;
 static s32 sSavedCurrentMask;
 static Vec3f sInteractWallCheckResult;
 static Input* sControlInput;
-static s32 sGuardActionLogArmed;
 
 // .data
 
@@ -2771,34 +2769,14 @@ s32 func_80834758(PlayState* play, Player* this) {
         frame = Animation_GetLastFrame(anim);
         LinkAnimation_Change(play, &this->upperSkelAnime, anim, 1.0f, frame, frame, ANIMMODE_ONCE, 0.0f);
         Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
-        osSyncPrintf("[FuseDBG] PostureStart: zTarget=%d R=%d childHylian=%d\n", isZTargeting, isShieldHeld,
-                     isChildHylian);
-
         return 1;
     } else {
         return 0;
     }
 }
 
-static s32 Player_TryShieldBashFromPosture(Player* this, PlayState* play, s32 postureTriggered) {
-    s32 pressedA = CHECK_BTN_ALL(sControlInput->press.button, BTN_A);
-
-    if (postureTriggered && pressedA && CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) && Player_IsZTargeting(this) &&
-        Player_CheckHostileLockOn(this) && !Player_IsChildWithHylianShield(this)) {
-        osSyncPrintf("[FuseDBG] BashStart(Posture): target=%d\n", (this->focusActor != NULL) ? this->focusActor->id : -1);
-        Player_SetupShieldBash(this, play);
-        return 1;
-    }
-
-    return 0;
-}
-
 s32 func_8083485C(Player* this, PlayState* play) {
     s32 postureTriggered = func_80834758(play, this);
-
-    if (Player_TryShieldBashFromPosture(this, play, postureTriggered)) {
-        return true;
-    }
 
     return postureTriggered ? true : false;
 }
@@ -2844,10 +2822,6 @@ s32 func_8083499C(Player* this, PlayState* play) {
  */
 s32 Player_UpperAction_Sword(Player* this, PlayState* play) {
     s32 postureTriggered = func_80834758(play, this);
-
-    if (Player_TryShieldBashFromPosture(this, play, postureTriggered)) {
-        return true;
-    }
 
     if (postureTriggered || func_8083499C(this, play)) {
         return true;
@@ -3007,10 +2981,6 @@ s32 func_80834FBC(Player* this) {
 s32 func_8083501C(Player* this, PlayState* play) {
     s32 postureTriggered = func_80834758(play, this);
 
-    if (Player_TryShieldBashFromPosture(this, play, postureTriggered)) {
-        return true;
-    }
-
     if (this->unk_860 >= 0) {
         this->unk_860 = -this->unk_860;
     }
@@ -3127,10 +3097,6 @@ s32 func_808353D8(Player* this, PlayState* play) {
     }
 
     postureTriggered = func_80834758(play, this);
-    if (Player_TryShieldBashFromPosture(this, play, postureTriggered)) {
-        return true;
-    }
-
     if (!postureTriggered &&
         (sUseHeldItem || ((this->unk_860 < 0) && sHeldItemButtonIsHeldDown) || func_80834E44(play))) {
         this->unk_860 = ABS(this->unk_860);
@@ -3214,10 +3180,6 @@ s32 Player_UpperAction_CarryActor(Player* this, PlayState* play) {
     }
 
     postureTriggered = func_80834758(play, this);
-    if (Player_TryShieldBashFromPosture(this, play, postureTriggered)) {
-        return true;
-    }
-
     if (postureTriggered) {
         return true;
     }
@@ -3249,10 +3211,6 @@ void func_808357E8(Player* this, Gfx** dLists) {
 
 s32 func_80835800(Player* this, PlayState* play) {
     s32 postureTriggered = func_80834758(play, this);
-
-    if (Player_TryShieldBashFromPosture(this, play, postureTriggered)) {
-        return true;
-    }
 
     if (postureTriggered) {
         return true;
@@ -3339,10 +3297,6 @@ s32 func_808359FC(Player* this, PlayState* play) {
 s32 func_80835B60(Player* this, PlayState* play) {
     s32 postureTriggered = func_80834758(play, this);
 
-    if (Player_TryShieldBashFromPosture(this, play, postureTriggered)) {
-        return true;
-    }
-
     if (postureTriggered) {
         return true;
     }
@@ -3385,9 +3339,6 @@ s32 Player_SetupAction(PlayState* play, Player* this, PlayerActionFunc actionFun
     }
 
     this->actionFunc = actionFunc;
-    if (actionFunc == Player_Action_80843188) {
-        sGuardActionLogArmed = 1;
-    }
 
     if ((this->itemAction != this->heldItemAction) &&
         (!(flags & 1) || !(this->stateFlags1 & PLAYER_STATE1_SHIELDING))) {
@@ -9316,109 +9267,7 @@ s32 func_80842DF4(PlayState* play, Player* this) {
     return 0;
 }
 
-static void Player_Action_ShieldBash(Player* this, PlayState* play);
-
-static void Player_SetupShieldBash(Player* this, PlayState* play) {
-    LinkAnimationHeader* anim = GET_PLAYER_ANIM(PLAYER_ANIMGROUP_defense, this->modelAnimType);
-
-    Player_SetupAction(play, this, Player_Action_ShieldBash, 0);
-    Player_AnimPlayOnce(play, this, anim);
-    this->av2.actionVar2 = 16;
-    this->av1.actionVar1 = 0;
-    this->shieldQuad.info.toucher.dmgFlags = 0;
-    this->shieldQuad.info.toucher.damage = 0;
-
-    osSyncPrintf("[FuseDBG] BashStart: target=%d\n", (this->focusActor != NULL) ? this->focusActor->id : -1);
-}
-
-static void Player_Action_ShieldBash(Player* this, PlayState* play) {
-    static const f32 kShieldBashKnockback = 4.0f;
-    static const f32 kShieldBashVelocity = 4.0f;
-    static const f32 kShieldBashStartFrame = 3.0f;
-    static const f32 kShieldBashActiveStart = 4.0f;
-    static const f32 kShieldBashActiveEnd = 10.0f;
-    s32 animDone;
-    f32 curFrame;
-
-    animDone = LinkAnimation_Update(play, &this->skelAnime);
-    if (this->av2.actionVar2 > 0) {
-        this->av2.actionVar2--;
-    }
-
-    this->stateFlags1 |= PLAYER_STATE1_SHIELDING;
-    Player_SetModelsForHoldingShield(this);
-
-    curFrame = this->skelAnime.curFrame;
-    if (curFrame <= kShieldBashStartFrame) {
-        this->linearVelocity = kShieldBashVelocity;
-    } else {
-        Player_DecelerateToZero(this);
-    }
-
-    if (!this->av1.actionVar1 && (curFrame >= kShieldBashActiveStart) && (curFrame <= kShieldBashActiveEnd) &&
-        (this->shieldQuad.base.atFlags & AT_HIT)) {
-        Actor* target = this->shieldQuad.base.at;
-        s16 knockbackYaw = 0;
-        s32 stunFrames = 0;
-
-        if (target != NULL) {
-            knockbackYaw = Actor_WorldYawTowardActor(&this->actor, target);
-            target->speedXZ = kShieldBashKnockback;
-            target->velocity.x = Math_SinS(knockbackYaw) * kShieldBashKnockback;
-            target->velocity.z = Math_CosS(knockbackYaw) * kShieldBashKnockback;
-            target->world.rot.y = knockbackYaw;
-        }
-
-        // TODO: find a reliable stun API for shield bash targets.
-        osSyncPrintf("[FuseDBG] BashHit: target=%d knockback=%.2f stun=%d\n",
-                     (target != NULL) ? target->id : -1, kShieldBashKnockback, stunFrames);
-        this->av1.actionVar1 = 1;
-    }
-
-    if ((this->av2.actionVar2 == 0) || animDone) {
-        if (CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) && !Player_IsChildWithHylianShield(this)) {
-            LinkAnimationHeader* anim = GET_PLAYER_ANIM(PLAYER_ANIMGROUP_defense, this->modelAnimType);
-            f32 frames = Animation_GetLastFrame(anim);
-
-            Player_SetupAction(play, this, Player_Action_80843188, 1);
-            this->stateFlags1 |= PLAYER_STATE1_SHIELDING;
-            Player_SetModelsForHoldingShield(this);
-            LinkAnimation_Change(play, &this->skelAnime, anim, 1.0f, frames, frames, ANIMMODE_ONCE, 0.0f);
-            osSyncPrintf("[FuseDBG] BashEnd: return=guard\n");
-        } else {
-            this->stateFlags1 &= ~PLAYER_STATE1_SHIELDING;
-            func_80832318(this);
-
-            if (Player_IsChildWithHylianShield(this)) {
-                func_8083A060(this, play);
-                LinkAnimation_Change(play, &this->skelAnime, &gPlayerAnim_clink_normal_defense_ALL, 1.0f,
-                                     Animation_GetLastFrame(&gPlayerAnim_clink_normal_defense_ALL), 0.0f, ANIMMODE_ONCE,
-                                     0.0f);
-                Player_StartAnimMovement(play, this, 4);
-            } else {
-                if (this->itemAction < 0) {
-                    func_8008EC70(this);
-                }
-                func_8083A098(this, GET_PLAYER_ANIM(PLAYER_ANIMGROUP_defense_end, this->modelAnimType), play);
-            }
-
-            Player_PlaySfx(this, NA_SE_IT_SHIELD_REMOVE);
-            osSyncPrintf("[FuseDBG] BashEnd: return=neutral\n");
-        }
-
-        return;
-    }
-}
-
 void Player_Action_80843188(Player* this, PlayState* play) {
-    s32 aDown = CHECK_BTN_ALL(sControlInput->cur.button, BTN_A);
-    s32 pressedA = CHECK_BTN_ALL(sControlInput->press.button, BTN_A);
-
-    if (sGuardActionLogArmed) {
-        osSyncPrintf("[FuseDBG] GuardActionEnter\n");
-        sGuardActionLogArmed = 0;
-    }
-
     if (LinkAnimation_Update(play, &this->skelAnime)) {
         if (!Player_IsChildWithHylianShield(this)) {
             Player_AnimPlayLoop(play, this, GET_PLAYER_ANIM(PLAYER_ANIMGROUP_defense_wait, this->modelAnimType));
@@ -9434,21 +9283,6 @@ void Player_Action_80843188(Player* this, PlayState* play) {
     }
 
     Player_DecelerateToZero(this);
-
-    if (pressedA) {
-        osSyncPrintf("[FuseDBG] GuardActionA: down=%d\n", aDown);
-    }
-
-    if (CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) && pressedA &&
-        Player_IsZTargeting(this) && Player_CheckHostileLockOn(this) && !Player_IsChildWithHylianShield(this)) {
-        osSyncPrintf("[FuseDBG] BashStart(Guard): target=%d\n", (this->focusActor != NULL) ? this->focusActor->id : -1);
-        Player_SetupShieldBash(this, play);
-        return;
-    }
-
-    if (pressedA) {
-        sControlInput->press.button &= ~BTN_A;
-    }
 
     if (this->av2.actionVar2 != 0) {
         f32 sp54;
