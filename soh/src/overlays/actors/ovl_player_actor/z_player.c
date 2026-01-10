@@ -2847,7 +2847,15 @@ s32 func_8083499C(Player* this, PlayState* play) {
  * This upper body action allows for shielding or changing held items while a sword is in hand.
  */
 s32 Player_UpperAction_Sword(Player* this, PlayState* play) {
+    const s32 zIntent = Player_IsZTargeting(this) || CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z);
     s32 postureTriggered = func_80834758(play, this);
+
+    if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) && CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) &&
+        zIntent && (this->currentShield != PLAYER_SHIELD_NONE) && !Player_IsChildWithHylianShield(this)) {
+        Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
+        Player_SetupShieldBash(this, play);
+        return 1;
+    }
 
     if (postureTriggered || func_8083499C(this, play)) {
         return true;
@@ -6431,7 +6439,7 @@ static void Player_Action_ShieldBash(Player* this, PlayState* play) {
                 target->world.pos.z += Math_CosS(pushYaw) * knockback;
                 target->world.rot.y = pushYaw;
                 target->speedXZ = knockback;
-                target->freezeTimer = 8;
+                Actor_SetColorFilter(target, 0x4000, 0xFF, 0, 8);
                 Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
                 this->av1.actionVar1 |= PLAYER_BASH_HIT;
             }
