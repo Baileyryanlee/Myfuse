@@ -6348,12 +6348,6 @@ static void Player_Action_ShieldBash(Player* this, PlayState* play) {
         PLAYER_BASH_AT_LOGGED = 1 << 1,
         PLAYER_BASH_ENTER_LOGGED = 1 << 2,
     };
-    static Vec3f sBashQuadOffsets[4] = {
-        { -15.0f, 20.0f, 35.0f },
-        { 15.0f, 20.0f, 35.0f },
-        { -15.0f, 55.0f, 35.0f },
-        { 15.0f, 55.0f, 35.0f },
-    };
     s32 animDone = LinkAnimation_Update(play, &this->skelAnime);
     f32 frame = this->skelAnime.curFrame;
     s32 bashActive = (frame >= 4.0f) && (frame <= 10.0f);
@@ -6383,24 +6377,34 @@ static void Player_Action_ShieldBash(Player* this, PlayState* play) {
     }
 
     if (bashActive) {
-        Vec3f bashQuad[4];
-        s32 i;
-        ColliderQuad* attackQuad = &this->meleeWeaponQuads[0];
+        Vec3f bashCenter;
+        Actor* target;
+        f32 forwardDist = 22.0f;
 
         if (!(this->av1.actionVar1 & PLAYER_BASH_AT_LOGGED)) {
             osSyncPrintf("[FuseDBG] BashATOn: frame=%.1f\n", frame);
             this->av1.actionVar1 |= PLAYER_BASH_AT_LOGGED;
         }
 
-        if (!(this->av1.actionVar1 & PLAYER_BASH_HIT) && (attackQuad->base.atFlags & AT_HIT)) {
-            Actor* target = attackQuad->base.at;
-            s32 isEnemy = (target != NULL) && (target->category == ACTORCAT_ENEMY);
+        if (!sShieldBashOCInit) {
+            Collider_InitCylinder(play, &sShieldBashOC);
+            Collider_SetCylinder(play, &sShieldBashOC, &this->actor, &sShieldBashOCCylInit);
+            sShieldBashOCInit = 1;
+        }
 
-            if (target != NULL) {
-                osSyncPrintf("[FuseDBG] BashHit: target=%d cat=%d enemy=%d\n", target->id, target->category, isEnemy);
-            }
+        bashCenter.x = this->actor.world.pos.x + (Math_SinS(this->actor.shape.rot.y) * forwardDist);
+        bashCenter.z = this->actor.world.pos.z + (Math_CosS(this->actor.shape.rot.y) * forwardDist);
+        bashCenter.y = this->actor.world.pos.y + 20.0f;
+        sShieldBashOC.dim.pos.x = bashCenter.x;
+        sShieldBashOC.dim.pos.y = bashCenter.y;
+        sShieldBashOC.dim.pos.z = bashCenter.z;
+        sShieldBashOC.dim.radius = 22;
+        sShieldBashOC.dim.height = 50;
+        CollisionCheck_SetOC(play, &play->colChkCtx, &sShieldBashOC.base);
 
-            if (isEnemy) {
+        if (!(this->av1.actionVar1 & PLAYER_BASH_HIT) && (sShieldBashOC.base.ocFlags1 & OC1_HIT)) {
+            target = sShieldBashOC.base.oc;
+            if ((target != NULL) && (target->category == ACTORCAT_ENEMY)) {
                 s16 pushYaw = Actor_WorldYawTowardActor(&this->actor, target);
                 f32 knockback = 4.0f;
 
@@ -6408,21 +6412,14 @@ static void Player_Action_ShieldBash(Player* this, PlayState* play) {
                 target->world.pos.z += Math_CosS(pushYaw) * knockback;
                 target->world.rot.y = pushYaw;
                 target->speedXZ = knockback;
-                // TODO: Confirm per-enemy stun handling before setting freezeTimer here.
+                target->freezeTimer = 8;
+                Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
+                osSyncPrintf("[FuseDBG] BashHit(enemy): id=%d\n", target->id);
+                this->av1.actionVar1 |= PLAYER_BASH_HIT;
             }
-
-            this->av1.actionVar1 |= PLAYER_BASH_HIT;
+            sShieldBashOC.base.ocFlags1 &= ~OC1_HIT;
+            sShieldBashOC.base.oc = NULL;
         }
-
-        attackQuad->base.atFlags &= ~(AT_HIT | AT_BOUNCED);
-        attackQuad->base.at = NULL;
-
-        for (i = 0; i < ARRAY_COUNT(sBashQuadOffsets); i++) {
-            Player_GetRelativePosition(this, &this->actor.world.pos, &sBashQuadOffsets[i], &bashQuad[i]);
-        }
-
-        Collider_SetQuadVertices(attackQuad, &bashQuad[0], &bashQuad[1], &bashQuad[2], &bashQuad[3]);
-        CollisionCheck_SetAT(play, &play->colChkCtx, &attackQuad->base);
     }
 
     if ((this->av2.actionVar2 <= 0) || animDone) {
@@ -10764,6 +10761,29 @@ static ColliderCylinderInit D_80854624 = {
         OCELEM_ON,
     },
     { 12, 60, 0, { 0, 0, 0 } },
+};
+
+static ColliderCylinder sShieldBashOC;
+static s32 sShieldBashOCInit = 0;
+
+static ColliderCylinderInit sShieldBashOCCylInit = {
+    {
+        COLTYPE_NONE,
+        AT_NONE,
+        AC_NONE,
+        OC1_ON | OC1_TYPE_ALL,
+        OC2_TYPE_PLAYER,
+        COLSHAPE_CYLINDER,
+    },
+    {
+        ELEMTYPE_UNK1,
+        { 0x00000000, 0x00, 0x00 },
+        { 0x00000000, 0x00, 0x00 },
+        TOUCH_NONE,
+        BUMP_NONE,
+        OCELEM_ON,
+    },
+    { 22, 50, 0, { 0, 0, 0 } },
 };
 
 static ColliderQuadInit D_80854650 = {
