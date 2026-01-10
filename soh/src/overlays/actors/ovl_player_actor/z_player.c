@@ -157,6 +157,8 @@ s32 func_80835C08(Player* this, PlayState* play);
 
 void Player_UseItem(PlayState* play, Player* this, s32 item);
 void func_80839F90(Player* this, PlayState* play);
+static void Player_SetupShieldBash(Player* this, PlayState* play);
+static void Player_Action_ShieldBash(Player* this, PlayState* play);
 s32 func_8083C61C(PlayState* play, Player* this);
 void Player_StartMode_Idle(PlayState* play, Player* this);
 void Player_StartMode_MoveForwardSlow(PlayState* play, Player* this);
@@ -6321,6 +6323,73 @@ void Player_SetupRoll(Player* this, PlayState* play) {
     gSaveContext.ship.stats.count[COUNT_ROLLS]++;
 }
 
+static void Player_SetupShieldBash(Player* this, PlayState* play) {
+    Player_SetupAction(play, this, Player_Action_ShieldBash, 0);
+    Player_SetModelsForHoldingShield(this);
+    LinkAnimation_PlayOnce(play, &this->skelAnime, GET_PLAYER_ANIM(PLAYER_ANIMGROUP_defense, this->modelAnimType));
+    this->av2.actionVar2 = 16;
+    this->av1.actionVar1 = 0;
+}
+
+static void Player_Action_ShieldBash(Player* this, PlayState* play) {
+    s32 animDone = LinkAnimation_Update(play, &this->skelAnime);
+    f32 frame = this->skelAnime.curFrame;
+    s32 bashActive = (frame >= 4.0f) && (frame <= 10.0f);
+
+    if (this->av2.actionVar2 > 0) {
+        this->av2.actionVar2--;
+    }
+
+    Player_DecelerateToZero(this);
+
+    if (frame <= 6.0f) {
+        this->linearVelocity = 3.5f;
+        this->yaw = this->actor.shape.rot.y;
+    }
+
+    if (bashActive) {
+        this->stateFlags1 |= PLAYER_STATE1_SHIELDING;
+        Player_SetModelsForHoldingShield(this);
+    } else {
+        this->stateFlags1 &= ~PLAYER_STATE1_SHIELDING;
+    }
+
+    if (bashActive && (this->av1.actionVar1 == 0) && (this->shieldQuad.base.atFlags & AT_HIT)) {
+        Actor* target = this->shieldQuad.base.at;
+
+        if ((target != NULL) && (target->category == ACTORCAT_ENEMY)) {
+            s16 pushYaw = Actor_WorldYawTowardActor(target, &this->actor) + 0x8000;
+            f32 knockback = 4.0f;
+            s16 stunFrames = 8;
+
+            target->world.pos.x += Math_SinS(pushYaw) * knockback;
+            target->world.pos.z += Math_CosS(pushYaw) * knockback;
+            target->world.rot.y = pushYaw;
+            target->speedXZ = knockback;
+            target->freezeTimer = stunFrames;
+            this->av1.actionVar1 = 1;
+
+            osSyncPrintf("[FuseDBG] BashHit: target=%d enemy=1 knockback=%.1f stun=%d\n", target->id, knockback,
+                         stunFrames);
+        }
+    }
+
+    if ((this->av2.actionVar2 <= 0) || animDone) {
+        const char* returnState = "neutral";
+
+        this->stateFlags1 &= ~PLAYER_STATE1_SHIELDING;
+
+        if (CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) && Player_ActionHandler_11(this, play)) {
+            returnState = "guard";
+            osSyncPrintf("[FuseDBG] BashEnd: return=%s\n", returnState);
+            return;
+        }
+
+        osSyncPrintf("[FuseDBG] BashEnd: return=%s\n", returnState);
+        func_8083C0E8(this, play);
+    }
+}
+
 s32 Player_TryRoll(Player* this, PlayState* play) {
     if ((this->controlStickDirections[this->controlStickDataIndex] == 0) && (sFloorType != 7)) {
         Player_SetupRoll(this, play);
@@ -6366,6 +6435,15 @@ s32 Player_ActionHandler_10(Player* this, PlayState* play) {
                     }
                 } else {
                     if ((Player_GetMeleeWeaponHeld(this) != 0) && Player_CanUpdateItems(this)) {
+                        if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) &&
+                            CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) &&
+                            CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z) &&
+                            (this->currentShield != PLAYER_SHIELD_NONE) && !Player_IsChildWithHylianShield(this)) {
+                            Player_SetupShieldBash(this, play);
+                            osSyncPrintf("[FuseDBG] BashStart(JumpGate): shield=%d age=%s\n", this->currentShield,
+                                         LINK_IS_CHILD ? "child" : "adult");
+                            return 1;
+                        }
                         func_8083BA90(play, this, PLAYER_MWA_JUMPSLASH_START, 5.0f, 5.0f);
                     } else {
                         Player_SetupRoll(this, play);
@@ -9283,6 +9361,15 @@ void Player_Action_80843188(Player* this, PlayState* play) {
     }
 
     Player_DecelerateToZero(this);
+
+    if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) && CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) &&
+        CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z) && (this->currentShield != PLAYER_SHIELD_NONE) &&
+        !Player_IsChildWithHylianShield(this)) {
+        Player_SetupShieldBash(this, play);
+        osSyncPrintf("[FuseDBG] BashStart(GuardLoop): shield=%d age=%s\n", this->currentShield,
+                     LINK_IS_CHILD ? "child" : "adult");
+        return;
+    }
 
     if (this->av2.actionVar2 != 0) {
         f32 sp54;
