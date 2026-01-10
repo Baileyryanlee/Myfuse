@@ -6337,7 +6337,7 @@ void Player_SetupRoll(Player* this, PlayState* play) {
 }
 
 static void Player_SetupShieldBash(Player* this, PlayState* play) {
-    osSyncPrintf("[FuseDBG] BashSetup\n");
+    osSyncPrintf("[FuseDBG] BashSetup CALLED\n");
     Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
     Player_SetupAction(play, this, Player_Action_ShieldBash, 0);
     Player_SetModelsForHoldingShield(this);
@@ -6481,6 +6481,23 @@ void func_8083BCD0(Player* this, PlayState* play, s32 controlStickDirection) {
 s32 Player_ActionHandler_10(Player* this, PlayState* play) {
     s32 controlStickDirection;
     const s32 zIntent = Player_IsZTargeting(this) || CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z);
+
+    if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A)) {
+        osSyncPrintf("[FuseDBG] APress: cur=%04X press=%04X R=%d Z=%d zTarget=%d shield=%d childHylian=%d\n",
+                     sControlInput->cur.button, sControlInput->press.button,
+                     CHECK_BTN_ALL(sControlInput->cur.button, BTN_R),
+                     CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z), Player_IsZTargeting(this),
+                     this->currentShield, Player_IsChildWithHylianShield(this));
+    }
+
+    // TEMP DEBUG: Force-enter bash when A pressed while a shield is equipped (no R/Z required).
+    // Remove this block once button mapping is confirmed.
+    if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) && (this->currentShield != PLAYER_SHIELD_NONE) &&
+        !Player_IsChildWithHylianShield(this)) {
+        osSyncPrintf("[FuseDBG] ForceBashGate: entering bash (debug)\n");
+        Player_SetupShieldBash(this, play);
+        return 1;
+    }
 
     if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) && CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) &&
         zIntent && (this->currentShield != PLAYER_SHIELD_NONE) && !Player_IsChildWithHylianShield(this)) {
@@ -6668,6 +6685,11 @@ s32 Player_ActionHandler_11(Player* this, PlayState* play) {
 
             Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
         }
+
+        osSyncPrintf("[FuseDBG] GuardEnter: cur=%04X R=%d Z=%d zTarget=%d shield=%d childHylian=%d\n",
+                     sControlInput->cur.button, CHECK_BTN_ALL(sControlInput->cur.button, BTN_R),
+                     CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z), Player_IsZTargeting(this), this->currentShield,
+                     Player_IsChildWithHylianShield(this));
 
         return 1;
     }
