@@ -238,6 +238,29 @@ void func_808524B0(PlayState* play, Player* this, CsCmdActorCue* cue);
 void func_808524D0(PlayState* play, Player* this, CsCmdActorCue* cue);
 void func_80852514(PlayState* play, Player* this, CsCmdActorCue* cue);
 void func_80852544(PlayState* play, Player* this, CsCmdActorCue* cue);
+
+static ColliderCylinder sShieldBashOC;
+static s32 sShieldBashOCInit = 0;
+
+static ColliderCylinderInit sShieldBashOCCylInit = {
+    {
+        COLTYPE_NONE,
+        AT_NONE,
+        AC_NONE,
+        OC1_ON | OC1_TYPE_ALL,
+        OC2_TYPE_PLAYER,
+        COLSHAPE_CYLINDER,
+    },
+    {
+        ELEMTYPE_UNK1,
+        { 0x00000000, 0x00, 0x00 },
+        { 0x00000000, 0x00, 0x00 },
+        TOUCH_NONE,
+        BUMP_NONE,
+        OCELEM_ON,
+    },
+    { 22, 50, 0, { 0, 0, 0 } },
+};
 void func_80852554(PlayState* play, Player* this, CsCmdActorCue* cue);
 void func_80852564(PlayState* play, Player* this, CsCmdActorCue* cue);
 void func_808525C0(PlayState* play, Player* this, CsCmdActorCue* cue);
@@ -6392,14 +6415,15 @@ static void Player_Action_ShieldBash(Player* this, PlayState* play) {
             sShieldBashOCInit = 1;
         }
 
+        Collider_UpdateCylinder(&this->actor, &sShieldBashOC);
+
         bashCenter.x = this->actor.world.pos.x + (Math_SinS(this->actor.shape.rot.y) * forwardDist);
         bashCenter.z = this->actor.world.pos.z + (Math_CosS(this->actor.shape.rot.y) * forwardDist);
         bashCenter.y = this->actor.world.pos.y + 20.0f;
         sShieldBashOC.dim.pos.x = bashCenter.x;
         sShieldBashOC.dim.pos.y = bashCenter.y;
         sShieldBashOC.dim.pos.z = bashCenter.z;
-        sShieldBashOC.dim.radius = 22;
-        sShieldBashOC.dim.height = 50;
+
         CollisionCheck_SetOC(play, &play->colChkCtx, &sShieldBashOC.base);
 
         if (!(this->av1.actionVar1 & PLAYER_BASH_HIT) && (sShieldBashOC.base.ocFlags1 & OC1_HIT)) {
@@ -10761,29 +10785,6 @@ static ColliderCylinderInit D_80854624 = {
         OCELEM_ON,
     },
     { 12, 60, 0, { 0, 0, 0 } },
-};
-
-static ColliderCylinder sShieldBashOC;
-static s32 sShieldBashOCInit = 0;
-
-static ColliderCylinderInit sShieldBashOCCylInit = {
-    {
-        COLTYPE_NONE,
-        AT_NONE,
-        AC_NONE,
-        OC1_ON | OC1_TYPE_ALL,
-        OC2_TYPE_PLAYER,
-        COLSHAPE_CYLINDER,
-    },
-    {
-        ELEMTYPE_UNK1,
-        { 0x00000000, 0x00, 0x00 },
-        { 0x00000000, 0x00, 0x00 },
-        TOUCH_NONE,
-        BUMP_NONE,
-        OCELEM_ON,
-    },
-    { 22, 50, 0, { 0, 0, 0 } },
 };
 
 static ColliderQuadInit D_80854650 = {
