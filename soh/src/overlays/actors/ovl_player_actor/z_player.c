@@ -157,6 +157,7 @@ s32 func_80835C08(Player* this, PlayState* play);
 
 void Player_UseItem(PlayState* play, Player* this, s32 item);
 void func_80839F90(Player* this, PlayState* play);
+void func_8083C0E8(Player* this, PlayState* play);
 static void Player_SetupShieldBash(Player* this, PlayState* play);
 static void Player_Action_ShieldBash(Player* this, PlayState* play);
 s32 func_8083C61C(PlayState* play, Player* this);
