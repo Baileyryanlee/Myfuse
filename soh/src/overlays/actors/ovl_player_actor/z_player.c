@@ -6484,12 +6484,17 @@ s32 Player_ActionHandler_10(Player* this, PlayState* play) {
                     }
                 } else {
                     if ((Player_GetMeleeWeaponHeld(this) != 0) && Player_CanUpdateItems(this)) {
+                        const s32 zIntent =
+                            Player_IsZTargeting(this) || CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z);
+
                         if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) &&
-                            CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) &&
-                            CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z) &&
+                            CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) && zIntent &&
                             (this->currentShield != PLAYER_SHIELD_NONE) && !Player_IsChildWithHylianShield(this)) {
-                            osSyncPrintf("[FuseDBG] BashTrigger(JumpGate)\n");
+                            osSyncPrintf("[FuseDBG] BashTrigger(JumpGate): zIntent=%d rawZ=%d zTarget=%d\n", zIntent,
+                                         CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z),
+                                         Player_IsZTargeting(this));
                             Player_SetupShieldBash(this, play);
+                            osSyncPrintf("[FuseDBG] BashStart(JumpGate)\n");
                             return 1;
                         }
                         func_8083BA90(play, this, PLAYER_MWA_JUMPSLASH_START, 5.0f, 5.0f);
@@ -9410,11 +9415,15 @@ void Player_Action_80843188(Player* this, PlayState* play) {
 
     Player_DecelerateToZero(this);
 
+    const s32 zIntent = Player_IsZTargeting(this) || CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z);
+
     if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) && CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) &&
-        CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z) && (this->currentShield != PLAYER_SHIELD_NONE) &&
+        zIntent && (this->currentShield != PLAYER_SHIELD_NONE) &&
         !Player_IsChildWithHylianShield(this)) {
-        osSyncPrintf("[FuseDBG] BashTrigger(GuardLoop)\n");
+        osSyncPrintf("[FuseDBG] BashTrigger(GuardLoop): zIntent=%d rawZ=%d zTarget=%d\n", zIntent,
+                     CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z), Player_IsZTargeting(this));
         Player_SetupShieldBash(this, play);
+        osSyncPrintf("[FuseDBG] BashStart(GuardLoop)\n");
         return;
     }
 
