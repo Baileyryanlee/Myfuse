@@ -6333,6 +6333,16 @@ static void Player_SetupShieldBash(Player* this, PlayState* play) {
 }
 
 static void Player_Action_ShieldBash(Player* this, PlayState* play) {
+    enum {
+        PLAYER_BASH_HIT = 1 << 0,
+        PLAYER_BASH_AT_LOGGED = 1 << 1,
+    };
+    static Vec3f sBashQuadOffsets[4] = {
+        { -15.0f, 20.0f, 35.0f },
+        { 15.0f, 20.0f, 35.0f },
+        { -15.0f, 55.0f, 35.0f },
+        { 15.0f, 55.0f, 35.0f },
+    };
     s32 animDone = LinkAnimation_Update(play, &this->skelAnime);
     f32 frame = this->skelAnime.curFrame;
     s32 bashActive = (frame >= 4.0f) && (frame <= 10.0f);
@@ -6355,24 +6365,47 @@ static void Player_Action_ShieldBash(Player* this, PlayState* play) {
         this->stateFlags1 &= ~PLAYER_STATE1_SHIELDING;
     }
 
-    if (bashActive && (this->av1.actionVar1 == 0) && (this->shieldQuad.base.atFlags & AT_HIT)) {
-        Actor* target = this->shieldQuad.base.at;
+    if (bashActive) {
+        Vec3f bashQuad[4];
+        s32 i;
 
-        if ((target != NULL) && (target->category == ACTORCAT_ENEMY)) {
-            s16 pushYaw = Actor_WorldYawTowardActor(target, &this->actor) + 0x8000;
-            f32 knockback = 4.0f;
-            s16 stunFrames = 8;
-
-            target->world.pos.x += Math_SinS(pushYaw) * knockback;
-            target->world.pos.z += Math_CosS(pushYaw) * knockback;
-            target->world.rot.y = pushYaw;
-            target->speedXZ = knockback;
-            target->freezeTimer = stunFrames;
-            this->av1.actionVar1 = 1;
-
-            osSyncPrintf("[FuseDBG] BashHit: target=%d enemy=1 knockback=%.1f stun=%d\n", target->id, knockback,
-                         stunFrames);
+        if (!(this->av1.actionVar1 & PLAYER_BASH_AT_LOGGED)) {
+            osSyncPrintf("[FuseDBG] BashATOn: frame=%.1f\n", frame);
+            this->av1.actionVar1 |= PLAYER_BASH_AT_LOGGED;
         }
+
+        if (!(this->av1.actionVar1 & PLAYER_BASH_HIT) && (this->shieldQuad.base.atFlags & AT_HIT)) {
+            Actor* target = this->shieldQuad.base.at;
+            s32 isEnemy = (target != NULL) && (target->category == ACTORCAT_ENEMY);
+
+            if (target != NULL) {
+                osSyncPrintf("[FuseDBG] BashHit: target=%d cat=%d enemy=%d\n", target->id, target->category, isEnemy);
+            }
+
+            if (isEnemy) {
+                s16 pushYaw = Actor_WorldYawTowardActor(target, &this->actor) + 0x8000;
+                f32 knockback = 4.0f;
+                s16 stunFrames = 8;
+
+                target->world.pos.x += Math_SinS(pushYaw) * knockback;
+                target->world.pos.z += Math_CosS(pushYaw) * knockback;
+                target->world.rot.y = pushYaw;
+                target->speedXZ = knockback;
+                target->freezeTimer = stunFrames;
+            }
+
+            this->av1.actionVar1 |= PLAYER_BASH_HIT;
+        }
+
+        this->shieldQuad.base.atFlags &= ~(AT_HIT | AT_BOUNCED);
+        this->shieldQuad.base.at = NULL;
+
+        for (i = 0; i < ARRAY_COUNT(sBashQuadOffsets); i++) {
+            Player_GetRelativePosition(this, &this->actor.world.pos, &sBashQuadOffsets[i], &bashQuad[i]);
+        }
+
+        Collider_SetQuadVertices(&this->shieldQuad, &bashQuad[0], &bashQuad[1], &bashQuad[2], &bashQuad[3]);
+        CollisionCheck_SetAT(play, &play->colChkCtx, &this->shieldQuad.base);
     }
 
     if ((this->av2.actionVar2 <= 0) || animDone) {
@@ -6382,11 +6415,15 @@ static void Player_Action_ShieldBash(Player* this, PlayState* play) {
 
         if (CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) && Player_ActionHandler_11(this, play)) {
             returnState = "guard";
-            osSyncPrintf("[FuseDBG] BashEnd: return=%s\n", returnState);
+            if (!(this->av1.actionVar1 & PLAYER_BASH_HIT)) {
+                osSyncPrintf("[FuseDBG] BashEnd: hit=0 return=%s\n", returnState);
+            }
             return;
         }
 
-        osSyncPrintf("[FuseDBG] BashEnd: return=%s\n", returnState);
+        if (!(this->av1.actionVar1 & PLAYER_BASH_HIT)) {
+            osSyncPrintf("[FuseDBG] BashEnd: hit=0 return=%s\n", returnState);
+        }
         func_8083C0E8(this, play);
     }
 }
