@@ -2858,7 +2858,19 @@ s32 Player_UpperAction_ChangeHeldItem(Player* this, PlayState* play) {
 }
 
 s32 func_80834B5C(Player* this, PlayState* play) {
+    const s32 zIntent = Player_IsZTargeting(this) || CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z);
+
     LinkAnimation_Update(play, &this->upperSkelAnime);
+
+    if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) && CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) &&
+        zIntent && (this->currentShield != PLAYER_SHIELD_NONE) && !Player_IsChildWithHylianShield(this)) {
+        osSyncPrintf("[FuseDBG] BashTrigger(PostureLoop): rawZ=%d zTarget=%d shield=%d age=%s\n",
+                     CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z), Player_IsZTargeting(this), this->currentShield,
+                     LINK_IS_CHILD ? "child" : "adult");
+        Player_SetupShieldBash(this, play);
+        osSyncPrintf("[FuseDBG] BashStart(PostureLoop)\n");
+        return 1;
+    }
 
     if (!CHECK_BTN_ALL(sControlInput->cur.button, BTN_R)) {
         func_80834894(this);
@@ -6468,6 +6480,17 @@ void func_8083BCD0(Player* this, PlayState* play, s32 controlStickDirection) {
 
 s32 Player_ActionHandler_10(Player* this, PlayState* play) {
     s32 controlStickDirection;
+    const s32 zIntent = Player_IsZTargeting(this) || CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z);
+
+    if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) && CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) &&
+        zIntent && (this->currentShield != PLAYER_SHIELD_NONE) && !Player_IsChildWithHylianShield(this)) {
+        osSyncPrintf("[FuseDBG] BashTrigger(ActionHandler10-Top): rawZ=%d zTarget=%d shield=%d age=%s\n",
+                     CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z), Player_IsZTargeting(this), this->currentShield,
+                     LINK_IS_CHILD ? "child" : "adult");
+        Player_SetupShieldBash(this, play);
+        osSyncPrintf("[FuseDBG] BashStart(ActionHandler10-Top)\n");
+        return 1;
+    }
 
     if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) &&
         (play->roomCtx.curRoom.behaviorType1 != ROOM_BEHAVIOR_TYPE1_2) && (sFloorType != 7) &&
@@ -6484,9 +6507,6 @@ s32 Player_ActionHandler_10(Player* this, PlayState* play) {
                     }
                 } else {
                     if ((Player_GetMeleeWeaponHeld(this) != 0) && Player_CanUpdateItems(this)) {
-                        const s32 zIntent =
-                            Player_IsZTargeting(this) || CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z);
-
                         if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) &&
                             CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) && zIntent &&
                             (this->currentShield != PLAYER_SHIELD_NONE) && !Player_IsChildWithHylianShield(this)) {
