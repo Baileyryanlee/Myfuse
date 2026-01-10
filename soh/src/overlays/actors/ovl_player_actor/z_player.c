@@ -6352,7 +6352,7 @@ static void Player_Action_ShieldBash(Player* this, PlayState* play) {
 
     if (!(this->av1.actionVar1 & PLAYER_BASH_ENTER_LOGGED)) {
         osSyncPrintf("[FuseDBG] BashActionEnter\n");
-        Player_PlaySfx(this, NA_SE_IT_SHIELD_SWING);
+        Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
         this->av1.actionVar1 |= PLAYER_BASH_ENTER_LOGGED;
     }
 
@@ -6396,7 +6396,6 @@ static void Player_Action_ShieldBash(Player* this, PlayState* play) {
                 s16 pushYaw = Actor_WorldYawTowardActor(&this->actor, target);
                 f32 knockback = 4.0f;
 
-                Actor_PlaySfx(target, NA_SE_EN_STALFO_DAMAGE);
                 target->world.pos.x += Math_SinS(pushYaw) * knockback;
                 target->world.pos.z += Math_CosS(pushYaw) * knockback;
                 target->world.rot.y = pushYaw;
