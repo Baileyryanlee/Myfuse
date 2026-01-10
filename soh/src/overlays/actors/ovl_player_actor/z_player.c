@@ -2864,11 +2864,8 @@ s32 func_80834B5C(Player* this, PlayState* play) {
 
     if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) && CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) &&
         zIntent && (this->currentShield != PLAYER_SHIELD_NONE) && !Player_IsChildWithHylianShield(this)) {
-        osSyncPrintf("[FuseDBG] BashTrigger(PostureLoop): rawZ=%d zTarget=%d shield=%d age=%s\n",
-                     CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z), Player_IsZTargeting(this), this->currentShield,
-                     LINK_IS_CHILD ? "child" : "adult");
+        Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
         Player_SetupShieldBash(this, play);
-        osSyncPrintf("[FuseDBG] BashStart(PostureLoop)\n");
         return 1;
     }
 
@@ -6337,7 +6334,6 @@ void Player_SetupRoll(Player* this, PlayState* play) {
 }
 
 static void Player_SetupShieldBash(Player* this, PlayState* play) {
-    osSyncPrintf("[FuseDBG] BashSetup CALLED\n");
     Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
     Player_SetupAction(play, this, Player_Action_ShieldBash, 0);
     Player_SetModelsForHoldingShield(this);
@@ -6482,30 +6478,10 @@ s32 Player_ActionHandler_10(Player* this, PlayState* play) {
     s32 controlStickDirection;
     const s32 zIntent = Player_IsZTargeting(this) || CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z);
 
-    if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A)) {
-        osSyncPrintf("[FuseDBG] APress: cur=%04X press=%04X R=%d Z=%d zTarget=%d shield=%d childHylian=%d\n",
-                     sControlInput->cur.button, sControlInput->press.button,
-                     CHECK_BTN_ALL(sControlInput->cur.button, BTN_R),
-                     CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z), Player_IsZTargeting(this),
-                     this->currentShield, Player_IsChildWithHylianShield(this));
-    }
-
-    // TEMP DEBUG: Force-enter bash when A pressed while a shield is equipped (no R/Z required).
-    // Remove this block once button mapping is confirmed.
-    if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) && (this->currentShield != PLAYER_SHIELD_NONE) &&
-        !Player_IsChildWithHylianShield(this)) {
-        osSyncPrintf("[FuseDBG] ForceBashGate: entering bash (debug)\n");
-        Player_SetupShieldBash(this, play);
-        return 1;
-    }
-
     if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) && CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) &&
         zIntent && (this->currentShield != PLAYER_SHIELD_NONE) && !Player_IsChildWithHylianShield(this)) {
-        osSyncPrintf("[FuseDBG] BashTrigger(ActionHandler10-Top): rawZ=%d zTarget=%d shield=%d age=%s\n",
-                     CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z), Player_IsZTargeting(this), this->currentShield,
-                     LINK_IS_CHILD ? "child" : "adult");
+        Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
         Player_SetupShieldBash(this, play);
-        osSyncPrintf("[FuseDBG] BashStart(ActionHandler10-Top)\n");
         return 1;
     }
 
@@ -6527,11 +6503,8 @@ s32 Player_ActionHandler_10(Player* this, PlayState* play) {
                         if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) &&
                             CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) && zIntent &&
                             (this->currentShield != PLAYER_SHIELD_NONE) && !Player_IsChildWithHylianShield(this)) {
-                            osSyncPrintf("[FuseDBG] BashTrigger(JumpGate): zIntent=%d rawZ=%d zTarget=%d\n", zIntent,
-                                         CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z),
-                                         Player_IsZTargeting(this));
+                            Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
                             Player_SetupShieldBash(this, play);
-                            osSyncPrintf("[FuseDBG] BashStart(JumpGate)\n");
                             return 1;
                         }
                         func_8083BA90(play, this, PLAYER_MWA_JUMPSLASH_START, 5.0f, 5.0f);
@@ -6645,6 +6618,7 @@ s32 Player_ActionHandler_Roll(Player* this, PlayState* play) {
 s32 Player_ActionHandler_11(Player* this, PlayState* play) {
     LinkAnimationHeader* anim;
     f32 frame;
+    s32 guardEntered = false;
 
     if ((play->shootingGalleryStatus == 0) && (this->currentShield != PLAYER_SHIELD_NONE) &&
         CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) &&
@@ -6682,14 +6656,11 @@ s32 Player_ActionHandler_11(Player* this, PlayState* play) {
             if (Player_IsChildWithHylianShield(this)) {
                 Player_StartAnimMovement(play, this, 4);
             }
-
+            guardEntered = true;
+        }
+        if (guardEntered) {
             Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
         }
-
-        osSyncPrintf("[FuseDBG] GuardEnter: cur=%04X R=%d Z=%d zTarget=%d shield=%d childHylian=%d\n",
-                     sControlInput->cur.button, CHECK_BTN_ALL(sControlInput->cur.button, BTN_R),
-                     CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z), Player_IsZTargeting(this), this->currentShield,
-                     Player_IsChildWithHylianShield(this));
 
         return 1;
     }
@@ -9462,10 +9433,8 @@ void Player_Action_80843188(Player* this, PlayState* play) {
     if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) && CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) &&
         zIntent && (this->currentShield != PLAYER_SHIELD_NONE) &&
         !Player_IsChildWithHylianShield(this)) {
-        osSyncPrintf("[FuseDBG] BashTrigger(GuardLoop): zIntent=%d rawZ=%d zTarget=%d\n", zIntent,
-                     CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z), Player_IsZTargeting(this));
+        Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
         Player_SetupShieldBash(this, play);
-        osSyncPrintf("[FuseDBG] BashStart(GuardLoop)\n");
         return;
     }
 
