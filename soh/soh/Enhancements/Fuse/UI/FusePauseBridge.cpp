@@ -8,6 +8,7 @@
 #include <libultraship/controller/controldeck/ControlDeck.h>
 #include <libultraship/libultraship.h>
 #include "soh/cvar_prefixes.h"
+#include <array>
 #include <algorithm>
 #include <cstdio>
 #include <string>
@@ -215,6 +216,9 @@ enum class FusePauseItem {
     Sword,
     Boomerang,
     Hammer,
+    DekuShield,
+    HylianShield,
+    MirrorShield,
 };
 
 struct FuseModalState {
@@ -262,10 +266,20 @@ static const char* PauseItemName(FusePauseItem item, EquipValueSword sword) {
             return "Boomerang";
         case FusePauseItem::Hammer:
             return "Megaton Hammer";
+        case FusePauseItem::DekuShield:
+            return "Deku Shield";
+        case FusePauseItem::HylianShield:
+            return "Hylian Shield";
+        case FusePauseItem::MirrorShield:
+            return "Mirror Shield";
         case FusePauseItem::None:
         default:
             return "Selected Item";
     }
+}
+
+static size_t ShieldSlotIndex(ShieldSlotKey key) {
+    return FusePersistence::kShieldSlotOffset + static_cast<size_t>(key);
 }
 
 static FuseSlot ResolveSlotForPauseItem(FusePauseItem item, PlayState* play) {
@@ -277,6 +291,16 @@ static FuseSlot ResolveSlotForPauseItem(FusePauseItem item, PlayState* play) {
             return Fuse::GetActiveBoomerangSlot();
         case FusePauseItem::Hammer:
             return Fuse::GetActiveHammerSlot();
+        case FusePauseItem::DekuShield:
+        case FusePauseItem::HylianShield:
+        case FusePauseItem::MirrorShield: {
+            const std::array<SwordFuseSlot, FusePersistence::kSwordSlotCount> slots = Fuse::GetSwordSlots();
+            const ShieldSlotKey key =
+                (item == FusePauseItem::HylianShield)
+                    ? ShieldSlotKey::Hylian
+                    : ((item == FusePauseItem::MirrorShield) ? ShieldSlotKey::Mirror : ShieldSlotKey::Deku);
+            return slots[ShieldSlotIndex(key)];
+        }
         case FusePauseItem::None:
         default:
             return {};
@@ -304,6 +328,10 @@ static bool IsPausePageForItem(const PauseContext* pauseCtx, FusePauseItem item)
 
     switch (item) {
         case FusePauseItem::Sword:
+            return pauseCtx->pageIndex == PAUSE_EQUIP;
+        case FusePauseItem::DekuShield:
+        case FusePauseItem::HylianShield:
+        case FusePauseItem::MirrorShield:
             return pauseCtx->pageIndex == PAUSE_EQUIP;
         case FusePauseItem::Boomerang:
         case FusePauseItem::Hammer:
@@ -424,20 +452,128 @@ EquipValueSword HoveredSwordForCursor(const PauseContext* pauseCtx) {
     }
 }
 
+int32_t HoveredShieldForCursor(const PauseContext* pauseCtx) {
+    if (pauseCtx == nullptr) {
+        return EQUIP_VALUE_SHIELD_NONE;
+    }
+
+    switch (pauseCtx->cursorX[PAUSE_EQUIP]) {
+        case 1:
+            return EQUIP_VALUE_SHIELD_DEKU;
+        case 2:
+            return EQUIP_VALUE_SHIELD_HYLIAN;
+        case 3:
+            return EQUIP_VALUE_SHIELD_MIRROR;
+        default:
+            return EQUIP_VALUE_SHIELD_NONE;
+    }
+}
+
+static s16 ItemIdFromSwordEquipValue(EquipValueSword sword) {
+    switch (sword) {
+        case EQUIP_VALUE_SWORD_KOKIRI:
+            return ITEM_SWORD_KOKIRI;
+        case EQUIP_VALUE_SWORD_MASTER:
+            return ITEM_SWORD_MASTER;
+        case EQUIP_VALUE_SWORD_BIGGORON:
+            return ITEM_SWORD_BGS;
+        case EQUIP_VALUE_SWORD_NONE:
+        default:
+            return ITEM_NONE;
+    }
+}
+
+static s16 ItemIdFromShieldEquipValue(int32_t shield) {
+    switch (shield) {
+        case EQUIP_VALUE_SHIELD_DEKU:
+            return ITEM_SHIELD_DEKU;
+        case EQUIP_VALUE_SHIELD_HYLIAN:
+            return ITEM_SHIELD_HYLIAN;
+        case EQUIP_VALUE_SHIELD_MIRROR:
+            return ITEM_SHIELD_MIRROR;
+        case EQUIP_VALUE_SHIELD_NONE:
+        default:
+            return ITEM_NONE;
+    }
+}
+
+static int PauseItemSlotId(FusePauseItem item, EquipValueSword sword, int32_t shield) {
+    switch (item) {
+        case FusePauseItem::Sword:
+            return (sword != EQUIP_VALUE_SWORD_NONE) ? static_cast<int>(SwordSlotKeyFromEquipValue(sword)) : -1;
+        case FusePauseItem::DekuShield:
+        case FusePauseItem::HylianShield:
+        case FusePauseItem::MirrorShield: {
+            const ShieldSlotKey key =
+                (item == FusePauseItem::HylianShield)
+                    ? ShieldSlotKey::Hylian
+                    : ((item == FusePauseItem::MirrorShield) ? ShieldSlotKey::Mirror : ShieldSlotKey::Deku);
+            return static_cast<int>(ShieldSlotIndex(key));
+        }
+        case FusePauseItem::Boomerang:
+        case FusePauseItem::Hammer:
+        case FusePauseItem::None:
+        default:
+            return -1;
+    }
+}
+
+static bool IsSlotFused(const FuseSlot& slot) {
+    return slot.materialId != MaterialId::None && slot.durabilityCur > 0;
+}
+
+static Fuse::FuseResult TryFuseShield(ShieldSlotKey key, MaterialId id) {
+    if (id == MaterialId::None) {
+        return Fuse::FuseResult::NotAllowed;
+    }
+
+    std::array<SwordFuseSlot, FusePersistence::kSwordSlotCount> slots = Fuse::GetSwordSlots();
+    FuseSlot& slot = slots[ShieldSlotIndex(key)];
+
+    if (IsSlotFused(slot)) {
+        return Fuse::FuseResult::AlreadyFused;
+    }
+
+    if (!Fuse::HasMaterial(id, 1)) {
+        return Fuse::FuseResult::NotEnoughMaterial;
+    }
+
+    const MaterialDef* def = Fuse::GetMaterialDef(id);
+    if (!def) {
+        return Fuse::FuseResult::InvalidMaterial;
+    }
+
+    if (!Fuse::ConsumeMaterial(id, 1)) {
+        return Fuse::FuseResult::NotEnoughMaterial;
+    }
+
+    const int maxDurability = Fuse::GetMaterialEffectiveBaseDurability(id);
+    slot.materialId = id;
+    slot.durabilityMax = std::max(maxDurability, 0);
+    slot.durabilityCur = slot.durabilityMax;
+
+    Fuse::ApplyLoadedSwordSlots(slots);
+    return Fuse::FuseResult::Ok;
+}
+
 struct FusePromptContext {
     bool isPauseOpen = false;
     bool isEquipmentPage = false;
     bool isEquipmentGridCell = false;
     bool isSwordRow = false;
+    bool isShieldRow = false;
     bool isOwnedEquip = false;
     bool isItemsPage = false;
     bool isBoomerangItem = false;
     bool isHammerItem = false;
     EquipValueSword hoveredSword = EQUIP_VALUE_SWORD_NONE;
+    int32_t hoveredShield = EQUIP_VALUE_SHIELD_NONE;
     EquipValueSword equippedSword = EQUIP_VALUE_SWORD_NONE;
     bool isSwordAlreadyEquippedSlot = false;
     FusePauseItem activeItem = FusePauseItem::None;
     bool shouldShowFusePrompt = false;
+    s16 hoverItemId = ITEM_NONE;
+    int hoverSlotId = -1;
 };
 
 FusePromptContext BuildPromptContext(PlayState* play) {
@@ -454,9 +590,12 @@ FusePromptContext BuildPromptContext(PlayState* play) {
     context.isItemsPage = pauseCtx->pageIndex == PAUSE_ITEM;
     context.isEquipmentGridCell = pauseCtx->cursorX[PAUSE_EQUIP] != 0;
     context.isSwordRow = context.isEquipmentGridCell && pauseCtx->cursorY[PAUSE_EQUIP] == 0;
+    context.isShieldRow = context.isEquipmentGridCell && pauseCtx->cursorY[PAUSE_EQUIP] == 1;
     context.isOwnedEquip =
         context.isEquipmentGridCell && CHECK_OWNED_EQUIP(pauseCtx->cursorY[PAUSE_EQUIP], pauseCtx->cursorX[PAUSE_EQUIP] - 1);
     context.hoveredSword = (context.isSwordRow && context.isOwnedEquip) ? HoveredSwordForCursor(pauseCtx) : EQUIP_VALUE_SWORD_NONE;
+    context.hoveredShield =
+        (context.isShieldRow && context.isOwnedEquip) ? HoveredShieldForCursor(pauseCtx) : EQUIP_VALUE_SHIELD_NONE;
     context.equippedSword = static_cast<EquipValueSword>(CUR_EQUIP_VALUE(EQUIP_TYPE_SWORD));
     context.isSwordAlreadyEquippedSlot = (context.hoveredSword != EQUIP_VALUE_SWORD_NONE) &&
                                          (context.equippedSword == context.hoveredSword);
@@ -467,12 +606,34 @@ FusePromptContext BuildPromptContext(PlayState* play) {
                                (context.hoveredSword != EQUIP_VALUE_SWORD_NONE) && context.isSwordAlreadyEquippedSlot;
     const bool boomerangEligible = context.isPauseOpen && context.isItemsPage && context.isBoomerangItem;
     const bool hammerEligible = context.isPauseOpen && context.isItemsPage && context.isHammerItem;
+    const bool shieldEligible =
+        context.isPauseOpen && context.isEquipmentPage && context.isShieldRow && context.isOwnedEquip &&
+        (context.hoveredShield != EQUIP_VALUE_SHIELD_NONE);
 
     context.activeItem =
         swordEligible ? FusePauseItem::Sword
-                      : (boomerangEligible ? FusePauseItem::Boomerang
-                                           : (hammerEligible ? FusePauseItem::Hammer : FusePauseItem::None));
-    context.shouldShowFusePrompt = swordEligible || boomerangEligible || hammerEligible;
+                      : (shieldEligible
+                             ? ((context.hoveredShield == EQUIP_VALUE_SHIELD_HYLIAN)
+                                    ? FusePauseItem::HylianShield
+                                    : ((context.hoveredShield == EQUIP_VALUE_SHIELD_MIRROR) ? FusePauseItem::MirrorShield
+                                                                                           : FusePauseItem::DekuShield))
+                             : (boomerangEligible ? FusePauseItem::Boomerang
+                                                  : (hammerEligible ? FusePauseItem::Hammer : FusePauseItem::None)));
+    context.shouldShowFusePrompt = swordEligible || boomerangEligible || hammerEligible || shieldEligible;
+
+    if (context.isEquipmentPage && context.isEquipmentGridCell) {
+        if (context.isOwnedEquip) {
+            if (context.isSwordRow) {
+                context.hoverItemId = ItemIdFromSwordEquipValue(context.hoveredSword);
+            } else if (context.isShieldRow) {
+                context.hoverItemId = ItemIdFromShieldEquipValue(context.hoveredShield);
+            }
+        }
+        context.hoverSlotId = pauseCtx->cursorSlot[PAUSE_EQUIP];
+    } else if (context.isItemsPage) {
+        context.hoverItemId = static_cast<s16>(pauseCtx->cursorItem[PAUSE_ITEM]);
+        context.hoverSlotId = pauseCtx->cursorItem[PAUSE_ITEM];
+    }
 
     return context;
 }
@@ -504,6 +665,24 @@ void FusePause_UpdateModal(PlayState* play) {
     FusePromptContext context = BuildPromptContext(play);
 
     if (!sModal.open) {
+        if (fusePressed) {
+            const bool allowed = context.shouldShowFusePrompt;
+            Fuse::Log("[FuseDBG] PauseFuseOpenAttempt: hover=%d item=%d allowed=%d\n", context.hoverSlotId,
+                      context.hoverItemId, allowed ? 1 : 0);
+            if (!allowed) {
+                const char* reason = nullptr;
+                if (!context.isEquipmentPage && !context.isItemsPage) {
+                    reason = "unsupported_context";
+                } else if (context.hoverItemId == ITEM_NONE) {
+                    reason = "no_item";
+                } else {
+                    reason = "not_fuse_capable";
+                }
+                Fuse::Log("[FuseDBG] PauseFuseDenied: reason=%s hover=%d item=%d\n", reason ? reason : "not_fuse_capable",
+                          context.hoverSlotId, context.hoverItemId);
+            }
+        }
+
         if (context.shouldShowFusePrompt && fusePressed) {
             const FuseSlot resolvedSlot = ResolveSlotForPauseItem(context.activeItem, play);
             const FuseWeaponView weaponView = WeaponViewFromSlot(resolvedSlot);
@@ -531,6 +710,8 @@ void FusePause_UpdateModal(PlayState* play) {
             Fuse::Log("[FuseDBG] UI:Open item=%s confirmedMat=%d locked=%d\n",
                       PauseItemName(sModal.activeItem, context.hoveredSword), static_cast<int>(weaponView.materialId),
                       sModal.isLocked ? 1 : 0);
+            Fuse::Log("[FuseDBG] PauseFuseOpen: item=%d slot=%d\n", context.hoverItemId,
+                      PauseItemSlotId(context.activeItem, context.hoveredSword, context.hoveredShield));
 
             input->press.button &= ~BTN_L;
         }
@@ -603,11 +784,22 @@ void FusePause_UpdateModal(PlayState* play) {
         } else if (sModal.uiState != FuseUiState::Confirm) {
             SetUiState(FuseUiState::Confirm);
         } else {
-            const Fuse::FuseResult result =
-                (sModal.activeItem == FusePauseItem::Hammer)
-                    ? Fuse::TryFuseHammer(sModal.previewMaterialId)
-                    : ((sModal.activeItem == FusePauseItem::Boomerang) ? Fuse::TryFuseBoomerang(sModal.previewMaterialId)
-                                                                      : Fuse::TryFuseSword(sModal.previewMaterialId));
+            Fuse::FuseResult result = Fuse::FuseResult::InvalidMaterial;
+            if (sModal.activeItem == FusePauseItem::Hammer) {
+                result = Fuse::TryFuseHammer(sModal.previewMaterialId);
+            } else if (sModal.activeItem == FusePauseItem::Boomerang) {
+                result = Fuse::TryFuseBoomerang(sModal.previewMaterialId);
+            } else if (sModal.activeItem == FusePauseItem::Sword) {
+                result = Fuse::TryFuseSword(sModal.previewMaterialId);
+            } else if (sModal.activeItem == FusePauseItem::HylianShield || sModal.activeItem == FusePauseItem::MirrorShield ||
+                       sModal.activeItem == FusePauseItem::DekuShield) {
+                const ShieldSlotKey key =
+                    (sModal.activeItem == FusePauseItem::HylianShield)
+                        ? ShieldSlotKey::Hylian
+                        : ((sModal.activeItem == FusePauseItem::MirrorShield) ? ShieldSlotKey::Mirror
+                                                                              : ShieldSlotKey::Deku);
+                result = TryFuseShield(key, sModal.previewMaterialId);
+            }
             const bool success = result == Fuse::FuseResult::Ok;
 
             Fuse::Log("[FuseDBG] UI:Confirm item=%s mat=%d result=%d\n",
