@@ -2850,8 +2850,9 @@ s32 Player_UpperAction_Sword(Player* this, PlayState* play) {
     const s32 zIntent = Player_IsZTargeting(this) || CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z);
     s32 postureTriggered = func_80834758(play, this);
 
-    if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) && CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) &&
-        zIntent && (this->currentShield != PLAYER_SHIELD_NONE) && !Player_IsChildWithHylianShield(this)) {
+    if ((Player_GetMeleeWeaponHeld(this) != 0) && CHECK_BTN_ALL(sControlInput->press.button, BTN_A) &&
+        CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) && zIntent && (this->currentShield != PLAYER_SHIELD_NONE) &&
+        !Player_IsChildWithHylianShield(this)) {
         Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
         Player_SetupShieldBash(this, play);
         return 1;
