@@ -6407,11 +6407,10 @@ static void Player_ShieldBash_UpdateColliderAndHit(Player* this, PlayState* play
         sShieldBashOC.base.oc = NULL;
         if (!sShieldBashHitOnce && (target != NULL) && (target->category == ACTORCAT_ENEMY)) {
             s16 pushYaw = Actor_WorldYawTowardActor(&this->actor, target);
-            f32 knockback = 5.6f;
+            const f32 knockback = 5.0f;
 
             target->world.pos.x += Math_SinS(pushYaw) * knockback;
             target->world.pos.z += Math_CosS(pushYaw) * knockback;
-            target->world.rot.y = pushYaw + 0x8000;
             target->speedXZ = knockback;
             Actor_SetColorFilter(target, 0x4000, 0xFF, 0, 8);
             Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
