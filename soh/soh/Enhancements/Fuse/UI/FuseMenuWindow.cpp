@@ -17,7 +17,7 @@ enum class FuseItem : int {
 
     MegatonHammer,
     Boomerang,
-    FairyBow,
+    SlingshotAmmo,
     Hookshot,
 
     Arrows,
@@ -42,8 +42,8 @@ static const char* ItemName(FuseItem i) {
             return "Megaton Hammer";
         case FuseItem::Boomerang:
             return "Boomerang";
-        case FuseItem::FairyBow:
-            return "Fairy Bow";
+        case FuseItem::SlingshotAmmo:
+            return "Slingshot Bullets";
         case FuseItem::Hookshot:
             return "Hookshot / Longshot";
 
