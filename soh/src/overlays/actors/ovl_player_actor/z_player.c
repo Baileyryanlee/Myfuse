@@ -158,7 +158,8 @@ s32 func_80835C08(Player* this, PlayState* play);
 void Player_UseItem(PlayState* play, Player* this, s32 item);
 void func_80839F90(Player* this, PlayState* play);
 void func_8083C0E8(Player* this, PlayState* play);
-static void Player_SetupShieldBash(Player* this, PlayState* play);
+static s32 Player_CanUseShieldBash(Player* this);
+static s32 Player_SetupShieldBash(Player* this, PlayState* play);
 static void Player_Action_ShieldBash(Player* this, PlayState* play);
 s32 func_8083C61C(PlayState* play, Player* this);
 void Player_StartMode_Idle(PlayState* play, Player* this);
@@ -2851,11 +2852,10 @@ s32 Player_UpperAction_Sword(Player* this, PlayState* play) {
     s32 postureTriggered = func_80834758(play, this);
 
     if ((Player_GetMeleeWeaponHeld(this) != 0) && CHECK_BTN_ALL(sControlInput->press.button, BTN_A) &&
-        CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) && zIntent && (this->currentShield != PLAYER_SHIELD_NONE) &&
-        !Player_IsChildWithHylianShield(this)) {
-        Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
-        Player_SetupShieldBash(this, play);
-        return 1;
+        CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) && zIntent && Player_CanUseShieldBash(this)) {
+        if (Player_SetupShieldBash(this, play)) {
+            return 1;
+        }
     }
 
     if (postureTriggered || func_8083499C(this, play)) {
@@ -2895,10 +2895,10 @@ s32 func_80834B5C(Player* this, PlayState* play) {
     LinkAnimation_Update(play, &this->upperSkelAnime);
 
     if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) && CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) &&
-        zIntent && (this->currentShield != PLAYER_SHIELD_NONE) && !Player_IsChildWithHylianShield(this)) {
-        Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
-        Player_SetupShieldBash(this, play);
-        return 1;
+        zIntent && Player_CanUseShieldBash(this)) {
+        if (Player_SetupShieldBash(this, play)) {
+            return 1;
+        }
     }
 
     if (!CHECK_BTN_ALL(sControlInput->cur.button, BTN_R)) {
@@ -6365,13 +6365,30 @@ void Player_SetupRoll(Player* this, PlayState* play) {
     gSaveContext.ship.stats.count[COUNT_ROLLS]++;
 }
 
-static void Player_SetupShieldBash(Player* this, PlayState* play) {
-    Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
-    Player_SetupAction(play, this, Player_Action_ShieldBash, 0);
+static s32 Player_CanUseShieldBash(Player* this) {
+    if ((this->currentShield == PLAYER_SHIELD_NONE) || Player_IsChildWithHylianShield(this)) {
+        return false;
+    }
+
+    if (Player_GetMeleeWeaponHeld(this) == Player_ActionToMeleeWeapon(PLAYER_IA_SWORD_BIGGORON)) {
+        return false;
+    }
+
+    return true;
+}
+
+static s32 Player_SetupShieldBash(Player* this, PlayState* play) {
+    if (!Player_SetupAction(play, this, Player_Action_ShieldBash, 0)) {
+        Player_PlaySfx(this, NA_SE_IT_SHIELD_REMOVE);
+        return false;
+    }
+
     Player_SetModelsForHoldingShield(this);
     LinkAnimation_PlayOnce(play, &this->skelAnime, GET_PLAYER_ANIM(PLAYER_ANIMGROUP_defense, this->modelAnimType));
     this->av2.actionVar2 = 16;
     this->av1.actionVar1 = 0;
+    Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
+    return true;
 }
 
 static void Player_Action_ShieldBash(Player* this, PlayState* play) {
@@ -6513,10 +6530,10 @@ s32 Player_ActionHandler_10(Player* this, PlayState* play) {
     const s32 zIntent = Player_IsZTargeting(this) || CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z);
 
     if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) && CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) &&
-        zIntent && (this->currentShield != PLAYER_SHIELD_NONE) && !Player_IsChildWithHylianShield(this)) {
-        Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
-        Player_SetupShieldBash(this, play);
-        return 1;
+        zIntent && Player_CanUseShieldBash(this)) {
+        if (Player_SetupShieldBash(this, play)) {
+            return 1;
+        }
     }
 
     if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) &&
@@ -6536,10 +6553,10 @@ s32 Player_ActionHandler_10(Player* this, PlayState* play) {
                     if ((Player_GetMeleeWeaponHeld(this) != 0) && Player_CanUpdateItems(this)) {
                         if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) &&
                             CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) && zIntent &&
-                            (this->currentShield != PLAYER_SHIELD_NONE) && !Player_IsChildWithHylianShield(this)) {
-                            Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
-                            Player_SetupShieldBash(this, play);
-                            return 1;
+                            Player_CanUseShieldBash(this)) {
+                            if (Player_SetupShieldBash(this, play)) {
+                                return 1;
+                            }
                         }
                         func_8083BA90(play, this, PLAYER_MWA_JUMPSLASH_START, 5.0f, 5.0f);
                     } else {
@@ -9465,11 +9482,10 @@ void Player_Action_80843188(Player* this, PlayState* play) {
     const s32 zIntent = Player_IsZTargeting(this) || CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z);
 
     if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) && CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) &&
-        zIntent && (this->currentShield != PLAYER_SHIELD_NONE) &&
-        !Player_IsChildWithHylianShield(this)) {
-        Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
-        Player_SetupShieldBash(this, play);
-        return;
+        zIntent && Player_CanUseShieldBash(this)) {
+        if (Player_SetupShieldBash(this, play)) {
+            return;
+        }
     }
 
     if (this->av2.actionVar2 != 0) {
