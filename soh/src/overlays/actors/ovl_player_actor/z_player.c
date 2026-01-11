@@ -246,6 +246,8 @@ static s32 sShieldBashOCInit = 0;
 static Player* sShieldBashColliderOwner = NULL;
 static s16 sShieldBashColliderTimer = 0;
 static u8 sShieldBashHitOnce = 0;
+static Player* sShieldBashRecoveryOwner = NULL;
+static s16 sShieldBashRecoveryTimer = 0;
 enum {
     PLAYER_BASH_HIT = 1 << 0,
     PLAYER_BASH_AT_LOGGED = 1 << 1,
@@ -6405,16 +6407,18 @@ static void Player_ShieldBash_UpdateColliderAndHit(Player* this, PlayState* play
         sShieldBashOC.base.oc = NULL;
         if (!sShieldBashHitOnce && (target != NULL) && (target->category == ACTORCAT_ENEMY)) {
             s16 pushYaw = Actor_WorldYawTowardActor(&this->actor, target);
-            f32 knockback = 4.0f;
+            f32 knockback = 5.6f;
 
             target->world.pos.x += Math_SinS(pushYaw) * knockback;
             target->world.pos.z += Math_CosS(pushYaw) * knockback;
-            target->world.rot.y = pushYaw;
+            target->world.rot.y = pushYaw + 0x8000;
             target->speedXZ = knockback;
             Actor_SetColorFilter(target, 0x4000, 0xFF, 0, 8);
             Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
             this->av1.actionVar1 |= PLAYER_BASH_HIT;
             sShieldBashHitOnce = 1;
+            sShieldBashRecoveryOwner = this;
+            sShieldBashRecoveryTimer = 6;
         }
     }
 
@@ -12561,6 +12565,13 @@ void Player_UpdateCommon(Player* this, PlayState* play, Input* input) {
         sShieldBashColliderTimer--;
         if (sShieldBashColliderTimer <= 0) {
             sShieldBashColliderOwner = NULL;
+        }
+    }
+    if ((sShieldBashRecoveryOwner == this) && (sShieldBashRecoveryTimer > 0)) {
+        sControlInput->press.button &= ~(BTN_A | BTN_B);
+        sShieldBashRecoveryTimer--;
+        if (sShieldBashRecoveryTimer <= 0) {
+            sShieldBashRecoveryOwner = NULL;
         }
     }
 
