@@ -15,6 +15,10 @@ extern "C" {
 
 namespace {
 
+constexpr size_t ShieldSlotIndex(ShieldSlotKey key) {
+    return FusePersistence::kShieldSlotOffset + static_cast<size_t>(key);
+}
+
 void NormalizeState(FuseSwordSaveState& state) {
     state.durabilityMax = std::max(state.durabilityMax, 0);
     state.durabilityCur = std::max(state.durabilityCur, 0);
@@ -61,6 +65,14 @@ void LogSlotPersistenceEvent(const char* prefix, SwordSlotKey slotKey, const Swo
     const int durabilityCur = slot.durabilityCur;
     const int durabilityMax = slot.durabilityMax;
     Fuse::Log("[FuseDBG] %s: slot=%s material=%d dura=%d/%d\n", prefix, SwordSlotName(slotKey), material, durabilityCur,
+              durabilityMax);
+}
+
+void LogShieldSlotPersistenceEvent(const char* prefix, ShieldSlotKey slotKey, const SwordFuseSlot& slot) {
+    const int material = static_cast<int>(slot.materialId);
+    const int durabilityCur = slot.durabilityCur;
+    const int durabilityMax = slot.durabilityMax;
+    Fuse::Log("[FuseDBG] %s: shield=%s material=%d dura=%d/%d\n", prefix, ShieldSlotName(slotKey), material, durabilityCur,
               durabilityMax);
 }
 
@@ -135,6 +147,42 @@ const char* SwordSlotName(SwordSlotKey key) {
     }
 }
 
+bool IsShieldEquipValue(int32_t equipValue) {
+    switch (equipValue) {
+        case EQUIP_VALUE_SHIELD_DEKU:
+        case EQUIP_VALUE_SHIELD_HYLIAN:
+        case EQUIP_VALUE_SHIELD_MIRROR:
+            return true;
+        default:
+            return false;
+    }
+}
+
+ShieldSlotKey ShieldSlotKeyFromEquipValue(int32_t equipValue) {
+    switch (equipValue) {
+        case EQUIP_VALUE_SHIELD_HYLIAN:
+            return ShieldSlotKey::Hylian;
+        case EQUIP_VALUE_SHIELD_MIRROR:
+            return ShieldSlotKey::Mirror;
+        case EQUIP_VALUE_SHIELD_DEKU:
+        default:
+            return ShieldSlotKey::Deku;
+    }
+}
+
+const char* ShieldSlotName(ShieldSlotKey key) {
+    switch (key) {
+        case ShieldSlotKey::Deku:
+            return "Deku";
+        case ShieldSlotKey::Hylian:
+            return "Hylian";
+        case ShieldSlotKey::Mirror:
+            return "Mirror";
+        default:
+            return "Unknown";
+    }
+}
+
 void SwordFuseSlot::Clear() {
     ResetToUnfused();
 }
@@ -160,6 +208,28 @@ SwordFuseSlot& FuseSaveData::GetActiveSwordSlot([[maybe_unused]] const PlayState
     const SwordSlotKey key = IsSwordEquipValue(equipValue) ? SwordSlotKeyFromEquipValue(equipValue)
                                                            : SwordSlotKey::Kokiri;
     return this->swordSlots[static_cast<size_t>(key)];
+}
+
+FuseSlot& FuseSaveData::GetShieldSlot(ShieldSlotKey key) {
+    return swordSlots[ShieldSlotIndex(key)];
+}
+
+const FuseSlot& FuseSaveData::GetShieldSlot(ShieldSlotKey key) const {
+    return swordSlots[ShieldSlotIndex(key)];
+}
+
+FuseSlot& FuseSaveData::GetActiveShieldSlot([[maybe_unused]] const PlayState* play) {
+    const int32_t equipValue =
+        (static_cast<int32_t>(gSaveContext.equips.equipment & gEquipMasks[EQUIP_TYPE_SHIELD]) >>
+         gEquipShifts[EQUIP_TYPE_SHIELD]);
+    const bool hasShield = IsShieldEquipValue(equipValue);
+    const ShieldSlotKey key = hasShield ? ShieldSlotKeyFromEquipValue(equipValue) : ShieldSlotKey::Deku;
+    FuseSlot& slot = swordSlots[ShieldSlotIndex(key)];
+    if (hasShield) {
+        Fuse::Log("[FuseDBG] Equip: shield=%s restore material=%d dura=%d/%d\n", ShieldSlotName(key),
+                  static_cast<int>(slot.materialId), slot.durabilityCur, slot.durabilityMax);
+    }
+    return slot;
 }
 
 FuseSlot& FuseSaveData::GetBoomerangSlot() {
@@ -276,7 +346,7 @@ FuseSwordSlotsSaveState LoadFuseStateFromManager(SaveManager& manager) {
     manager.LoadStruct(kSwordSaveSectionName, [&]() {
         manager.LoadData(kSwordSaveVersionKey, version, 0);
         if (version >= static_cast<int32_t>(kSwordSlotsSaveVersion)) {
-            manager.LoadArray(kSwordSlotsKey, kSwordSlotCount, [&](size_t i) {
+            manager.LoadArray(kSwordSlotsKey, kSwordSlotsOnlyCount, [&](size_t i) {
                 int32_t materialId = static_cast<int32_t>(MaterialId::None);
                 int32_t durabilityCur = 0;
                 int32_t durabilityMax = 0;
@@ -294,7 +364,27 @@ FuseSwordSlotsSaveState LoadFuseStateFromManager(SaveManager& manager) {
                 NormalizeSlot(slot);
                 state.swordSlots[i] = slot;
             });
-            if (version >= static_cast<int32_t>(kFuseSaveVersion)) {
+            if (version >= static_cast<int32_t>(kShieldSlotsSaveVersion)) {
+                manager.LoadArray(kShieldSlotsKey, kShieldSlotCount, [&](size_t i) {
+                    int32_t materialId = static_cast<int32_t>(MaterialId::None);
+                    int32_t durabilityCur = 0;
+                    int32_t durabilityMax = 0;
+
+                    manager.LoadStruct("", [&]() {
+                        manager.LoadData(kSwordSlotMaterialKey, materialId, static_cast<int32_t>(MaterialId::None));
+                        manager.LoadData(kSwordSlotDurabilityCurKey, durabilityCur, 0);
+                        manager.LoadData(kSwordSlotDurabilityMaxKey, durabilityMax, 0);
+                    });
+
+                    SwordFuseSlot slot{};
+                    slot.materialId = static_cast<MaterialId>(materialId);
+                    slot.durabilityCur = durabilityCur;
+                    slot.durabilityMax = durabilityMax;
+                    NormalizeSlot(slot);
+                    state.swordSlots[kShieldSlotOffset + i] = slot;
+                });
+            }
+            if (version >= static_cast<int32_t>(kBoomerangHammerSaveVersion)) {
                 manager.LoadStruct(kBoomerangSlotKey, [&]() {
                     int32_t materialId = static_cast<int32_t>(MaterialId::None);
                     int32_t durabilityCur = 0;
@@ -347,8 +437,14 @@ FuseSwordSlotsSaveState LoadFuseStateFromManager(SaveManager& manager) {
 
     if (version >= static_cast<int32_t>(kSwordSlotsSaveVersion)) {
         state.version = static_cast<uint32_t>(version);
-        for (size_t i = 0; i < kSwordSlotCount; ++i) {
+        for (size_t i = 0; i < kSwordSlotsOnlyCount; ++i) {
             LogSlotPersistenceEvent("Load", static_cast<SwordSlotKey>(i), state.swordSlots[i]);
+        }
+        if (version >= static_cast<int32_t>(kShieldSlotsSaveVersion)) {
+            for (size_t i = 0; i < kShieldSlotCount; ++i) {
+                LogShieldSlotPersistenceEvent("Load", static_cast<ShieldSlotKey>(i),
+                                              state.swordSlots[kShieldSlotOffset + i]);
+            }
         }
         if (state.boomerangSlotLoaded) {
             Fuse::Log("[FuseSave] ReadBoom mat=%d dur=%d/%d\n", static_cast<int>(state.boomerangSlot.materialId),
@@ -374,7 +470,7 @@ FuseSwordSlotsSaveState LoadFuseStateFromManager(SaveManager& manager) {
         state.swordSlots[static_cast<size_t>(targetSlot)] = migratedSlot;
     }
 
-    for (size_t i = 0; i < kSwordSlotCount; ++i) {
+    for (size_t i = 0; i < kSwordSlotsOnlyCount; ++i) {
         LogSlotPersistenceEvent("LoadLegacy", static_cast<SwordSlotKey>(i), state.swordSlots[i]);
     }
 
@@ -394,7 +490,7 @@ void SaveFuseStateToManager(SaveManager& manager, const std::array<SwordFuseSlot
                             const FuseSlot& boomerangSlot, const FuseSlot& hammerSlot) {
     manager.SaveStruct(kSwordSaveSectionName, [&]() {
         manager.SaveData(kSwordSaveVersionKey, static_cast<int32_t>(kFuseSaveVersion));
-        manager.SaveArray(kSwordSlotsKey, kSwordSlotCount, [&](size_t i) {
+        manager.SaveArray(kSwordSlotsKey, kSwordSlotsOnlyCount, [&](size_t i) {
             SwordFuseSlot slot = slots[i];
             NormalizeSlot(slot);
 
@@ -409,6 +505,22 @@ void SaveFuseStateToManager(SaveManager& manager, const std::array<SwordFuseSlot
             });
 
             LogSlotPersistenceEvent("Save", static_cast<SwordSlotKey>(i), slot);
+        });
+        manager.SaveArray(kShieldSlotsKey, kShieldSlotCount, [&](size_t i) {
+            SwordFuseSlot slot = slots[kShieldSlotOffset + i];
+            NormalizeSlot(slot);
+
+            const int32_t materialId = static_cast<int32_t>(slot.materialId);
+            const int32_t durabilityCur = slot.durabilityCur;
+            const int32_t durabilityMax = slot.durabilityMax;
+
+            manager.SaveStruct("", [&]() {
+                manager.SaveData(kSwordSlotMaterialKey, materialId);
+                manager.SaveData(kSwordSlotDurabilityCurKey, durabilityCur);
+                manager.SaveData(kSwordSlotDurabilityMaxKey, durabilityMax);
+            });
+
+            LogShieldSlotPersistenceEvent("Save", static_cast<ShieldSlotKey>(i), slot);
         });
         SwordFuseSlot slot = boomerangSlot;
         NormalizeSlot(slot);
