@@ -6370,7 +6370,10 @@ static s32 Player_CanUseShieldBash(Player* this) {
         return false;
     }
 
-    if (Player_GetMeleeWeaponHeld(this) == Player_ActionToMeleeWeapon(PLAYER_IA_SWORD_BIGGORON)) {
+    s32 melee = Player_GetMeleeWeaponHeld(this);
+    s32 biggoronMelee = Player_ActionToMeleeWeapon(PLAYER_IA_SWORD_BIGGORON);
+
+    if ((melee != 0) && (melee == biggoronMelee)) {
         return false;
     }
 
