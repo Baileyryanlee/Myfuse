@@ -161,6 +161,7 @@ void func_8083C0E8(Player* this, PlayState* play);
 static s32 Player_CanUseShieldBash(Player* this);
 static void Player_SetupShieldBash(Player* this, PlayState* play);
 static void Player_Action_ShieldBash(Player* this, PlayState* play);
+static void Player_ShieldBash_UpdateColliderAndHit(Player* this, PlayState* play);
 s32 func_8083C61C(PlayState* play, Player* this);
 void Player_StartMode_Idle(PlayState* play, Player* this);
 void Player_StartMode_MoveForwardSlow(PlayState* play, Player* this);
@@ -242,6 +243,14 @@ void func_80852544(PlayState* play, Player* this, CsCmdActorCue* cue);
 
 static ColliderCylinder sShieldBashOC;
 static s32 sShieldBashOCInit = 0;
+static Player* sShieldBashColliderOwner = NULL;
+static s16 sShieldBashColliderTimer = 0;
+static u8 sShieldBashHitOnce = 0;
+enum {
+    PLAYER_BASH_HIT = 1 << 0,
+    PLAYER_BASH_AT_LOGGED = 1 << 1,
+    PLAYER_BASH_ENTER_LOGGED = 1 << 2,
+};
 
 static ColliderCylinderInit sShieldBashOCCylInit = {
     {
@@ -6375,21 +6384,66 @@ static s32 Player_CanUseShieldBash(Player* this) {
     return true;
 }
 
+static void Player_ShieldBash_UpdateColliderAndHit(Player* this, PlayState* play) {
+    Actor* target;
+    const f32 forwardDist = 22.0f;
+    const s16 radius = 22;
+    const s16 height = 50;
+    const f32 bottomOffsetY = 8.0f;
+    f32 fx;
+    f32 fz;
+
+    if (!sShieldBashOCInit) {
+        Collider_InitCylinder(play, &sShieldBashOC);
+        Collider_SetCylinder(play, &sShieldBashOC, &this->actor, &sShieldBashOCCylInit);
+        sShieldBashOCInit = 1;
+    }
+
+    if (sShieldBashOC.base.ocFlags1 & OC1_HIT) {
+        target = sShieldBashOC.base.oc;
+        sShieldBashOC.base.ocFlags1 &= ~OC1_HIT;
+        sShieldBashOC.base.oc = NULL;
+        if (!sShieldBashHitOnce && (target != NULL) && (target->category == ACTORCAT_ENEMY)) {
+            s16 pushYaw = Actor_WorldYawTowardActor(&this->actor, target);
+            f32 knockback = 4.0f;
+
+            target->world.pos.x += Math_SinS(pushYaw) * knockback;
+            target->world.pos.z += Math_CosS(pushYaw) * knockback;
+            target->world.rot.y = pushYaw;
+            target->speedXZ = knockback;
+            Actor_SetColorFilter(target, 0x4000, 0xFF, 0, 8);
+            Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
+            this->av1.actionVar1 |= PLAYER_BASH_HIT;
+            sShieldBashHitOnce = 1;
+        }
+    }
+
+    Collider_UpdateCylinder(&this->actor, &sShieldBashOC);
+
+    fx = Math_SinS(this->actor.shape.rot.y) * forwardDist;
+    fz = Math_CosS(this->actor.shape.rot.y) * forwardDist;
+    sShieldBashOC.dim.radius = radius;
+    sShieldBashOC.dim.height = height;
+    sShieldBashOC.dim.pos.x = this->actor.world.pos.x + fx;
+    sShieldBashOC.dim.pos.z = this->actor.world.pos.z + fz;
+    sShieldBashOC.dim.pos.y = (s16)(this->actor.world.pos.y + bottomOffsetY + (height * 0.5f));
+
+    CollisionCheck_SetOC(play, &play->colChkCtx, &sShieldBashOC.base);
+}
+
 static void Player_SetupShieldBash(Player* this, PlayState* play) {
     Player_SetupAction(play, this, Player_Action_ShieldBash, 0);
     Player_SetModelsForHoldingShield(this);
     LinkAnimation_PlayOnce(play, &this->skelAnime, GET_PLAYER_ANIM(PLAYER_ANIMGROUP_defense, this->modelAnimType));
     this->av2.actionVar2 = 16;
     this->av1.actionVar1 = 0;
+    sShieldBashColliderOwner = this;
+    sShieldBashColliderTimer = 16;
+    sShieldBashHitOnce = 0;
     Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
 }
 
 static void Player_Action_ShieldBash(Player* this, PlayState* play) {
-    enum {
-        PLAYER_BASH_HIT = 1 << 0,
-        PLAYER_BASH_AT_LOGGED = 1 << 1,
-        PLAYER_BASH_ENTER_LOGGED = 1 << 2,
-    };
     s32 animDone = LinkAnimation_Update(play, &this->skelAnime);
     f32 frame = this->skelAnime.curFrame;
     s32 bashActive = (frame >= 4.0f) && (frame <= 10.0f);
@@ -6419,54 +6473,12 @@ static void Player_Action_ShieldBash(Player* this, PlayState* play) {
     }
 
     if (bashActive) {
-        Actor* target;
-        const f32 forwardDist = 22.0f;
-        const s16 radius = 22;
-        const s16 height = 50;
-        const f32 bottomOffsetY = 8.0f;
-        f32 fx;
-        f32 fz;
-
         if (!(this->av1.actionVar1 & PLAYER_BASH_AT_LOGGED)) {
             osSyncPrintf("[FuseDBG] BashATOn: frame=%.1f\n", frame);
             this->av1.actionVar1 |= PLAYER_BASH_AT_LOGGED;
         }
 
-        if (!sShieldBashOCInit) {
-            Collider_InitCylinder(play, &sShieldBashOC);
-            Collider_SetCylinder(play, &sShieldBashOC, &this->actor, &sShieldBashOCCylInit);
-            sShieldBashOCInit = 1;
-        }
-
-        if (!(this->av1.actionVar1 & PLAYER_BASH_HIT) && (sShieldBashOC.base.ocFlags1 & OC1_HIT)) {
-            target = sShieldBashOC.base.oc;
-            sShieldBashOC.base.ocFlags1 &= ~OC1_HIT;
-            sShieldBashOC.base.oc = NULL;
-            if ((target != NULL) && (target->category == ACTORCAT_ENEMY)) {
-                s16 pushYaw = Actor_WorldYawTowardActor(&this->actor, target);
-                f32 knockback = 4.0f;
-
-                target->world.pos.x += Math_SinS(pushYaw) * knockback;
-                target->world.pos.z += Math_CosS(pushYaw) * knockback;
-                target->world.rot.y = pushYaw;
-                target->speedXZ = knockback;
-                Actor_SetColorFilter(target, 0x4000, 0xFF, 0, 8);
-                Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
-                this->av1.actionVar1 |= PLAYER_BASH_HIT;
-            }
-        }
-
-        Collider_UpdateCylinder(&this->actor, &sShieldBashOC);
-
-        fx = Math_SinS(this->actor.shape.rot.y) * forwardDist;
-        fz = Math_CosS(this->actor.shape.rot.y) * forwardDist;
-        sShieldBashOC.dim.radius = radius;
-        sShieldBashOC.dim.height = height;
-        sShieldBashOC.dim.pos.x = this->actor.world.pos.x + fx;
-        sShieldBashOC.dim.pos.z = this->actor.world.pos.z + fz;
-        sShieldBashOC.dim.pos.y = (s16)(this->actor.world.pos.y + bottomOffsetY + (height * 0.5f));
-
-        CollisionCheck_SetOC(play, &play->colChkCtx, &sShieldBashOC.base);
+        Player_ShieldBash_UpdateColliderAndHit(this, play);
     }
 
     if ((this->av2.actionVar2 <= 0) || animDone) {
@@ -12542,6 +12554,14 @@ void Player_UpdateCommon(Player* this, PlayState* play, Input* input) {
         this->actor.colChkInfo.mass = MASS_IMMOVABLE;
     } else {
         this->actor.colChkInfo.mass = 50;
+    }
+
+    if ((sShieldBashColliderOwner == this) && (sShieldBashColliderTimer > 0)) {
+        Player_ShieldBash_UpdateColliderAndHit(this, play);
+        sShieldBashColliderTimer--;
+        if (sShieldBashColliderTimer <= 0) {
+            sShieldBashColliderOwner = NULL;
+        }
     }
 
     this->stateFlags3 &= ~PLAYER_STATE3_PAUSE_ACTION_FUNC;
