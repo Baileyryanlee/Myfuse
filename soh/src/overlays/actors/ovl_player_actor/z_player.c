@@ -6389,7 +6389,7 @@ static void Player_ShieldBash_UpdateColliderAndHit(Player* this, PlayState* play
     const f32 forwardDist = 22.0f;
     const s16 radius = 22;
     const s16 height = 50;
-    const f32 bottomOffsetY = 8.0f;
+    const f32 bottomOffsetY = LINK_IS_CHILD ? -4.0f : 4.0f;
     f32 fx;
     f32 fz;
 
@@ -6438,7 +6438,7 @@ static void Player_SetupShieldBash(Player* this, PlayState* play) {
     this->av2.actionVar2 = 16;
     this->av1.actionVar1 = 0;
     sShieldBashColliderOwner = this;
-    sShieldBashColliderTimer = 16;
+    sShieldBashColliderTimer = 10;
     sShieldBashHitOnce = 0;
     Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
 }
