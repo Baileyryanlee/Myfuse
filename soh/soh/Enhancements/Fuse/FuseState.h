@@ -11,10 +11,14 @@ struct PlayState;
 class SaveManager;
 
 enum class SwordSlotKey { Kokiri = 0, Master = 1, Biggoron = 2 };
+enum class ShieldSlotKey { Deku = 0, Hylian = 1, Mirror = 2 };
 
 bool IsSwordEquipValue(int32_t equipValue);
 SwordSlotKey SwordSlotKeyFromEquipValue(int32_t equipValue);
 const char* SwordSlotName(SwordSlotKey key);
+bool IsShieldEquipValue(int32_t equipValue);
+ShieldSlotKey ShieldSlotKeyFromEquipValue(int32_t equipValue);
+const char* ShieldSlotName(ShieldSlotKey key);
 
 struct SwordFuseSlot {
     MaterialId materialId = MaterialId::None;
@@ -58,12 +62,15 @@ struct FuseSaveData {
     uint16_t swordFuseDurability = 0;    // current (0 = broken/none)
     uint16_t swordFuseMaxDurability = 0; // max
 
-    std::array<SwordFuseSlot, 3> swordSlots{};
+    std::array<SwordFuseSlot, 6> swordSlots{};
     FuseSlot boomerangSlot{};
 
     SwordFuseSlot& GetSwordSlot(SwordSlotKey key);
     const SwordFuseSlot& GetSwordSlot(SwordSlotKey key) const;
     SwordFuseSlot& GetActiveSwordSlot(const PlayState* play);
+    FuseSlot& GetShieldSlot(ShieldSlotKey key);
+    const FuseSlot& GetShieldSlot(ShieldSlotKey key) const;
+    FuseSlot& GetActiveShieldSlot(const PlayState* play);
     FuseSlot& GetBoomerangSlot();
     const FuseSlot& GetBoomerangSlot() const;
     FuseSlot& GetActiveBoomerangSlot(const PlayState* play);
@@ -89,14 +96,20 @@ namespace FusePersistence {
 
 constexpr s16 kSwordMaterialIdNone = static_cast<s16>(MaterialId::None);
 constexpr uint32_t kSwordSlotsSaveVersion = 2;
-constexpr uint32_t kFuseSaveVersion = 4;
-constexpr size_t kSwordSlotCount = 3;
+constexpr uint32_t kShieldSlotsSaveVersion = 5;
+constexpr uint32_t kBoomerangHammerSaveVersion = 4;
+constexpr uint32_t kFuseSaveVersion = 5;
+constexpr size_t kSwordSlotCount = 6;
+constexpr size_t kSwordSlotsOnlyCount = 3;
+constexpr size_t kShieldSlotCount = 3;
+constexpr size_t kShieldSlotOffset = kSwordSlotsOnlyCount;
 constexpr const char* kSwordSaveSectionName = "enhancements.fuse";
 constexpr const char* kSwordSaveVersionKey = "version";
 constexpr const char* kSwordSlotsKey = "slots";
 constexpr const char* kSwordSlotMaterialKey = "matId";
 constexpr const char* kSwordSlotDurabilityCurKey = "curDurability";
 constexpr const char* kSwordSlotDurabilityMaxKey = "maxDurability";
+constexpr const char* kShieldSlotsKey = "shieldSlots";
 constexpr const char* kBoomerangSlotKey = "boomerang";
 constexpr const char* kBoomerangSlotMaterialKey = "matId";
 constexpr const char* kBoomerangSlotDurabilityCurKey = "curDurability";
