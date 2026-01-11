@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <string>
+#include <utility>
 
 // ----------------------------------------------------------------------------
 // UI enums
@@ -63,6 +64,64 @@ static const char* ItemName(FuseItem i) {
 
 static bool IsSword(FuseItem i) {
     return i == FuseItem::KokiriSword || i == FuseItem::MasterSword || i == FuseItem::BiggoronSword;
+}
+
+static bool IsShield(FuseItem i) {
+    return i == FuseItem::DekuShield || i == FuseItem::HylianShield || i == FuseItem::MirrorShield;
+}
+
+static ShieldSlotKey ShieldKeyForItem(FuseItem item) {
+    switch (item) {
+        case FuseItem::HylianShield:
+            return ShieldSlotKey::Hylian;
+        case FuseItem::MirrorShield:
+            return ShieldSlotKey::Mirror;
+        case FuseItem::DekuShield:
+        default:
+            return ShieldSlotKey::Deku;
+    }
+}
+
+static const char* ShieldDebugName(FuseItem item) {
+    switch (item) {
+        case FuseItem::HylianShield:
+            return "shield_hylian";
+        case FuseItem::MirrorShield:
+            return "shield_mirror";
+        case FuseItem::DekuShield:
+        default:
+            return "shield_deku";
+    }
+}
+
+static size_t ShieldSlotIndex(ShieldSlotKey key) {
+    return FusePersistence::kShieldSlotOffset + static_cast<size_t>(key);
+}
+
+static FuseSlot GetShieldSlotForItem(FuseItem item) {
+    const ShieldSlotKey key = ShieldKeyForItem(item);
+    const std::array<SwordFuseSlot, FusePersistence::kSwordSlotCount> slots = Fuse::GetSwordSlots();
+    return slots[ShieldSlotIndex(key)];
+}
+
+static void ApplyShieldSlot(ShieldSlotKey key, const FuseSlot& slot) {
+    std::array<SwordFuseSlot, FusePersistence::kSwordSlotCount> slots = Fuse::GetSwordSlots();
+    slots[ShieldSlotIndex(key)] = slot;
+    Fuse::ApplyLoadedSwordSlots(slots);
+}
+
+static bool IsShieldSlotFused(const FuseSlot& slot) {
+    return slot.materialId != MaterialId::None && slot.durabilityCur > 0 && slot.durabilityMax > 0;
+}
+
+static void LogShieldSlotView(FuseItem item, const FuseSlot& slot) {
+    Fuse::Log("[FuseDBG] DebugSlotView: item=%s material=%d dura=%d/%d\n", ShieldDebugName(item),
+              static_cast<int>(slot.materialId), slot.durabilityCur, slot.durabilityMax);
+}
+
+static void LogShieldAction(const char* action, FuseItem item, const FuseSlot& slot) {
+    Fuse::Log("[FuseDBG] DebugAction: action=%s item=%s material=%d dura=%d/%d\n", action, ShieldDebugName(item),
+              static_cast<int>(slot.materialId), slot.durabilityCur, slot.durabilityMax);
 }
 
 static const char* MatName(MaterialId m) {
@@ -125,7 +184,7 @@ static const char* ResultName(Fuse::FuseResult r) {
 
 // In v0, only swords are implemented in backend. Everything else is display-only for now.
 static bool ItemSupportedNow(FuseItem item) {
-    return IsSword(item) || item == FuseItem::Boomerang || item == FuseItem::MegatonHammer;
+    return IsSword(item) || item == FuseItem::Boomerang || item == FuseItem::MegatonHammer || IsShield(item);
 }
 
 // Return currently selected material for an item, based on current backend state (v0).
@@ -139,7 +198,40 @@ static MaterialId GetCurrentMatForItem(FuseItem item) {
     if (item == FuseItem::MegatonHammer) {
         return Fuse::IsHammerFused() ? Fuse::GetHammerMaterial() : MaterialId::None;
     }
+    if (IsShield(item)) {
+        const FuseSlot slot = GetShieldSlotForItem(item);
+        return IsShieldSlotFused(slot) ? slot.materialId : MaterialId::None;
+    }
     return MaterialId::None;
+}
+
+static Fuse::FuseResult TryFuseShieldSlot(ShieldSlotKey key, MaterialId id) {
+    std::array<SwordFuseSlot, FusePersistence::kSwordSlotCount> slots = Fuse::GetSwordSlots();
+    FuseSlot& slot = slots[ShieldSlotIndex(key)];
+
+    if (IsShieldSlotFused(slot)) {
+        return Fuse::FuseResult::AlreadyFused;
+    }
+
+    if (!Fuse::HasMaterial(id, 1)) {
+        return Fuse::FuseResult::NotEnoughMaterial;
+    }
+
+    const MaterialDef* def = Fuse::GetMaterialDef(id);
+    if (!def) {
+        return Fuse::FuseResult::InvalidMaterial;
+    }
+
+    if (!Fuse::ConsumeMaterial(id, 1)) {
+        return Fuse::FuseResult::NotEnoughMaterial;
+    }
+
+    const int maxDurability = Fuse::GetMaterialEffectiveBaseDurability(id);
+    slot.materialId = id;
+    slot.durabilityMax = maxDurability;
+    slot.durabilityCur = maxDurability;
+    Fuse::ApplyLoadedSwordSlots(slots);
+    return Fuse::FuseResult::Ok;
 }
 
 // Apply selection for an item (v0 implementation).
@@ -159,6 +251,12 @@ static void ApplyMatForItem(FuseItem item, MaterialId mat) {
             result = Fuse::TryUnfuseBoomerang();
         } else if (item == FuseItem::MegatonHammer) {
             result = Fuse::TryUnfuseHammer();
+        } else if (IsShield(item)) {
+            FuseSlot slot{};
+            slot.ResetToUnfused();
+            ApplyShieldSlot(ShieldKeyForItem(item), slot);
+            result = Fuse::FuseResult::Ok;
+            LogShieldAction("clear", item, slot);
         }
     } else {
         if (IsSword(item)) {
@@ -167,6 +265,11 @@ static void ApplyMatForItem(FuseItem item, MaterialId mat) {
             result = Fuse::TryFuseBoomerang(mat);
         } else if (item == FuseItem::MegatonHammer) {
             result = Fuse::TryFuseHammer(mat);
+        } else if (IsShield(item)) {
+            const ShieldSlotKey key = ShieldKeyForItem(item);
+            result = TryFuseShieldSlot(key, mat);
+            const FuseSlot slot = GetShieldSlotForItem(item);
+            LogShieldAction("fuse", item, slot);
         }
     }
 
@@ -218,6 +321,9 @@ static bool IsItemFused(FuseItem item) {
     if (item == FuseItem::MegatonHammer) {
         return Fuse::IsHammerFused();
     }
+    if (IsShield(item)) {
+        return IsShieldSlotFused(GetShieldSlotForItem(item));
+    }
     return false;
 }
 
@@ -228,6 +334,14 @@ static void DamageItemFuse(FuseItem item) {
         Fuse::DamageBoomerangFuseDurability(nullptr, 1, "debug");
     } else if (item == FuseItem::MegatonHammer) {
         Fuse::DamageHammerFuseDurability(nullptr, 1, "debug");
+    } else if (IsShield(item)) {
+        FuseSlot slot = GetShieldSlotForItem(item);
+        slot.durabilityCur = std::max(0, slot.durabilityCur - 1);
+        if (slot.durabilityCur <= 0) {
+            slot.ResetToUnfused();
+        }
+        ApplyShieldSlot(ShieldKeyForItem(item), slot);
+        LogShieldAction("damage", item, slot);
     } else {
         Fuse::SetLastEvent("That item isn't implemented yet");
     }
@@ -240,6 +354,11 @@ static void ClearItemFuse(FuseItem item) {
         Fuse::TryUnfuseBoomerang();
     } else if (item == FuseItem::MegatonHammer) {
         Fuse::TryUnfuseHammer();
+    } else if (IsShield(item)) {
+        FuseSlot slot = GetShieldSlotForItem(item);
+        slot.ResetToUnfused();
+        ApplyShieldSlot(ShieldKeyForItem(item), slot);
+        LogShieldAction("clear", item, slot);
     } else {
         Fuse::SetLastEvent("That item isn't implemented yet");
         return;
@@ -248,6 +367,23 @@ static void ClearItemFuse(FuseItem item) {
     static std::string s;
     s = std::string(ItemName(item)) + " fuse cleared (debug)";
     Fuse::SetLastEvent(s.c_str());
+}
+
+static std::pair<int, int> GetItemDurability(FuseItem item) {
+    if (IsSword(item)) {
+        return { Fuse::GetSwordFuseDurability(), Fuse::GetSwordFuseMaxDurability() };
+    }
+    if (item == FuseItem::Boomerang) {
+        return { Fuse::GetBoomerangFuseDurability(), Fuse::GetBoomerangFuseMaxDurability() };
+    }
+    if (item == FuseItem::MegatonHammer) {
+        return { Fuse::GetHammerFuseDurability(), Fuse::GetHammerFuseMaxDurability() };
+    }
+    if (IsShield(item)) {
+        const FuseSlot slot = GetShieldSlotForItem(item);
+        return { slot.durabilityCur, slot.durabilityMax };
+    }
+    return { 0, 0 };
 }
 
 void FuseMenuWindow::InitElement() {
@@ -326,6 +462,9 @@ void FuseMenuWindow::DrawElement() {
 
                     // Current selection derived from backend (v0: swords share one)
                     MaterialId current = GetCurrentMatForItem(item);
+                    if (IsShield(item)) {
+                        LogShieldSlotView(item, GetShieldSlotForItem(item));
+                    }
 
                     // Unique ID per row so combos don't collide
                     std::string comboId = std::string("##mat_") + std::to_string(i);
@@ -389,6 +528,12 @@ void FuseMenuWindow::DrawElement() {
                     }
 
                     ImGui::TableSetColumnIndex(2);
+                    const auto durability = GetItemDurability(item);
+                    if (IsItemFused(item)) {
+                        ImGui::Text("Durability: %d / %d", durability.first, durability.second);
+                    } else {
+                        ImGui::TextUnformatted("Durability: -");
+                    }
                     const bool isFused = IsItemFused(item);
                     ImGui::BeginDisabled(!supported || !isFused);
                     std::string damageLabel = std::string("Damage ") + ItemName(item) + " Fuse (-1)";
