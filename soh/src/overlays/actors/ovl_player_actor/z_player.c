@@ -29,6 +29,7 @@
 #include "soh/Enhancements/cosmetics/cosmeticsTypes.h"
 #include "soh/Enhancements/enhancementTypes.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
+#include "soh/Enhancements/Fuse/ShieldBashRules.h"
 #include "soh/Enhancements/randomizer/randomizer_grotto.h"
 #include "soh/frame_interpolation.h"
 #include "soh/OTRGlobals.h"
@@ -6405,19 +6406,42 @@ static void Player_ShieldBash_UpdateColliderAndHit(Player* this, PlayState* play
         target = sShieldBashOC.base.oc;
         sShieldBashOC.base.ocFlags1 &= ~OC1_HIT;
         sShieldBashOC.base.oc = NULL;
-        if (!sShieldBashHitOnce && (target != NULL) && (target->category == ACTORCAT_ENEMY)) {
-            s16 pushYaw = Actor_WorldYawTowardActor(&this->actor, target);
-            const f32 knockback = 5.0f;
+        if (!sShieldBashHitOnce && (target != NULL)) {
+            const bool isEnemy = FuseBash_IsEnemyActor(target);
+            const bool isBoss = FuseBash_IsBossActor(target);
+            const bool allowed = FuseBash_IsKnockbackAllowed(target);
+            const float scalar = FuseBash_GetKnockbackScalar(target);
+            const char* reason = "default";
 
-            target->world.pos.x += Math_SinS(pushYaw) * knockback;
-            target->world.pos.z += Math_CosS(pushYaw) * knockback;
-            target->speedXZ = knockback;
-            Actor_SetColorFilter(target, 0x4000, 0xFF, 0, 8);
-            Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
-            this->av1.actionVar1 |= PLAYER_BASH_HIT;
-            sShieldBashHitOnce = 1;
-            sShieldBashRecoveryOwner = this;
-            sShieldBashRecoveryTimer = 6;
+            if (isBoss) {
+                reason = "boss";
+            } else if (!isEnemy) {
+                reason = "non_enemy";
+            } else if (!allowed) {
+                reason = "blacklist";
+            }
+
+            osSyncPrintf("[FuseDBG] BashKB: actor=%d cat=%d allowed=%d scalar=%.2f reason=%s\n", target->id,
+                         target->category, allowed ? 1 : 0, scalar, reason);
+
+            if (isEnemy) {
+                s16 pushYaw = Actor_WorldYawTowardActor(&this->actor, target);
+                const f32 knockback = 5.0f;
+                const f32 knockbackScaled = knockback * scalar;
+
+                if (scalar > 0.0f) {
+                    target->world.pos.x += Math_SinS(pushYaw) * knockbackScaled;
+                    target->world.pos.z += Math_CosS(pushYaw) * knockbackScaled;
+                    target->speedXZ = knockbackScaled;
+                }
+
+                Actor_SetColorFilter(target, 0x4000, 0xFF, 0, 8);
+                Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
+                this->av1.actionVar1 |= PLAYER_BASH_HIT;
+                sShieldBashHitOnce = 1;
+                sShieldBashRecoveryOwner = this;
+                sShieldBashRecoveryTimer = 6;
+            }
         }
     }
 
