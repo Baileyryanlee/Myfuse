@@ -34,6 +34,7 @@
 #include "soh/frame_interpolation.h"
 #include "soh/OTRGlobals.h"
 #include "soh/ResourceManagerHelpers.h"
+#include "soh/ActorDB.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -6387,6 +6388,21 @@ static s32 Player_CanUseShieldBash(Player* this) {
     return true;
 }
 
+static const char* Player_GetShieldBashReasonLabel(FuseBashKnockbackReason reason) {
+    switch (reason) {
+        case FUSE_BASH_KNOCKBACK_REASON_NON_ENEMY:
+            return "NonEnemy";
+        case FUSE_BASH_KNOCKBACK_REASON_BOSS:
+            return "Boss";
+        case FUSE_BASH_KNOCKBACK_REASON_BLACKLIST:
+            return "Blacklist";
+        case FUSE_BASH_KNOCKBACK_REASON_ALLOWED:
+            return "Allowed";
+        default:
+            return "Unknown";
+    }
+}
+
 static void Player_ShieldBash_UpdateColliderAndHit(Player* this, PlayState* play) {
     Actor* target;
     const f32 forwardDist = 22.0f;
@@ -6408,28 +6424,20 @@ static void Player_ShieldBash_UpdateColliderAndHit(Player* this, PlayState* play
         sShieldBashOC.base.oc = NULL;
         if (!sShieldBashHitOnce && (target != NULL)) {
             const bool isEnemy = FuseBash_IsEnemyActor(target);
-            const bool isBoss = FuseBash_IsBossActor(target);
-            const bool allowed = FuseBash_IsKnockbackAllowed(target);
-            const float scalar = FuseBash_GetKnockbackScalar(target);
-            const char* reason = "default";
+            const FuseBashKnockbackResult bashResult = FuseBash_EvaluateKnockback(target);
+            ActorDBEntry* actorEntry = ActorDB_Retrieve(target->id);
+            const char* actorName = (actorEntry != NULL) ? actorEntry->name : "Unknown";
+            const char* reasonLabel = Player_GetShieldBashReasonLabel(bashResult.reason);
 
-            if (isBoss) {
-                reason = "boss";
-            } else if (!isEnemy) {
-                reason = "non_enemy";
-            } else if (!allowed) {
-                reason = "blacklist";
-            }
-
-            osSyncPrintf("[FuseDBG] BashKB: actor=%d cat=%d allowed=%d scalar=%.2f reason=%s\n", target->id,
-                         target->category, allowed ? 1 : 0, scalar, reason);
+            osSyncPrintf("[FuseDBG] BashKB: actor=%s id=%d allowed=%d scalar=%.2f reason=%s\n", actorName,
+                         target->id, bashResult.allowed ? 1 : 0, bashResult.scalar, reasonLabel);
 
             if (isEnemy) {
                 s16 pushYaw = Actor_WorldYawTowardActor(&this->actor, target);
                 const f32 knockback = 5.0f;
-                const f32 knockbackScaled = knockback * scalar;
+                const f32 knockbackScaled = knockback * bashResult.scalar;
 
-                if (scalar > 0.0f) {
+                if (bashResult.allowed) {
                     target->world.pos.x += Math_SinS(pushYaw) * knockbackScaled;
                     target->world.pos.z += Math_CosS(pushYaw) * knockbackScaled;
                     target->speedXZ = knockbackScaled;
