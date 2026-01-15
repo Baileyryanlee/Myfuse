@@ -380,7 +380,7 @@ void DrawSolidRectOpa(GraphicsContext* gfxCtx, Gfx** gfxp, s32 x, s32 y, s32 w, 
         vtx[i].v.cn[3] = a;
     }
 
-    gSPVertex((*gfxp)++, vtx, 4, 0);
+    gSPVertex((*gfxp)++, (uintptr_t)vtx, 4, 0);
     gSP2Triangles((*gfxp)++, 0, 1, 2, 0, 0, 2, 3, 0);
 }
 
