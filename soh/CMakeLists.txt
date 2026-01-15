@@ -125,6 +125,7 @@ file(GLOB_RECURSE soh__ RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "soh/*.c" "soh/*.cp
 list(APPEND soh__
     ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/FuseSystem.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/Fuse.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/RangedFuseMenu.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/FuseModifiers.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/FuseMaterials.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/FuseState.cpp

@@ -95,6 +95,24 @@ void FuseHammerWithMaterial(MaterialId id, uint16_t maxDurability, bool initiali
                             bool logDurability = true);
 FuseResult TryFuseHammer(MaterialId id);
 FuseResult TryUnfuseHammer();
+bool IsArrowsFused();
+MaterialId GetArrowsMaterial();
+void FuseArrowsWithMaterial(MaterialId id, uint16_t maxDurability, bool initializeCurrentDurability = true,
+                            bool logDurability = true);
+FuseResult TryFuseArrows(MaterialId id);
+FuseResult TryUnfuseArrows();
+bool IsSlingshotFused();
+MaterialId GetSlingshotMaterial();
+void FuseSlingshotWithMaterial(MaterialId id, uint16_t maxDurability, bool initializeCurrentDurability = true,
+                               bool logDurability = true);
+FuseResult TryFuseSlingshot(MaterialId id);
+FuseResult TryUnfuseSlingshot();
+bool IsHookshotFused();
+MaterialId GetHookshotMaterial();
+void FuseHookshotWithMaterial(MaterialId id, uint16_t maxDurability, bool initializeCurrentDurability = true,
+                              bool logDurability = true);
+FuseResult TryFuseHookshot(MaterialId id);
+FuseResult TryUnfuseHookshot();
 bool HammerDrainedThisSwing();
 bool HammerHitActorThisSwing();
 s16 GetHammerSwingId();
@@ -128,6 +146,9 @@ void SetHammerFuseMaxDurability(int v);
 bool DamageHammerFuseDurability(PlayState* play, int amount, const char* reason);
 void ClearHammerFuse();
 void OnHammerFuseBroken(PlayState* play);
+void ClearArrowsFuse();
+void ClearSlingshotFuse();
+void ClearHookshotFuse();
 
 // Debug/testing (safe no-op in shipping later)
 const char* GetLastEvent();

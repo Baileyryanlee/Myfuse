@@ -741,6 +741,21 @@ bool Fuse::IsHammerFused() {
     return slot.materialId != MaterialId::None && slot.durabilityCur > 0;
 }
 
+bool Fuse::IsArrowsFused() {
+    const FuseSlot& slot = gFuseRuntime.GetActiveArrowsSlot(nullptr);
+    return slot.materialId != MaterialId::None && slot.durabilityCur > 0;
+}
+
+bool Fuse::IsSlingshotFused() {
+    const FuseSlot& slot = gFuseRuntime.GetActiveSlingshotSlot(nullptr);
+    return slot.materialId != MaterialId::None && slot.durabilityCur > 0;
+}
+
+bool Fuse::IsHookshotFused() {
+    const FuseSlot& slot = gFuseRuntime.GetActiveHookshotSlot(nullptr);
+    return slot.materialId != MaterialId::None && slot.durabilityCur > 0;
+}
+
 MaterialId Fuse::GetSwordMaterial() {
     const SwordFuseSlot& slot = gFuseSave.GetActiveSwordSlot(nullptr);
     return slot.materialId;
@@ -753,6 +768,21 @@ MaterialId Fuse::GetBoomerangMaterial() {
 
 MaterialId Fuse::GetHammerMaterial() {
     const FuseSlot& slot = gFuseRuntime.GetActiveHammerSlot(nullptr);
+    return slot.materialId;
+}
+
+MaterialId Fuse::GetArrowsMaterial() {
+    const FuseSlot& slot = gFuseRuntime.GetActiveArrowsSlot(nullptr);
+    return slot.materialId;
+}
+
+MaterialId Fuse::GetSlingshotMaterial() {
+    const FuseSlot& slot = gFuseRuntime.GetActiveSlingshotSlot(nullptr);
+    return slot.materialId;
+}
+
+MaterialId Fuse::GetHookshotMaterial() {
+    const FuseSlot& slot = gFuseRuntime.GetActiveHookshotSlot(nullptr);
     return slot.materialId;
 }
 
@@ -916,6 +946,21 @@ void Fuse::ClearHammerFuse() {
     slot.ResetToUnfused();
 }
 
+void Fuse::ClearArrowsFuse() {
+    FuseSlot& slot = gFuseRuntime.GetActiveArrowsSlot(nullptr);
+    slot.ResetToUnfused();
+}
+
+void Fuse::ClearSlingshotFuse() {
+    FuseSlot& slot = gFuseRuntime.GetActiveSlingshotSlot(nullptr);
+    slot.ResetToUnfused();
+}
+
+void Fuse::ClearHookshotFuse() {
+    FuseSlot& slot = gFuseRuntime.GetActiveHookshotSlot(nullptr);
+    slot.ResetToUnfused();
+}
+
 void Fuse::FuseSwordWithMaterial(MaterialId id, uint16_t maxDurability, bool initializeCurrentDurability,
                                  bool logDurability) {
     SwordFuseSlot& slot = gFuseSave.GetActiveSwordSlot(nullptr);
@@ -991,6 +1036,81 @@ void Fuse::FuseHammerWithMaterial(MaterialId id, uint16_t maxDurability, bool in
 
     if (logDurability) {
         Fuse::Log("[FuseMVP] Hammer fused with material=%d (durability %u/%u)\n", static_cast<int>(id),
+                  static_cast<unsigned int>(slot.durabilityCur), static_cast<unsigned int>(maxDurability));
+    }
+}
+
+void Fuse::FuseArrowsWithMaterial(MaterialId id, uint16_t maxDurability, bool initializeCurrentDurability,
+                                  bool logDurability) {
+    FuseSlot& slot = gFuseRuntime.GetActiveArrowsSlot(nullptr);
+    slot.materialId = id;
+    slot.durabilityMax = maxDurability;
+
+    if (initializeCurrentDurability) {
+        slot.durabilityCur = maxDurability;
+    } else {
+        slot.durabilityCur = std::clamp<int>(slot.durabilityCur, 0, maxDurability);
+    }
+
+    const MaterialDef* def = Fuse::GetMaterialDef(id);
+    if (def) {
+        Fuse::SetLastEvent(def->name);
+    } else {
+        Fuse::SetLastEvent("Arrows fused with material");
+    }
+
+    if (logDurability) {
+        Fuse::Log("[FuseMVP] Arrows fused with material=%d (durability %u/%u)\n", static_cast<int>(id),
+                  static_cast<unsigned int>(slot.durabilityCur), static_cast<unsigned int>(maxDurability));
+    }
+}
+
+void Fuse::FuseSlingshotWithMaterial(MaterialId id, uint16_t maxDurability, bool initializeCurrentDurability,
+                                     bool logDurability) {
+    FuseSlot& slot = gFuseRuntime.GetActiveSlingshotSlot(nullptr);
+    slot.materialId = id;
+    slot.durabilityMax = maxDurability;
+
+    if (initializeCurrentDurability) {
+        slot.durabilityCur = maxDurability;
+    } else {
+        slot.durabilityCur = std::clamp<int>(slot.durabilityCur, 0, maxDurability);
+    }
+
+    const MaterialDef* def = Fuse::GetMaterialDef(id);
+    if (def) {
+        Fuse::SetLastEvent(def->name);
+    } else {
+        Fuse::SetLastEvent("Slingshot fused with material");
+    }
+
+    if (logDurability) {
+        Fuse::Log("[FuseMVP] Slingshot fused with material=%d (durability %u/%u)\n", static_cast<int>(id),
+                  static_cast<unsigned int>(slot.durabilityCur), static_cast<unsigned int>(maxDurability));
+    }
+}
+
+void Fuse::FuseHookshotWithMaterial(MaterialId id, uint16_t maxDurability, bool initializeCurrentDurability,
+                                    bool logDurability) {
+    FuseSlot& slot = gFuseRuntime.GetActiveHookshotSlot(nullptr);
+    slot.materialId = id;
+    slot.durabilityMax = maxDurability;
+
+    if (initializeCurrentDurability) {
+        slot.durabilityCur = maxDurability;
+    } else {
+        slot.durabilityCur = std::clamp<int>(slot.durabilityCur, 0, maxDurability);
+    }
+
+    const MaterialDef* def = Fuse::GetMaterialDef(id);
+    if (def) {
+        Fuse::SetLastEvent(def->name);
+    } else {
+        Fuse::SetLastEvent("Hookshot fused with material");
+    }
+
+    if (logDurability) {
+        Fuse::Log("[FuseMVP] Hookshot fused with material=%d (durability %u/%u)\n", static_cast<int>(id),
                   static_cast<unsigned int>(slot.durabilityCur), static_cast<unsigned int>(maxDurability));
     }
 }
@@ -1083,6 +1203,87 @@ Fuse::FuseResult Fuse::TryFuseHammer(MaterialId id) {
     return FuseResult::Ok;
 }
 
+Fuse::FuseResult Fuse::TryFuseArrows(MaterialId id) {
+    if (id == MaterialId::None) {
+        return FuseResult::NotAllowed;
+    }
+
+    if (Fuse::IsArrowsFused()) {
+        return FuseResult::AlreadyFused;
+    }
+
+    if (!Fuse::HasMaterial(id, 1)) {
+        return FuseResult::NotEnoughMaterial;
+    }
+
+    const MaterialDef* def = Fuse::GetMaterialDef(id);
+    if (!def) {
+        return FuseResult::InvalidMaterial;
+    }
+
+    if (!Fuse::ConsumeMaterial(id, 1)) {
+        return FuseResult::NotEnoughMaterial;
+    }
+
+    Fuse::FuseArrowsWithMaterial(id, Fuse::GetMaterialEffectiveBaseDurability(id));
+
+    return FuseResult::Ok;
+}
+
+Fuse::FuseResult Fuse::TryFuseSlingshot(MaterialId id) {
+    if (id == MaterialId::None) {
+        return FuseResult::NotAllowed;
+    }
+
+    if (Fuse::IsSlingshotFused()) {
+        return FuseResult::AlreadyFused;
+    }
+
+    if (!Fuse::HasMaterial(id, 1)) {
+        return FuseResult::NotEnoughMaterial;
+    }
+
+    const MaterialDef* def = Fuse::GetMaterialDef(id);
+    if (!def) {
+        return FuseResult::InvalidMaterial;
+    }
+
+    if (!Fuse::ConsumeMaterial(id, 1)) {
+        return FuseResult::NotEnoughMaterial;
+    }
+
+    Fuse::FuseSlingshotWithMaterial(id, Fuse::GetMaterialEffectiveBaseDurability(id));
+
+    return FuseResult::Ok;
+}
+
+Fuse::FuseResult Fuse::TryFuseHookshot(MaterialId id) {
+    if (id == MaterialId::None) {
+        return FuseResult::NotAllowed;
+    }
+
+    if (Fuse::IsHookshotFused()) {
+        return FuseResult::AlreadyFused;
+    }
+
+    if (!Fuse::HasMaterial(id, 1)) {
+        return FuseResult::NotEnoughMaterial;
+    }
+
+    const MaterialDef* def = Fuse::GetMaterialDef(id);
+    if (!def) {
+        return FuseResult::InvalidMaterial;
+    }
+
+    if (!Fuse::ConsumeMaterial(id, 1)) {
+        return FuseResult::NotEnoughMaterial;
+    }
+
+    Fuse::FuseHookshotWithMaterial(id, Fuse::GetMaterialEffectiveBaseDurability(id));
+
+    return FuseResult::Ok;
+}
+
 Fuse::FuseResult Fuse::TryUnfuseSword() {
     if (!Fuse::IsSwordFused()) {
         return FuseResult::Ok;
@@ -1107,6 +1308,33 @@ Fuse::FuseResult Fuse::TryUnfuseHammer() {
     }
 
     Fuse::ClearHammerFuse();
+    return FuseResult::Ok;
+}
+
+Fuse::FuseResult Fuse::TryUnfuseArrows() {
+    if (!Fuse::IsArrowsFused()) {
+        return FuseResult::Ok;
+    }
+
+    Fuse::ClearArrowsFuse();
+    return FuseResult::Ok;
+}
+
+Fuse::FuseResult Fuse::TryUnfuseSlingshot() {
+    if (!Fuse::IsSlingshotFused()) {
+        return FuseResult::Ok;
+    }
+
+    Fuse::ClearSlingshotFuse();
+    return FuseResult::Ok;
+}
+
+Fuse::FuseResult Fuse::TryUnfuseHookshot() {
+    if (!Fuse::IsHookshotFused()) {
+        return FuseResult::Ok;
+    }
+
+    Fuse::ClearHookshotFuse();
     return FuseResult::Ok;
 }
 
