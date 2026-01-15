@@ -17,16 +17,14 @@ constexpr int kNavRepeatFrames = 10;
 constexpr int kReopenCooldownFrames = 18;
 constexpr int kStickThreshold = 30;
 constexpr int kVisibleRows = 7;
-constexpr float kTextScale = 0.85f;
+constexpr int kCharWidth = 8;
+constexpr int kCharHeight = 8;
 constexpr int kMenuCol = 2;
-constexpr int kMenuRow = 3;
-constexpr int kMenuX = 24;
-constexpr int kMenuY = 56;
-constexpr int kBaseRowHeight = 14;
+constexpr int kMenuBaseRow = 7;
 constexpr int kBaseListWidth = 160;
-constexpr int kRowHeight = static_cast<int>((kBaseRowHeight * kTextScale) + 0.5f);
+constexpr int kRowHeight = kCharHeight;
 constexpr int kPanelPadding = 6;
-constexpr int kListWidth = static_cast<int>((kBaseListWidth * kTextScale) + 0.5f);
+constexpr int kListWidth = kBaseListWidth;
 constexpr bool kEnableTimeSlowdown = false;
 constexpr float kTimeSlowdownFactor = 0.35f;
 
@@ -464,11 +462,13 @@ void Draw(PlayState* play) {
     Gfx_SetupDL_39Opa(gfxCtx);
 
     const int totalEntries = static_cast<int>(sMenu.entries.size());
-    const int availableHeight = std::max(0, SCREEN_HEIGHT - kMenuY - kPanelPadding);
+    const int menuYPx = kMenuBaseRow * kCharHeight;
+    const int menuXPx = kMenuCol * kCharWidth;
+    const int availableHeight = std::max(0, SCREEN_HEIGHT - menuYPx - kPanelPadding);
     const int maxVisibleRows = std::max(1, availableHeight / kRowHeight);
     const int visible = std::min({ kVisibleRows, totalEntries, maxVisibleRows });
-    const int panelX = kMenuX - kPanelPadding;
-    const int panelY = kMenuY - kPanelPadding;
+    const int panelX = menuXPx - kPanelPadding;
+    const int panelY = menuYPx - kPanelPadding;
     const int panelH = (visible * kRowHeight) + (kPanelPadding * 2);
     const int panelW = kListWidth + (kPanelPadding * 2);
 
@@ -476,8 +476,8 @@ void Draw(PlayState* play) {
 
     const int highlightIndex = sMenu.selectedIndex - sMenu.scrollOffset;
     if (highlightIndex >= 0 && highlightIndex < visible) {
-        const int highlightY = kMenuY + (highlightIndex * kRowHeight);
-        DrawSolidRectOpa(gfxCtx, &opa, kMenuX - 2, highlightY - 2, kListWidth + 4, kRowHeight, 20, 20, 20, 220);
+        const int highlightY = menuYPx + (highlightIndex * kRowHeight);
+        DrawSolidRectOpa(gfxCtx, &opa, menuXPx - 2, highlightY, kListWidth + 4, kRowHeight, 20, 20, 20, 220);
     }
 
     RestoreOverlayTextState(gfxCtx, &opa);
@@ -485,8 +485,6 @@ void Draw(PlayState* play) {
     GfxPrint printer;
     GfxPrint_Init(&printer);
     GfxPrint_Open(&printer, opa);
-
-    GfxPrint_SetPos(&printer, kMenuCol, kMenuRow);
 
     for (int row = 0; row < visible; ++row) {
         const int entryIndex = sMenu.scrollOffset + row;
@@ -503,8 +501,7 @@ void Draw(PlayState* play) {
             GfxPrint_SetColor(&printer, 220, 220, 220, 255);
         }
 
-        const int textRow = kMenuRow + row;
-        GfxPrint_SetPos(&printer, kMenuCol, textRow);
+        GfxPrint_SetPos(&printer, kMenuCol, kMenuBaseRow + row);
 
         if (entry.id == MaterialId::None) {
             GfxPrint_Printf(&printer, "NONE");
