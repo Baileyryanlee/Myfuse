@@ -18,6 +18,8 @@ constexpr int kReopenCooldownFrames = 18;
 constexpr int kStickThreshold = 30;
 constexpr int kVisibleRows = 7;
 constexpr float kTextScale = 0.85f;
+constexpr int kMenuCol = 2;
+constexpr int kMenuRow = 3;
 constexpr int kMenuX = 24;
 constexpr int kMenuY = 56;
 constexpr int kBaseRowHeight = 14;
@@ -484,6 +486,8 @@ void Draw(PlayState* play) {
     GfxPrint_Init(&printer);
     GfxPrint_Open(&printer, opa);
 
+    GfxPrint_SetPos(&printer, kMenuCol, kMenuRow);
+
     for (int row = 0; row < visible; ++row) {
         const int entryIndex = sMenu.scrollOffset + row;
         if (entryIndex >= totalEntries) {
@@ -499,8 +503,8 @@ void Draw(PlayState* play) {
             GfxPrint_SetColor(&printer, 220, 220, 220, 255);
         }
 
-        const int textY = kMenuY + (row * kRowHeight);
-        GfxPrint_SetPosPx(&printer, kMenuX, textY);
+        const int textRow = kMenuRow + row;
+        GfxPrint_SetPos(&printer, kMenuCol, textRow);
 
         if (entry.id == MaterialId::None) {
             GfxPrint_Printf(&printer, "NONE");
