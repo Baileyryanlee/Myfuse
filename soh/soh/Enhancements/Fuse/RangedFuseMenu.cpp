@@ -448,10 +448,8 @@ void Draw(PlayState* play) {
         return;
     }
 
-    OPEN_DISPS(play->state.gfxCtx);
-
     GraphicsContext* gfxCtx = play->state.gfxCtx;
-    Gfx* opa = POLY_OPA_DISP;
+    Gfx* opa = gfxCtx->polyOpa.p;
 
     Gfx_SetupDL_39Opa(gfxCtx);
 
@@ -505,9 +503,7 @@ void Draw(PlayState* play) {
     opa = GfxPrint_Close(&printer);
     GfxPrint_Destroy(&printer);
 
-    POLY_OPA_DISP = opa;
-
-    CLOSE_DISPS(play->state.gfxCtx);
+    gfxCtx->polyOpa.p = opa;
 }
 
 } // namespace RangedFuseMenu
