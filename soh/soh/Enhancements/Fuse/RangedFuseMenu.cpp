@@ -13,6 +13,7 @@
 #include <vector>
 
 namespace {
+constexpr int kMenuY = 56; // pixel anchor used for bounds math
 constexpr int kNavRepeatFrames = 10;
 constexpr int kReopenCooldownFrames = 18;
 constexpr int kStickThreshold = 30;
@@ -464,9 +465,9 @@ void Draw(PlayState* play) {
     const int totalEntries = static_cast<int>(sMenu.entries.size());
     const int menuYPx = kMenuBaseRow * kCharHeight;
     const int menuXPx = kMenuCol * kCharWidth;
-    const int availableHeight = std::max(0, SCREEN_HEIGHT - menuYPx - kPanelPadding);
+    const int availableHeight = std::max(0, SCREEN_HEIGHT - kMenuY - kPanelPadding);
     const int maxVisibleRows = std::max(1, availableHeight / kRowHeight);
-    const int visible = std::min({ kVisibleRows, totalEntries, maxVisibleRows });
+    const int visible = std::min(kVisibleRows, std::min(totalEntries, maxVisibleRows));
     const int panelX = menuXPx - kPanelPadding;
     const int panelY = menuYPx - kPanelPadding;
     const int panelH = (visible * kRowHeight) + (kPanelPadding * 2);
