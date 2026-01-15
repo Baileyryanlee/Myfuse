@@ -17,11 +17,14 @@ constexpr int kNavRepeatFrames = 10;
 constexpr int kReopenCooldownFrames = 18;
 constexpr int kStickThreshold = 30;
 constexpr int kVisibleRows = 7;
-constexpr int kRowHeight = 14;
+constexpr float kTextScale = 0.85f;
+constexpr int kMenuX = 24;
+constexpr int kMenuY = 56;
+constexpr int kBaseRowHeight = 14;
+constexpr int kBaseListWidth = 160;
+constexpr int kRowHeight = static_cast<int>((kBaseRowHeight * kTextScale) + 0.5f);
 constexpr int kPanelPadding = 6;
-constexpr int kListX = 24;
-constexpr int kListY = 40;
-constexpr int kListWidth = 160;
+constexpr int kListWidth = static_cast<int>((kBaseListWidth * kTextScale) + 0.5f);
 constexpr bool kEnableTimeSlowdown = false;
 constexpr float kTimeSlowdownFactor = 0.35f;
 
@@ -194,6 +197,9 @@ void BuildEntries(RangedFuseMenuState& state) {
     const MaterialDef* defs = Fuse::GetMaterialDefs(&count);
     for (size_t i = 0; i < count; ++i) {
         const MaterialDef& def = defs[i];
+        if (def.id == MaterialId::None) {
+            continue;
+        }
         state.entries.push_back({ def.id, &def, Fuse::GetMaterialCount(def.id) });
     }
 
@@ -301,7 +307,9 @@ void UpdateCooldowns() {
 
 void AdjustScroll() {
     const int totalEntries = static_cast<int>(sMenu.entries.size());
-    const int visible = std::min(kVisibleRows, totalEntries);
+    const int availableHeight = std::max(0, SCREEN_HEIGHT - kMenuY - kPanelPadding);
+    const int maxVisibleRows = std::max(1, availableHeight / kRowHeight);
+    const int visible = std::min({ kVisibleRows, totalEntries, maxVisibleRows });
     const int maxScroll = std::max(0, totalEntries - visible);
 
     if (sMenu.selectedIndex < sMenu.scrollOffset) {
@@ -454,9 +462,11 @@ void Draw(PlayState* play) {
     Gfx_SetupDL_39Opa(gfxCtx);
 
     const int totalEntries = static_cast<int>(sMenu.entries.size());
-    const int visible = std::min(kVisibleRows, totalEntries);
-    const int panelX = kListX - kPanelPadding;
-    const int panelY = kListY - kPanelPadding;
+    const int availableHeight = std::max(0, SCREEN_HEIGHT - kMenuY - kPanelPadding);
+    const int maxVisibleRows = std::max(1, availableHeight / kRowHeight);
+    const int visible = std::min({ kVisibleRows, totalEntries, maxVisibleRows });
+    const int panelX = kMenuX - kPanelPadding;
+    const int panelY = kMenuY - kPanelPadding;
     const int panelH = (visible * kRowHeight) + (kPanelPadding * 2);
     const int panelW = kListWidth + (kPanelPadding * 2);
 
@@ -464,8 +474,8 @@ void Draw(PlayState* play) {
 
     const int highlightIndex = sMenu.selectedIndex - sMenu.scrollOffset;
     if (highlightIndex >= 0 && highlightIndex < visible) {
-        const int highlightY = kListY + (highlightIndex * kRowHeight);
-        DrawSolidRectOpa(gfxCtx, &opa, kListX - 2, highlightY - 2, kListWidth + 4, kRowHeight, 40, 90, 160, 200);
+        const int highlightY = kMenuY + (highlightIndex * kRowHeight);
+        DrawSolidRectOpa(gfxCtx, &opa, kMenuX - 2, highlightY - 2, kListWidth + 4, kRowHeight, 20, 20, 20, 220);
     }
 
     RestoreOverlayTextState(gfxCtx, &opa);
@@ -484,13 +494,13 @@ void Draw(PlayState* play) {
         const bool selected = entryIndex == sMenu.selectedIndex;
 
         if (selected) {
-            GfxPrint_SetColor(&printer, 255, 255, 255, 255);
+            GfxPrint_SetColor(&printer, 255, 255, 80, 255);
         } else {
-            GfxPrint_SetColor(&printer, 200, 200, 200, 255);
+            GfxPrint_SetColor(&printer, 220, 220, 220, 255);
         }
 
-        const int textY = kListY + (row * kRowHeight);
-        GfxPrint_SetPosPx(&printer, kListX, textY);
+        const int textY = kMenuY + (row * kRowHeight);
+        GfxPrint_SetPosPx(&printer, kMenuX, textY);
 
         if (entry.id == MaterialId::None) {
             GfxPrint_Printf(&printer, "NONE");
