@@ -6,6 +6,7 @@
 #include "soh/Enhancements/Fuse/Fuse.h"
 #include "soh/Enhancements/Fuse/FuseState.h"
 #include "soh/Enhancements/Fuse/Hooks/FuseHooks_Objects.h"
+#include "soh/Enhancements/Fuse/RangedFuseMenu.h"
 #include "soh/Enhancements/Fuse/UI/FuseMenuWindow.h"
 #include "soh/SaveManager.h"
 
@@ -132,6 +133,7 @@ static void RegisterFuseMod() {
 
         PlayState* play = gPlayState;
         Fuse::OnGameFrameUpdate(play);
+        RangedFuseMenu::Update(play);
         // Pre-collision: enables hammer flags for En_Ishi breaking
         FuseHooks::OnFrame_Objects_Pre(play);
 
@@ -164,6 +166,14 @@ static void RegisterFuseMod() {
         }
 
         FuseHooks::OnPlayerUpdate(gPlayState);
+    });
+
+    COND_HOOK(OnPlayDrawEnd, true, []() {
+        if (!IsInGameplay()) {
+            return;
+        }
+
+        RangedFuseMenu::Draw(gPlayState);
     });
 }
 

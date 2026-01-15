@@ -80,6 +80,9 @@ struct FuseRuntimeState {
     bool enabled = true;
     bool swordFuseLoadedFromSave = false;
     FuseSlot hammerSlot{};
+    FuseSlot arrowsSlot{};
+    FuseSlot slingshotSlot{};
+    FuseSlot hookshotSlot{};
     bool hammerDrainedThisSwing = false;
     bool hammerHitActorThisSwing = false;
     s16 hammerSwingId = 0;
@@ -90,6 +93,15 @@ struct FuseRuntimeState {
     FuseSlot& GetHammerSlot();
     const FuseSlot& GetHammerSlot() const;
     FuseSlot& GetActiveHammerSlot(const PlayState* play);
+    FuseSlot& GetArrowsSlot();
+    const FuseSlot& GetArrowsSlot() const;
+    FuseSlot& GetActiveArrowsSlot(const PlayState* play);
+    FuseSlot& GetSlingshotSlot();
+    const FuseSlot& GetSlingshotSlot() const;
+    FuseSlot& GetActiveSlingshotSlot(const PlayState* play);
+    FuseSlot& GetHookshotSlot();
+    const FuseSlot& GetHookshotSlot() const;
+    FuseSlot& GetActiveHookshotSlot(const PlayState* play);
 };
 
 namespace FusePersistence {

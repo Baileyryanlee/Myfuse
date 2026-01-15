@@ -256,6 +256,42 @@ FuseSlot& FuseRuntimeState::GetActiveHammerSlot([[maybe_unused]] const PlayState
     return hammerSlot;
 }
 
+FuseSlot& FuseRuntimeState::GetArrowsSlot() {
+    return arrowsSlot;
+}
+
+const FuseSlot& FuseRuntimeState::GetArrowsSlot() const {
+    return arrowsSlot;
+}
+
+FuseSlot& FuseRuntimeState::GetActiveArrowsSlot([[maybe_unused]] const PlayState* play) {
+    return arrowsSlot;
+}
+
+FuseSlot& FuseRuntimeState::GetSlingshotSlot() {
+    return slingshotSlot;
+}
+
+const FuseSlot& FuseRuntimeState::GetSlingshotSlot() const {
+    return slingshotSlot;
+}
+
+FuseSlot& FuseRuntimeState::GetActiveSlingshotSlot([[maybe_unused]] const PlayState* play) {
+    return slingshotSlot;
+}
+
+FuseSlot& FuseRuntimeState::GetHookshotSlot() {
+    return hookshotSlot;
+}
+
+const FuseSlot& FuseRuntimeState::GetHookshotSlot() const {
+    return hookshotSlot;
+}
+
+FuseSlot& FuseRuntimeState::GetActiveHookshotSlot([[maybe_unused]] const PlayState* play) {
+    return hookshotSlot;
+}
+
 namespace FusePersistence {
 
 FuseSwordSaveState ClearedSwordState() {
