@@ -20,6 +20,8 @@ void EnArrow_Fly(EnArrow* this, PlayState* play);
 void func_809B45E0(EnArrow* this, PlayState* play);
 void func_809B4640(EnArrow* this, PlayState* play);
 
+void FuseHooks_OnArrowProjectileFired(PlayState* play, int32_t arrowParams);
+
 const ActorInit En_Arrow_InitVars = {
     ACTOR_EN_ARROW,
     ACTORCAT_ITEMACTION,
@@ -231,6 +233,7 @@ void EnArrow_Shoot(EnArrow* this, PlayState* play) {
                 break;
         }
 
+        FuseHooks_OnArrowProjectileFired(play, this->actor.params);
         EnArrow_SetupAction(this, EnArrow_Fly);
         Math_Vec3f_Copy(&this->unk_210, &this->actor.world.pos);
 

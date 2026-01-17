@@ -12,6 +12,7 @@ class SaveManager;
 
 enum class SwordSlotKey { Kokiri = 0, Master = 1, Biggoron = 2 };
 enum class ShieldSlotKey { Deku = 0, Hylian = 1, Mirror = 2 };
+enum class RangedFuseSlot { Arrows = 0, Slingshot = 1, Hookshot = 2 };
 
 bool IsSwordEquipValue(int32_t equipValue);
 SwordSlotKey SwordSlotKeyFromEquipValue(int32_t equipValue);
@@ -30,6 +31,14 @@ struct SwordFuseSlot {
 };
 
 using FuseSlot = SwordFuseSlot;
+
+struct RangedQueuedFuse {
+    MaterialId materialId = MaterialId::None;
+    bool inFlight = false;
+    bool hadSuccess = false;
+    MaterialId pendingRefundMaterial = MaterialId::None;
+    int pendingRefundFrame = -1;
+};
 
 // Centralized representation of the save data for the currently equipped sword.
 // Invariants:
@@ -86,6 +95,8 @@ struct FuseRuntimeState {
     bool hammerDrainedThisSwing = false;
     bool hammerHitActorThisSwing = false;
     s16 hammerSwingId = 0;
+    std::array<RangedQueuedFuse, 3> rangedQueuedSlots{};
+    int32_t lastHeldItemAction = 0;
 
     // Useful for debugging/testing
     const char* lastEvent = "None";
@@ -102,6 +113,8 @@ struct FuseRuntimeState {
     FuseSlot& GetHookshotSlot();
     const FuseSlot& GetHookshotSlot() const;
     FuseSlot& GetActiveHookshotSlot(const PlayState* play);
+    RangedQueuedFuse& GetRangedQueuedSlot(RangedFuseSlot slot);
+    const RangedQueuedFuse& GetRangedQueuedSlot(RangedFuseSlot slot) const;
 };
 
 namespace FusePersistence {
