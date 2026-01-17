@@ -1,5 +1,6 @@
 #include "z_arms_hook.h"
 #include "objects/object_link_boy/object_link_boy.h"
+#include "soh/Enhancements/Fuse/Hooks/FuseHooks_Ranged.h"
 
 #define FLAGS (ACTOR_FLAG_UPDATE_CULLING_DISABLED | ACTOR_FLAG_DRAW_CULLING_DISABLED)
 
@@ -10,12 +11,6 @@ void ArmsHook_Draw(Actor* thisx, PlayState* play);
 
 void ArmsHook_Wait(ArmsHook* this, PlayState* play);
 void ArmsHook_Shoot(ArmsHook* this, PlayState* play);
-
-void FuseHooks_OnHookshotShotStarted(PlayState* play);
-void FuseHooks_OnHookshotEnemyHit(PlayState* play);
-void FuseHooks_OnHookshotLatched(PlayState* play);
-void FuseHooks_OnHookshotRetracted(PlayState* play);
-void FuseHooks_OnHookshotKilled(PlayState* play);
 
 const ActorInit Arms_Hook_InitVars = {
     ACTOR_ARMS_HOOK,
