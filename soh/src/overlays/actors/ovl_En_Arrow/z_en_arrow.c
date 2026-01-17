@@ -7,6 +7,7 @@
 #include "z_en_arrow.h"
 #include "objects/gameplay_keep/gameplay_keep.h"
 #include "objects/object_gi_nuts/object_gi_nuts.h"
+#include "soh/Enhancements/Fuse/Hooks/FuseHooks_Ranged.h"
 
 #define FLAGS (ACTOR_FLAG_UPDATE_CULLING_DISABLED | ACTOR_FLAG_DRAW_CULLING_DISABLED)
 
@@ -19,8 +20,6 @@ void EnArrow_Shoot(EnArrow* this, PlayState* play);
 void EnArrow_Fly(EnArrow* this, PlayState* play);
 void func_809B45E0(EnArrow* this, PlayState* play);
 void func_809B4640(EnArrow* this, PlayState* play);
-
-void FuseHooks_OnArrowProjectileFired(PlayState* play, int32_t arrowParams);
 
 const ActorInit En_Arrow_InitVars = {
     ACTOR_EN_ARROW,
