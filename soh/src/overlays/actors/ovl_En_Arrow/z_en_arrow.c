@@ -233,7 +233,7 @@ void EnArrow_Shoot(EnArrow* this, PlayState* play) {
                 break;
         }
 
-        FuseHooks_OnArrowProjectileFired(play, this->actor.params);
+        FuseHooks_OnArrowProjectileFired(play, (this->actor.params == ARROW_SEED));
         EnArrow_SetupAction(this, EnArrow_Fly);
         Math_Vec3f_Copy(&this->unk_210, &this->actor.world.pos);
 
