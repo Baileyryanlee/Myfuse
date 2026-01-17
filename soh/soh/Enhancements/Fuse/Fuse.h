@@ -149,6 +149,12 @@ void OnHammerFuseBroken(PlayState* play);
 void ClearArrowsFuse();
 void ClearSlingshotFuse();
 void ClearHookshotFuse();
+FuseResult TryQueueRangedFuse(RangedFuseSlot slot, MaterialId mat, const char* reason);
+void ClearQueuedRangedFuse_NoRefund(RangedFuseSlot slot, const char* reason);
+void CommitQueuedRangedFuse(RangedFuseSlot slot, const char* reason);
+void CancelQueuedRangedFuse_Refund(RangedFuseSlot slot, const char* reason);
+void OnHookshotShotStarted(const char* reason);
+void OnHookshotRetractedOrKilled(const char* reason);
 
 // Debug/testing (safe no-op in shipping later)
 const char* GetLastEvent();

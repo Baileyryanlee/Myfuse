@@ -25,6 +25,7 @@ extern "C" {
 #include "macros.h"
 #include "functions.h"
 }
+extern "C" PlayState* gPlayState;
 using Fuse::MaterialDebugOverride;
 
 // -----------------------------------------------------------------------------
@@ -246,6 +247,134 @@ void ApplyIceArrowFreeze(PlayState* play, Actor* victim, uint8_t level) {
     }
 
     Fuse::Log("[FuseDBG] FreezeApply: victim=%p duration=%d mat=FrozenShard\n", (void*)victim, duration);
+}
+
+const char* RangedSlotName(RangedFuseSlot slot) {
+    switch (slot) {
+        case RangedFuseSlot::Arrows:
+            return "Arrows";
+        case RangedFuseSlot::Slingshot:
+            return "Slingshot";
+        case RangedFuseSlot::Hookshot:
+            return "Hookshot";
+        default:
+            return "Unknown";
+    }
+}
+
+FuseSlot& GetRangedFuseSlot(RangedFuseSlot slot) {
+    switch (slot) {
+        case RangedFuseSlot::Arrows:
+            return gFuseRuntime.GetActiveArrowsSlot(nullptr);
+        case RangedFuseSlot::Slingshot:
+            return gFuseRuntime.GetActiveSlingshotSlot(nullptr);
+        case RangedFuseSlot::Hookshot:
+            return gFuseRuntime.GetActiveHookshotSlot(nullptr);
+    }
+    return gFuseRuntime.GetActiveArrowsSlot(nullptr);
+}
+
+void ApplyRangedFuseSlotMaterial(RangedFuseSlot slot, MaterialId mat) {
+    if (mat == MaterialId::None) {
+        GetRangedFuseSlot(slot).ResetToUnfused();
+        return;
+    }
+
+    switch (slot) {
+        case RangedFuseSlot::Arrows:
+            Fuse::FuseArrowsWithMaterial(mat, Fuse::GetMaterialEffectiveBaseDurability(mat));
+            return;
+        case RangedFuseSlot::Slingshot:
+            Fuse::FuseSlingshotWithMaterial(mat, Fuse::GetMaterialEffectiveBaseDurability(mat));
+            return;
+        case RangedFuseSlot::Hookshot:
+            Fuse::FuseHookshotWithMaterial(mat, Fuse::GetMaterialEffectiveBaseDurability(mat));
+            return;
+    }
+}
+
+int GetGameplayFrame() {
+    return gPlayState ? gPlayState->gameplayFrames : -1;
+}
+
+void LogRangedEvent(const char* tag, RangedFuseSlot slot, MaterialId mat, const char* reason) {
+    const int matId = static_cast<int>(mat);
+    const int count = (mat != MaterialId::None) ? Fuse::GetMaterialCount(mat) : -1;
+    Fuse::Log("[FuseDBG] %s: slot=%s mat=%d count=%d reason=%s\n", tag, RangedSlotName(slot), matId, count,
+              reason ? reason : "None");
+}
+
+bool IsPlayerAimingRangedSlot(PlayState* play, RangedFuseSlot* outSlot) {
+    if (!play) {
+        return false;
+    }
+
+    Player* player = GET_PLAYER(play);
+    if (!player) {
+        return false;
+    }
+
+    if ((player->stateFlags1 & PLAYER_STATE1_READY_TO_FIRE) == 0) {
+        return false;
+    }
+
+    switch (player->heldItemAction) {
+        case PLAYER_IA_BOW:
+        case PLAYER_IA_BOW_FIRE:
+        case PLAYER_IA_BOW_ICE:
+        case PLAYER_IA_BOW_LIGHT:
+        case PLAYER_IA_BOW_0C:
+        case PLAYER_IA_BOW_0D:
+        case PLAYER_IA_BOW_0E:
+            if (outSlot) {
+                *outSlot = RangedFuseSlot::Arrows;
+            }
+            return true;
+        case PLAYER_IA_SLINGSHOT:
+            if (outSlot) {
+                *outSlot = RangedFuseSlot::Slingshot;
+            }
+            return true;
+        case PLAYER_IA_HOOKSHOT:
+        case PLAYER_IA_LONGSHOT:
+            if (outSlot) {
+                *outSlot = RangedFuseSlot::Hookshot;
+            }
+            return true;
+        default:
+            break;
+    }
+
+    return false;
+}
+
+bool HeldItemActionToSlot(int32_t heldAction, RangedFuseSlot* outSlot) {
+    switch (heldAction) {
+        case PLAYER_IA_BOW:
+        case PLAYER_IA_BOW_FIRE:
+        case PLAYER_IA_BOW_ICE:
+        case PLAYER_IA_BOW_LIGHT:
+        case PLAYER_IA_BOW_0C:
+        case PLAYER_IA_BOW_0D:
+        case PLAYER_IA_BOW_0E:
+            if (outSlot) {
+                *outSlot = RangedFuseSlot::Arrows;
+            }
+            return true;
+        case PLAYER_IA_SLINGSHOT:
+            if (outSlot) {
+                *outSlot = RangedFuseSlot::Slingshot;
+            }
+            return true;
+        case PLAYER_IA_HOOKSHOT:
+        case PLAYER_IA_LONGSHOT:
+            if (outSlot) {
+                *outSlot = RangedFuseSlot::Hookshot;
+            }
+            return true;
+        default:
+            return false;
+    }
 }
 
 static bool IsActorAliveInPlay(PlayState* play, Actor* target) {
@@ -947,18 +1076,18 @@ void Fuse::ClearHammerFuse() {
 }
 
 void Fuse::ClearArrowsFuse() {
-    FuseSlot& slot = gFuseRuntime.GetActiveArrowsSlot(nullptr);
-    slot.ResetToUnfused();
+    ClearQueuedRangedFuse_NoRefund(RangedFuseSlot::Arrows, "ClearArrowsFuse");
+    ApplyRangedFuseSlotMaterial(RangedFuseSlot::Arrows, MaterialId::None);
 }
 
 void Fuse::ClearSlingshotFuse() {
-    FuseSlot& slot = gFuseRuntime.GetActiveSlingshotSlot(nullptr);
-    slot.ResetToUnfused();
+    ClearQueuedRangedFuse_NoRefund(RangedFuseSlot::Slingshot, "ClearSlingshotFuse");
+    ApplyRangedFuseSlotMaterial(RangedFuseSlot::Slingshot, MaterialId::None);
 }
 
 void Fuse::ClearHookshotFuse() {
-    FuseSlot& slot = gFuseRuntime.GetActiveHookshotSlot(nullptr);
-    slot.ResetToUnfused();
+    ClearQueuedRangedFuse_NoRefund(RangedFuseSlot::Hookshot, "ClearHookshotFuse");
+    ApplyRangedFuseSlotMaterial(RangedFuseSlot::Hookshot, MaterialId::None);
 }
 
 void Fuse::FuseSwordWithMaterial(MaterialId id, uint16_t maxDurability, bool initializeCurrentDurability,
@@ -1204,84 +1333,15 @@ Fuse::FuseResult Fuse::TryFuseHammer(MaterialId id) {
 }
 
 Fuse::FuseResult Fuse::TryFuseArrows(MaterialId id) {
-    if (id == MaterialId::None) {
-        return FuseResult::NotAllowed;
-    }
-
-    if (Fuse::IsArrowsFused()) {
-        return FuseResult::AlreadyFused;
-    }
-
-    if (!Fuse::HasMaterial(id, 1)) {
-        return FuseResult::NotEnoughMaterial;
-    }
-
-    const MaterialDef* def = Fuse::GetMaterialDef(id);
-    if (!def) {
-        return FuseResult::InvalidMaterial;
-    }
-
-    if (!Fuse::ConsumeMaterial(id, 1)) {
-        return FuseResult::NotEnoughMaterial;
-    }
-
-    Fuse::FuseArrowsWithMaterial(id, Fuse::GetMaterialEffectiveBaseDurability(id));
-
-    return FuseResult::Ok;
+    return Fuse::TryQueueRangedFuse(RangedFuseSlot::Arrows, id, "TryFuseArrows");
 }
 
 Fuse::FuseResult Fuse::TryFuseSlingshot(MaterialId id) {
-    if (id == MaterialId::None) {
-        return FuseResult::NotAllowed;
-    }
-
-    if (Fuse::IsSlingshotFused()) {
-        return FuseResult::AlreadyFused;
-    }
-
-    if (!Fuse::HasMaterial(id, 1)) {
-        return FuseResult::NotEnoughMaterial;
-    }
-
-    const MaterialDef* def = Fuse::GetMaterialDef(id);
-    if (!def) {
-        return FuseResult::InvalidMaterial;
-    }
-
-    if (!Fuse::ConsumeMaterial(id, 1)) {
-        return FuseResult::NotEnoughMaterial;
-    }
-
-    Fuse::FuseSlingshotWithMaterial(id, Fuse::GetMaterialEffectiveBaseDurability(id));
-
-    return FuseResult::Ok;
+    return Fuse::TryQueueRangedFuse(RangedFuseSlot::Slingshot, id, "TryFuseSlingshot");
 }
 
 Fuse::FuseResult Fuse::TryFuseHookshot(MaterialId id) {
-    if (id == MaterialId::None) {
-        return FuseResult::NotAllowed;
-    }
-
-    if (Fuse::IsHookshotFused()) {
-        return FuseResult::AlreadyFused;
-    }
-
-    if (!Fuse::HasMaterial(id, 1)) {
-        return FuseResult::NotEnoughMaterial;
-    }
-
-    const MaterialDef* def = Fuse::GetMaterialDef(id);
-    if (!def) {
-        return FuseResult::InvalidMaterial;
-    }
-
-    if (!Fuse::ConsumeMaterial(id, 1)) {
-        return FuseResult::NotEnoughMaterial;
-    }
-
-    Fuse::FuseHookshotWithMaterial(id, Fuse::GetMaterialEffectiveBaseDurability(id));
-
-    return FuseResult::Ok;
+    return Fuse::TryQueueRangedFuse(RangedFuseSlot::Hookshot, id, "TryFuseHookshot");
 }
 
 Fuse::FuseResult Fuse::TryUnfuseSword() {
@@ -1336,6 +1396,136 @@ Fuse::FuseResult Fuse::TryUnfuseHookshot() {
 
     Fuse::ClearHookshotFuse();
     return FuseResult::Ok;
+}
+
+Fuse::FuseResult Fuse::TryQueueRangedFuse(RangedFuseSlot slot, MaterialId mat, const char* reason) {
+    if (!Fuse::IsEnabled()) {
+        return FuseResult::NotAllowed;
+    }
+
+    if (mat == MaterialId::None) {
+        return FuseResult::NotAllowed;
+    }
+
+    if (!Fuse::GetMaterialDef(mat)) {
+        return FuseResult::InvalidMaterial;
+    }
+
+    RangedQueuedFuse& queued = gFuseRuntime.GetRangedQueuedSlot(slot);
+    if (queued.inFlight) {
+        LogRangedEvent("RangedQueueFail", slot, mat, "inFlight");
+        return FuseResult::NotAllowed;
+    }
+
+    const int currentFrame = GetGameplayFrame();
+    const bool hasPendingSwap =
+        queued.pendingRefundMaterial != MaterialId::None && queued.pendingRefundFrame == currentFrame;
+    const MaterialId pendingMat = hasPendingSwap ? queued.pendingRefundMaterial : MaterialId::None;
+    if (hasPendingSwap) {
+        queued.pendingRefundMaterial = MaterialId::None;
+        queued.pendingRefundFrame = -1;
+    }
+
+    if (queued.materialId != MaterialId::None) {
+        Fuse::CancelQueuedRangedFuse_Refund(slot, "QueueReplace");
+    }
+
+    if (!Fuse::HasMaterial(mat, 1) || !Fuse::ConsumeMaterial(mat, 1)) {
+        if (hasPendingSwap && pendingMat != MaterialId::None) {
+            queued.materialId = pendingMat;
+            queued.inFlight = false;
+            queued.hadSuccess = false;
+            ApplyRangedFuseSlotMaterial(slot, pendingMat);
+        }
+
+        LogRangedEvent("RangedQueueFail", slot, mat, reason);
+        return FuseResult::NotEnoughMaterial;
+    }
+
+    if (hasPendingSwap && pendingMat != MaterialId::None) {
+        Fuse::AddMaterial(pendingMat, 1);
+        LogRangedEvent("RangedCancel", slot, pendingMat, "SwapRefund");
+    }
+
+    queued.materialId = mat;
+    queued.inFlight = false;
+    queued.hadSuccess = false;
+    queued.pendingRefundMaterial = MaterialId::None;
+    queued.pendingRefundFrame = -1;
+    ApplyRangedFuseSlotMaterial(slot, mat);
+    LogRangedEvent("RangedQueue", slot, mat, reason);
+    return FuseResult::Ok;
+}
+
+void Fuse::ClearQueuedRangedFuse_NoRefund(RangedFuseSlot slot, const char* reason) {
+    RangedQueuedFuse& queued = gFuseRuntime.GetRangedQueuedSlot(slot);
+    if (queued.materialId == MaterialId::None) {
+        return;
+    }
+
+    queued.pendingRefundMaterial = queued.materialId;
+    queued.pendingRefundFrame = GetGameplayFrame();
+    queued.materialId = MaterialId::None;
+    queued.inFlight = false;
+    queued.hadSuccess = false;
+
+    LogRangedEvent("RangedClear", slot, queued.pendingRefundMaterial, reason);
+}
+
+void Fuse::CommitQueuedRangedFuse(RangedFuseSlot slot, const char* reason) {
+    RangedQueuedFuse& queued = gFuseRuntime.GetRangedQueuedSlot(slot);
+    if (queued.materialId == MaterialId::None) {
+        return;
+    }
+
+    const MaterialId mat = queued.materialId;
+    queued.materialId = MaterialId::None;
+    queued.inFlight = false;
+    queued.hadSuccess = true;
+    queued.pendingRefundMaterial = MaterialId::None;
+    queued.pendingRefundFrame = -1;
+    ApplyRangedFuseSlotMaterial(slot, MaterialId::None);
+    LogRangedEvent("RangedCommit", slot, mat, reason);
+}
+
+void Fuse::CancelQueuedRangedFuse_Refund(RangedFuseSlot slot, const char* reason) {
+    RangedQueuedFuse& queued = gFuseRuntime.GetRangedQueuedSlot(slot);
+    if (queued.materialId == MaterialId::None) {
+        return;
+    }
+
+    const MaterialId mat = queued.materialId;
+    Fuse::AddMaterial(mat, 1);
+    queued.materialId = MaterialId::None;
+    queued.inFlight = false;
+    queued.hadSuccess = false;
+    queued.pendingRefundMaterial = MaterialId::None;
+    queued.pendingRefundFrame = -1;
+    ApplyRangedFuseSlotMaterial(slot, MaterialId::None);
+    LogRangedEvent("RangedCancel", slot, mat, reason);
+}
+
+void Fuse::OnHookshotShotStarted(const char* reason) {
+    RangedQueuedFuse& queued = gFuseRuntime.GetRangedQueuedSlot(RangedFuseSlot::Hookshot);
+    queued.inFlight = true;
+    queued.hadSuccess = false;
+    (void)reason;
+}
+
+void Fuse::OnHookshotRetractedOrKilled(const char* reason) {
+    RangedQueuedFuse& queued = gFuseRuntime.GetRangedQueuedSlot(RangedFuseSlot::Hookshot);
+    if (!queued.inFlight) {
+        queued.hadSuccess = false;
+        return;
+    }
+
+    queued.inFlight = false;
+    if (!queued.hadSuccess) {
+        Fuse::CancelQueuedRangedFuse_Refund(RangedFuseSlot::Hookshot, reason);
+        return;
+    }
+
+    queued.hadSuccess = false;
 }
 
 bool Fuse::HammerDrainedThisSwing() {
@@ -1499,8 +1689,59 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
     Fuse::Log("[FuseMVP] MVP: Throw a liftable rock until it BREAKS to acquire ROCK.\n");
 }
 
+static void UpdateRangedFuseLifecycle(PlayState* play) {
+    const int currentFrame = GetGameplayFrame();
+    for (size_t i = 0; i < gFuseRuntime.rangedQueuedSlots.size(); ++i) {
+        RangedQueuedFuse& queued = gFuseRuntime.rangedQueuedSlots[i];
+        if (queued.pendingRefundMaterial != MaterialId::None && queued.pendingRefundFrame != currentFrame) {
+            queued.pendingRefundMaterial = MaterialId::None;
+            queued.pendingRefundFrame = -1;
+        }
+    }
+
+    if (!play || !Fuse::IsEnabled()) {
+        return;
+    }
+
+    Player* player = GET_PLAYER(play);
+    const int32_t heldAction = player ? player->heldItemAction : 0;
+    RangedFuseSlot aimingSlot = RangedFuseSlot::Arrows;
+    const bool aiming = IsPlayerAimingRangedSlot(play, &aimingSlot);
+
+    if (gFuseRuntime.lastHeldItemAction != heldAction) {
+        RangedFuseSlot previousSlot = RangedFuseSlot::Arrows;
+        if (HeldItemActionToSlot(gFuseRuntime.lastHeldItemAction, &previousSlot)) {
+            RangedQueuedFuse& queued = gFuseRuntime.GetRangedQueuedSlot(previousSlot);
+            if (queued.materialId != MaterialId::None && !(previousSlot == RangedFuseSlot::Hookshot && queued.inFlight)) {
+                if (!aiming || aimingSlot != previousSlot) {
+                    Fuse::CancelQueuedRangedFuse_Refund(previousSlot, "HeldItemSwitch");
+                }
+            }
+        }
+    }
+
+    for (size_t i = 0; i < gFuseRuntime.rangedQueuedSlots.size(); ++i) {
+        const RangedFuseSlot slot = static_cast<RangedFuseSlot>(i);
+        RangedQueuedFuse& queued = gFuseRuntime.rangedQueuedSlots[i];
+        if (queued.materialId == MaterialId::None) {
+            continue;
+        }
+
+        if (slot == RangedFuseSlot::Hookshot && queued.inFlight) {
+            continue;
+        }
+
+        if (!aiming || aimingSlot != slot) {
+            Fuse::CancelQueuedRangedFuse_Refund(slot, "AimExitOrSwitch");
+        }
+    }
+
+    gFuseRuntime.lastHeldItemAction = heldAction;
+}
+
 void Fuse::OnGameFrameUpdate(PlayState* play) {
     TickFuseFrozenTimers(play);
+    UpdateRangedFuseLifecycle(play);
 }
 
 void Fuse::ProcessDeferredSwordFreezes(PlayState* play) {

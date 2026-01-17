@@ -292,6 +292,14 @@ FuseSlot& FuseRuntimeState::GetActiveHookshotSlot([[maybe_unused]] const PlaySta
     return hookshotSlot;
 }
 
+RangedQueuedFuse& FuseRuntimeState::GetRangedQueuedSlot(RangedFuseSlot slot) {
+    return rangedQueuedSlots[static_cast<size_t>(slot)];
+}
+
+const RangedQueuedFuse& FuseRuntimeState::GetRangedQueuedSlot(RangedFuseSlot slot) const {
+    return rangedQueuedSlots[static_cast<size_t>(slot)];
+}
+
 namespace FusePersistence {
 
 FuseSwordSaveState ClearedSwordState() {

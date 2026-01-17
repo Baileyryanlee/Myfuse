@@ -11,6 +11,12 @@ void ArmsHook_Draw(Actor* thisx, PlayState* play);
 void ArmsHook_Wait(ArmsHook* this, PlayState* play);
 void ArmsHook_Shoot(ArmsHook* this, PlayState* play);
 
+void FuseHooks_OnHookshotShotStarted(PlayState* play);
+void FuseHooks_OnHookshotEnemyHit(PlayState* play);
+void FuseHooks_OnHookshotLatched(PlayState* play);
+void FuseHooks_OnHookshotRetracted(PlayState* play);
+void FuseHooks_OnHookshotKilled(PlayState* play);
+
 const ActorInit Arms_Hook_InitVars = {
     ACTOR_ARMS_HOOK,
     ACTORCAT_ITEMACTION,
@@ -88,6 +94,7 @@ void ArmsHook_Wait(ArmsHook* this, PlayState* play) {
         s32 length = ((player->heldItemAction == PLAYER_IA_HOOKSHOT) ? 13 : 26) *
                      CVarGetFloat(CVAR_CHEAT("HookshotReachMultiplier"), 1.0f);
 
+        FuseHooks_OnHookshotShotStarted(play);
         ArmsHook_SetupAction(this, ArmsHook_Shoot);
         Actor_SetProjectileSpeed(&this->actor, 20.0f);
         this->actor.parent = &GET_PLAYER(play)->actor;
@@ -163,6 +170,7 @@ void ArmsHook_Shoot(ArmsHook* this, PlayState* play) {
 
     if ((this->actor.parent == NULL) || (!Player_HoldsHookshot(player))) {
         ArmsHook_DetachHookFromActor(this);
+        FuseHooks_OnHookshotKilled(play);
         Actor_Kill(&this->actor);
         return;
     }
@@ -173,6 +181,9 @@ void ArmsHook_Shoot(ArmsHook* this, PlayState* play) {
     if ((this->timer != 0) && (this->collider.base.atFlags & AT_HIT) &&
         (this->collider.info.atHitInfo->elemType != ELEMTYPE_UNK4)) {
         touchedActor = this->collider.base.at;
+        if ((touchedActor != NULL) && (touchedActor->category == ACTORCAT_ENEMY)) {
+            FuseHooks_OnHookshotEnemyHit(play);
+        }
         if ((touchedActor->update != NULL) &&
             (touchedActor->flags & (ACTOR_FLAG_HOOKSHOT_PULLS_ACTOR | ACTOR_FLAG_HOOKSHOT_PULLS_PLAYER))) {
             if (this->collider.info.atHitInfo->bumperFlags & BUMP_HOOKABLE) {
@@ -245,6 +256,7 @@ void ArmsHook_Shoot(ArmsHook* this, PlayState* play) {
             ArmsHook_DetachHookFromActor(this);
             if (phi_f16 == 0.0f) {
                 ArmsHook_SetupAction(this, ArmsHook_Wait);
+                FuseHooks_OnHookshotRetracted(play);
                 if (ArmsHook_AttachToPlayer(this, player)) {
                     Math_Vec3f_Diff(&this->actor.world.pos, &player->actor.world.pos, &player->actor.velocity);
                     player->actor.velocity.y -= 20.0f;
@@ -273,6 +285,7 @@ void ArmsHook_Shoot(ArmsHook* this, PlayState* play) {
             this->actor.world.pos.z += 10.0f * sp58;
             this->timer = 0;
             if (SurfaceType_IsHookshotSurface(&play->colCtx, poly, bgId)) {
+                FuseHooks_OnHookshotLatched(play);
                 if (bgId != BGCHECK_SCENE) {
                     dynaPolyActor = DynaPoly_GetActor(&play->colCtx, bgId);
                     if (dynaPolyActor != NULL) {
