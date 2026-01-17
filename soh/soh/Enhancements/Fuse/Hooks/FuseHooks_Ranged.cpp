@@ -6,13 +6,12 @@ extern "C" {
 #include "z64.h"
 }
 
-void FuseHooks_OnArrowProjectileFired(PlayState* play, int32_t arrowParams) {
+void FuseHooks_OnArrowProjectileFired(PlayState* play, int32_t isSeed) {
     (void)play;
-    if (arrowParams == ARROW_SEED) {
+    if (isSeed) {
         Fuse::CommitQueuedRangedFuse(RangedFuseSlot::Slingshot, "ArrowProjectileFired");
         return;
     }
-
     Fuse::CommitQueuedRangedFuse(RangedFuseSlot::Arrows, "ArrowProjectileFired");
 }
 
