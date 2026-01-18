@@ -603,6 +603,22 @@ void OnPlayerUpdate(PlayState* play) {
         const bool fused = Fuse::IsHammerFused();
         const int before = Fuse::GetHammerFuseDurability();
 
+        if (fused) {
+            const MaterialId materialId = Fuse::GetHammerMaterial();
+            const MaterialDef* def = Fuse::GetMaterialDef(materialId);
+            uint8_t poundLevel = 0;
+            if (def) {
+                HasModifier(def->modifiers, def->modifierCount, ModifierId::PoundUp, &poundLevel);
+            }
+
+            if (poundLevel > 0) {
+                // TODO: Apply 25% hammer impact radius increase when a ground-impact radius hook exposes the value.
+                Fuse::Log("[FuseDBG] HammerPoundUp: event=ground-impact item=hammer mat=%d lvl=%u dura=%d/%d note=no-radius\n",
+                          static_cast<int>(materialId), static_cast<unsigned int>(poundLevel), before,
+                          Fuse::GetHammerFuseMaxDurability());
+            }
+        }
+
         if (!Fuse::HammerDrainedThisSwing() && fused && before > 0) {
             const bool broke = Fuse::DamageHammerFuseDurability(play, 1, "Hammer ground impact");
             const int after = Fuse::GetHammerFuseDurability();
