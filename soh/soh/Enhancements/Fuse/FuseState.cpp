@@ -256,58 +256,6 @@ FuseSlot& FuseRuntimeState::GetActiveHammerSlot([[maybe_unused]] const PlayState
     return hammerSlot;
 }
 
-FuseSlot& FuseRuntimeState::GetArrowsSlot() {
-    return rangedSlots[static_cast<size_t>(RangedFuseSlot::Arrows)].active;
-}
-
-const FuseSlot& FuseRuntimeState::GetArrowsSlot() const {
-    return rangedSlots[static_cast<size_t>(RangedFuseSlot::Arrows)].active;
-}
-
-FuseSlot& FuseRuntimeState::GetActiveArrowsSlot([[maybe_unused]] const PlayState* play) {
-    return rangedSlots[static_cast<size_t>(RangedFuseSlot::Arrows)].active;
-}
-
-FuseSlot& FuseRuntimeState::GetSlingshotSlot() {
-    return rangedSlots[static_cast<size_t>(RangedFuseSlot::Slingshot)].active;
-}
-
-const FuseSlot& FuseRuntimeState::GetSlingshotSlot() const {
-    return rangedSlots[static_cast<size_t>(RangedFuseSlot::Slingshot)].active;
-}
-
-FuseSlot& FuseRuntimeState::GetActiveSlingshotSlot([[maybe_unused]] const PlayState* play) {
-    return rangedSlots[static_cast<size_t>(RangedFuseSlot::Slingshot)].active;
-}
-
-FuseSlot& FuseRuntimeState::GetHookshotSlot() {
-    return rangedSlots[static_cast<size_t>(RangedFuseSlot::Hookshot)].active;
-}
-
-const FuseSlot& FuseRuntimeState::GetHookshotSlot() const {
-    return rangedSlots[static_cast<size_t>(RangedFuseSlot::Hookshot)].active;
-}
-
-FuseSlot& FuseRuntimeState::GetActiveHookshotSlot([[maybe_unused]] const PlayState* play) {
-    return rangedSlots[static_cast<size_t>(RangedFuseSlot::Hookshot)].active;
-}
-
-RangedFuseState& FuseRuntimeState::GetRangedQueuedSlot(RangedFuseSlot slot) {
-    return rangedSlots[static_cast<size_t>(slot)];
-}
-
-const RangedFuseState& FuseRuntimeState::GetRangedQueuedSlot(RangedFuseSlot slot) const {
-    return rangedSlots[static_cast<size_t>(slot)];
-}
-
-FuseSlot& FuseRuntimeState::GetRangedQueuedMaterialSlot(RangedFuseSlot slot) {
-    return rangedSlots[static_cast<size_t>(slot)].queued;
-}
-
-const FuseSlot& FuseRuntimeState::GetRangedQueuedMaterialSlot(RangedFuseSlot slot) const {
-    return rangedSlots[static_cast<size_t>(slot)].queued;
-}
-
 namespace FusePersistence {
 
 FuseSwordSaveState ClearedSwordState() {
