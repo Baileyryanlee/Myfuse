@@ -348,6 +348,8 @@ static const char* ModifierName(ModifierId id) {
             return "Hammerize";
         case ModifierId::Stun:
             return "Stun";
+        case ModifierId::MegaStun:
+            return "Mega Stun";
         default:
             return "Unknown";
     }

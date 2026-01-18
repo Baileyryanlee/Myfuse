@@ -24,6 +24,7 @@ void Fuse_ApplySavedSwordFuse(const PlayState* play, s16 savedMaterialId, s16 sa
 void Fuse_WriteSwordFuseToSave(const PlayState* play);
 void Fuse_ClearSavedSwordFuse(const PlayState* play);
 void Fuse_EnqueuePendingStun(Actor* victim, uint8_t level, MaterialId materialId, int itemId);
+void Fuse_TriggerMegaStun(PlayState* play, Player* player, MaterialId materialId, int itemId);
 
 FuseWeaponView Fuse_GetEquippedSwordView(const PlayState* play);
 

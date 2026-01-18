@@ -6,10 +6,11 @@
 enum class ModifierId : uint16_t {
     Hammerize = 1,
     Stun = 2,
-    Freeze = 3,
-    Knockback = 4,
-    PoundUp = 5,
-    NegateKnockback = 6,
+    MegaStun = 3,
+    Freeze = 4,
+    Knockback = 5,
+    PoundUp = 6,
+    NegateKnockback = 7,
     // future: Range, Freeze, Explode, Stun, Seek, etc.
 };
 

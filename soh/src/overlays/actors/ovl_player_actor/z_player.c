@@ -42,7 +42,13 @@
 
 extern bool Fuse_ShieldHasNegateKnockback(PlayState* play, int* outMaterialId, int* outDurabilityCur,
                                           int* outDurabilityMax, uint8_t* outLevel);
+extern bool Fuse_ShieldHasStun(PlayState* play, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax,
+                               uint8_t* outLevel);
+extern bool Fuse_ShieldHasMegaStun(PlayState* play, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax,
+                                   uint8_t* outLevel);
 extern void Fuse_ShieldGuardDrain(PlayState* play);
+extern void Fuse_ShieldEnqueuePendingStun(Actor* victim, uint8_t level, int materialId, int itemId);
+extern void Fuse_ShieldTriggerMegaStun(PlayState* play, Player* player, int materialId, int itemId);
 
 // Some player animations are played at this reduced speed, for reasons yet unclear.
 // This is called "adjusted" for now.
@@ -4875,6 +4881,47 @@ s32 func_808382DC(Player* this, PlayState* play) {
 
                 if (sp64) {
                     Fuse_ShieldGuardDrain(play);
+
+                    Actor* attacker = this->shieldQuad.base.ac;
+                    if (attacker != NULL && FuseBash_IsEnemyActor(attacker)) {
+                        int shieldMatId = 0;
+                        int shieldDurabilityCur = 0;
+                        int shieldDurabilityMax = 0;
+                        uint8_t stunLevel = 0;
+                        const int32_t equipValue = CUR_EQUIP_VALUE(EQUIP_TYPE_SHIELD);
+                        int shieldItemId = ITEM_NONE;
+
+                        switch (equipValue) {
+                            case EQUIP_VALUE_SHIELD_DEKU:
+                                shieldItemId = ITEM_SHIELD_DEKU;
+                                break;
+                            case EQUIP_VALUE_SHIELD_HYLIAN:
+                                shieldItemId = ITEM_SHIELD_HYLIAN;
+                                break;
+                            case EQUIP_VALUE_SHIELD_MIRROR:
+                                shieldItemId = ITEM_SHIELD_MIRROR;
+                                break;
+                            default:
+                                shieldItemId = ITEM_NONE;
+                                break;
+                        }
+
+                        if (Player_IsChildWithHylianShield(this)) {
+                            if (Fuse_ShieldHasMegaStun(play, &shieldMatId, &shieldDurabilityCur,
+                                                       &shieldDurabilityMax, &stunLevel) &&
+                                stunLevel > 0) {
+                                osSyncPrintf("[FuseDBG] shield_stun_trigger shield=%d attacker=%p attackerId=0x%04X\n",
+                                             equipValue, (void*)attacker, attacker->id);
+                                Fuse_ShieldTriggerMegaStun(play, this, shieldMatId, shieldItemId);
+                            }
+                        } else if (Fuse_ShieldHasStun(play, &shieldMatId, &shieldDurabilityCur, &shieldDurabilityMax,
+                                                      &stunLevel) &&
+                                   stunLevel > 0) {
+                            osSyncPrintf("[FuseDBG] shield_stun_trigger shield=%d attacker=%p attackerId=0x%04X\n",
+                                         equipValue, (void*)attacker, attacker->id);
+                            Fuse_ShieldEnqueuePendingStun(attacker, stunLevel, shieldMatId, shieldItemId);
+                        }
+                    }
                 }
 
                 if (!Player_IsChildWithHylianShield(this)) {

@@ -321,6 +321,11 @@ void EnArrow_Fly(EnArrow* this, PlayState* play) {
                 this->actor.world.pos.x = (this->actor.world.pos.x + this->actor.prevPos.x) * 0.5f;
                 this->actor.world.pos.y = (this->actor.world.pos.y + this->actor.prevPos.y) * 0.5f;
                 this->actor.world.pos.z = (this->actor.world.pos.z + this->actor.prevPos.z) * 0.5f;
+
+                hitActor = this->collider.base.at;
+                if (hitActor != NULL) {
+                    FuseHooks_OnRangedProjectileHit(play, hitActor, true);
+                }
             }
 
             if (this->actor.params == ARROW_NUT) {
@@ -340,6 +345,9 @@ void EnArrow_Fly(EnArrow* this, PlayState* play) {
 
             if (atTouched && (this->collider.info.atHitInfo->elemType != ELEMTYPE_UNK4)) {
                 hitActor = this->collider.base.at;
+                if (hitActor != NULL) {
+                    FuseHooks_OnRangedProjectileHit(play, hitActor, false);
+                }
 
                 if ((hitActor->update != NULL) && (!(this->collider.base.atFlags & AT_BOUNCED)) &&
                     (hitActor->flags & ACTOR_FLAG_CAN_ATTACH_TO_ARROW)) {
