@@ -62,6 +62,21 @@ void EnArrow_SetupAction(EnArrow* this, EnArrowActionFunc actionFunc) {
     this->actionFunc = actionFunc;
 }
 
+Actor* EnArrow_TriggerDekuNutEffect(PlayState* play, const Vec3f* pos) {
+    Actor* flashActor;
+
+    if (play == NULL || pos == NULL) {
+        return NULL;
+    }
+
+    iREG(50) = -1;
+    flashActor = Actor_Spawn(&play->actorCtx, play, ACTOR_EN_M_FIRE1, pos->x, pos->y, pos->z, 0, 0, 0, 0, true);
+    EffectSsStone1_Spawn(play, pos, 0);
+    SoundSource_PlaySfxAtFixedWorldPos(play, pos, 20, NA_SE_IT_DEKU);
+
+    return flashActor;
+}
+
 void EnArrow_Init(Actor* thisx, PlayState* play) {
     static EffectBlureInit2 blureNormal = {
         0, 4, 0, { 0, 255, 200, 255 },   { 0, 255, 255, 255 }, { 0, 255, 200, 0 }, { 0, 255, 255, 0 }, 16,
@@ -329,16 +344,13 @@ void EnArrow_Fly(EnArrow* this, PlayState* play) {
             }
 
             if (this->actor.params == ARROW_NUT) {
-                iREG(50) = -1;
-                Actor_Spawn(&play->actorCtx, play, ACTOR_EN_M_FIRE1, this->actor.world.pos.x, this->actor.world.pos.y,
-                            this->actor.world.pos.z, 0, 0, 0, 0, true);
-                sfxId = NA_SE_IT_DEKU;
+                EnArrow_TriggerDekuNutEffect(play, &this->actor.world.pos);
             } else {
                 sfxId = NA_SE_IT_SLING_REFLECT;
+                EffectSsStone1_Spawn(play, &this->actor.world.pos, 0);
+                SoundSource_PlaySfxAtFixedWorldPos(play, &this->actor.world.pos, 20, sfxId);
             }
 
-            EffectSsStone1_Spawn(play, &this->actor.world.pos, 0);
-            SoundSource_PlaySfxAtFixedWorldPos(play, &this->actor.world.pos, 20, sfxId);
             Actor_Kill(&this->actor);
         } else {
             EffectSsHitMark_SpawnCustomScale(play, 0, 150, &this->actor.world.pos);
