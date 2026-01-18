@@ -169,8 +169,16 @@ void Fuse_AddMaterialToInventory(MaterialId mat, int amount) {
 constexpr s16 kVanillaDekuNutParams = 0;
 constexpr float kVanillaDekuNutRadius = 200.0f;
 
-Actor* SpawnVanillaDekuNutFlash(PlayState* play, const Vec3f& pos) {
+const char* GetStunSourceLabel(int itemId);
+
+Actor* SpawnVanillaDekuNutFlash(PlayState* play, const Vec3f& pos, int srcItemId) {
     if (!play) {
+        return nullptr;
+    }
+
+    if (CVarGetInteger(CVAR_ENHANCEMENT("FuseDekuNutSpawn"), 1) == 0) {
+        const char* srcLabel = GetStunSourceLabel(srcItemId);
+        Fuse::Log("[FuseDBG] DekuNutSpawnDisabled src=%s frame=%d\n", srcLabel, play->gameplayFrames);
         return nullptr;
     }
 
@@ -179,9 +187,7 @@ Actor* SpawnVanillaDekuNutFlash(PlayState* play, const Vec3f& pos) {
                        true);
 }
 
-const char* GetStunSourceLabel(int itemId);
-
-void ApplyDekuNutStunVanilla(PlayState* play, Player* player, Actor* victim, uint8_t level) {
+void ApplyDekuNutStunVanilla(PlayState* play, Player* player, Actor* victim, uint8_t level, int srcItemId) {
     (void)player;
 
     if (!play || !victim || level == 0) {
@@ -195,7 +201,7 @@ void ApplyDekuNutStunVanilla(PlayState* play, Player* player, Actor* victim, uin
     Fuse::Log("[FuseMVP] DekuNut stun: using vanilla nut effect frame=%d victim=%p\n", play->gameplayFrames,
               (void*)victim);
 
-    Actor* flashActor = SpawnVanillaDekuNutFlash(play, spawnPos);
+    Actor* flashActor = SpawnVanillaDekuNutFlash(play, spawnPos, srcItemId);
 
     if (flashActor) {
         Fuse::Log("[FuseMVP] DekuNut stun: spawned actor id=0x%04X ptr=%p\n", flashActor->id, (void*)flashActor);
@@ -214,7 +220,7 @@ void Fuse_TriggerDekuNutAtPos(PlayState* play, const Vec3f& pos, int srcItemId) 
     Fuse::Log("[FuseDBG] DekuNutAtPos: trigger frame=%d src=%s item=%d pos=(%.2f, %.2f, %.2f)\n",
               play->gameplayFrames, GetStunSourceLabel(srcItemId), srcItemId, pos.x, pos.y, pos.z);
 
-    Actor* flashActor = SpawnVanillaDekuNutFlash(play, pos);
+    Actor* flashActor = SpawnVanillaDekuNutFlash(play, pos, srcItemId);
     if (flashActor) {
         Vec3f mutablePos = pos;
         SoundSource_PlaySfxAtFixedWorldPos(play, &mutablePos, 20, NA_SE_IT_DEKU);
@@ -790,7 +796,7 @@ void Fuse_TriggerMegaStun(PlayState* play, Player* player, MaterialId materialId
         spawnPos.x += Math_SinS(angle) * kMegaStunRadius;
         spawnPos.z += Math_CosS(angle) * kMegaStunRadius;
 
-        Actor* flashActor = SpawnVanillaDekuNutFlash(play, spawnPos);
+        Actor* flashActor = SpawnVanillaDekuNutFlash(play, spawnPos, itemId);
         if (flashActor) {
             SoundSource_PlaySfxAtFixedWorldPos(play, &spawnPos, 20, NA_SE_IT_DEKU);
             EffectSsStone1_Spawn(play, &spawnPos, 0);
@@ -2362,7 +2368,7 @@ void Fuse::ProcessPendingStuns(PlayState* play) {
         const char* srcLabel = GetStunSourceLabel(request.itemId);
         Fuse::Log("[FuseDBG] dekunut_apply victim=%p id=0x%04X frame=%d src=%s\n", (void*)victim, victim->id, curFrame,
                   srcLabel);
-        ApplyDekuNutStunVanilla(play, GET_PLAYER(play), victim, request.level);
+        ApplyDekuNutStunVanilla(play, GET_PLAYER(play), victim, request.level, request.itemId);
         sDekuStunCooldownUntil[victim] = curFrame + kDekuStunCooldownFrames;
         removeEntry(i);
     }
