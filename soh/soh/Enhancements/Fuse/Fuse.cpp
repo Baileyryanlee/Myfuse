@@ -47,10 +47,10 @@ static std::unordered_map<Actor*, int> sFreezeAppliedFrame;
 static std::unordered_map<Actor*, int> sShatterFrame;
 static std::unordered_map<Actor*, Vec3f> sFuseFrozenPos;
 static constexpr int kDekuStunDelayFrames = 12;
-static constexpr int kDekuStunRetryDelayFrames = 6;
-static constexpr int kDekuStunMaxTries = 12;
+static constexpr int kDekuStunCooldownFrames = 90;
 static std::vector<struct PendingStunRequest> sPendingStunQueue;
 static std::unordered_map<Actor*, size_t> sPendingStunIndex;
+static std::unordered_map<Actor*, int> sDekuStunCooldownUntil;
 
 struct SwordFreezeRequest {
     Actor* victim = nullptr;
@@ -63,12 +63,9 @@ static std::array<int, kSwordFreezeQueueCount> sSwordFreezeQueueFrames = { -1, -
 struct PendingStunRequest {
     Actor* victim = nullptr;
     uint8_t level = 0;
-    int delayFrames = kDekuStunDelayFrames;
-    int triesRemaining = kDekuStunMaxTries;
     int applyNotBeforeFrame = -1;
     MaterialId materialId = MaterialId::None;
     int itemId = 0;
-    s16 actorIdAtEnqueue = 0;
 };
 
 static bool IsFuseFrozen(Actor* actor) {
@@ -517,6 +514,7 @@ void ResetSwordFreezeQueueInternal() {
 void ResetDekuStunQueueInternal() {
     sPendingStunQueue.clear();
     sPendingStunIndex.clear();
+    sDekuStunCooldownUntil.clear();
 }
 
 void EnqueueSwordFreezeRequest(PlayState* play, Actor* victim, uint8_t level) {
@@ -549,34 +547,35 @@ void Fuse_EnqueuePendingStun(Actor* victim, uint8_t level, MaterialId materialId
     }
 
     const int curFrame = GetGameplayFrame();
+    auto cooldownIt = sDekuStunCooldownUntil.find(victim);
+    if (curFrame >= 0 && cooldownIt != sDekuStunCooldownUntil.end() && curFrame < cooldownIt->second) {
+        Fuse::Log("[FuseDBG] dekunut_skip_cooldown victim=%p id=0x%04X until=%d\n", (void*)victim, victim->id,
+                  cooldownIt->second);
+        return;
+    }
     const int applyNotBefore = (curFrame >= 0) ? curFrame + kDekuStunDelayFrames : kDekuStunDelayFrames;
     auto existing = sPendingStunIndex.find(victim);
     if (existing != sPendingStunIndex.end()) {
         PendingStunRequest& request = sPendingStunQueue[existing->second];
         request.level = level;
-        request.triesRemaining = kDekuStunMaxTries;
         request.applyNotBeforeFrame = applyNotBefore;
         request.materialId = materialId;
         request.itemId = itemId;
-        request.actorIdAtEnqueue = victim->id;
-        Fuse::Log("[FuseDBG] dekunut_enqueue victim=%p id=0x%04X lvl=%u notBefore=%d tries=%d\n", (void*)victim,
-                  victim->id, level, request.applyNotBeforeFrame, request.triesRemaining);
+        Fuse::Log("[FuseDBG] dekunut_enqueue victim=%p id=0x%04X lvl=%u notBefore=%d\n", (void*)victim, victim->id,
+                  level, request.applyNotBeforeFrame);
         return;
     }
 
     PendingStunRequest request{};
     request.victim = victim;
     request.level = level;
-    request.delayFrames = kDekuStunDelayFrames;
-    request.triesRemaining = kDekuStunMaxTries;
-        request.applyNotBeforeFrame = applyNotBefore;
+    request.applyNotBeforeFrame = applyNotBefore;
     request.materialId = materialId;
     request.itemId = itemId;
-    request.actorIdAtEnqueue = victim->id;
     sPendingStunIndex[victim] = sPendingStunQueue.size();
     sPendingStunQueue.push_back(request);
-    Fuse::Log("[FuseDBG] dekunut_enqueue victim=%p id=0x%04X lvl=%u notBefore=%d tries=%d\n", (void*)victim,
-              victim->id, level, request.applyNotBeforeFrame, request.triesRemaining);
+    Fuse::Log("[FuseDBG] dekunut_enqueue victim=%p id=0x%04X lvl=%u notBefore=%d\n", (void*)victim, victim->id, level,
+              request.applyNotBeforeFrame);
 }
 
 // -----------------------------------------------------------------------------
@@ -1982,14 +1981,6 @@ void Fuse::OnGameFrameUpdate(PlayState* play) {
     UpdateRangedFuseLifecycle(play);
 }
 
-static bool IsActorHitThisFrame(Actor* victim) {
-    if (!victim) {
-        return false;
-    }
-
-    return victim->colChkInfo.acHitEffect != 0 || victim->colChkInfo.damage != 0;
-}
-
 void Fuse::ProcessPendingStuns(PlayState* play) {
     if (!play) {
         return;
@@ -2030,11 +2021,9 @@ void Fuse::ProcessPendingStuns(PlayState* play) {
         Actor* victim = request.victim;
 
         if (!victim || !IsActorAliveInPlay(play, victim)) {
-            removeEntry(i);
-            continue;
-        }
-
-        if (request.triesRemaining <= 0) {
+            if (victim) {
+                sDekuStunCooldownUntil.erase(victim);
+            }
             removeEntry(i);
             continue;
         }
@@ -2044,27 +2033,17 @@ void Fuse::ProcessPendingStuns(PlayState* play) {
             continue;
         }
 
-        if (IsActorHitThisFrame(victim)) {
-            request.applyNotBeforeFrame = curFrame + kDekuStunDelayFrames;
-            Fuse::Log("[FuseDBG] dekunut_retry victim=%p id=0x%04X reason=still_hit\n", (void*)victim, victim->id);
-            ++i;
+        auto cooldownIt = sDekuStunCooldownUntil.find(victim);
+        if (cooldownIt != sDekuStunCooldownUntil.end() && curFrame < cooldownIt->second) {
+            Fuse::Log("[FuseDBG] dekunut_skip_cooldown victim=%p id=0x%04X until=%d\n", (void*)victim, victim->id,
+                      cooldownIt->second);
+            removeEntry(i);
             continue;
         }
 
-        const int preEffect = victim->colChkInfo.damageEffect;
-        const int preDamage = victim->colChkInfo.damage;
         Fuse::Log("[FuseDBG] dekunut_apply victim=%p id=0x%04X frame=%d\n", (void*)victim, victim->id, curFrame);
         ApplyDekuNutStunVanilla(play, GET_PLAYER(play), victim, request.level);
-        const int postEffect = victim->colChkInfo.damageEffect;
-        const int postDamage = victim->colChkInfo.damage;
-        Fuse::Log("[FuseDBG] dekunut_postspawn victimEffect=%d victimDamage=%d\n", postEffect, postDamage);
-        if (postEffect == preEffect && postDamage == preDamage) {
-            request.applyNotBeforeFrame = curFrame + kDekuStunRetryDelayFrames;
-            request.triesRemaining--;
-            ++i;
-            continue;
-        }
-
+        sDekuStunCooldownUntil[victim] = curFrame + kDekuStunCooldownFrames;
         removeEntry(i);
     }
 }
