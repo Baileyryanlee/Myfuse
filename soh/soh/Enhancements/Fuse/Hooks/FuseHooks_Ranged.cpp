@@ -9,7 +9,33 @@ extern "C" {
 
 void Fuse_GetRangedFuseStatus(RangedFuseSlot slot, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax);
 
-static void EnqueueRangedStun(PlayState* play, Actor* victim, RangedFuseSlot slot, int itemId) {
+static const char* RangedSlotLabel(RangedFuseSlotId slot) {
+    switch (slot) {
+        case RANGED_FUSE_SLOT_ARROWS:
+            return "Arrows";
+        case RANGED_FUSE_SLOT_SLINGSHOT:
+            return "Slingshot";
+        case RANGED_FUSE_SLOT_HOOKSHOT:
+            return "Hookshot";
+        default:
+            return "Unknown";
+    }
+}
+
+static int RangedSlotItemId(RangedFuseSlotId slot) {
+    switch (slot) {
+        case RANGED_FUSE_SLOT_ARROWS:
+            return ITEM_BOW;
+        case RANGED_FUSE_SLOT_SLINGSHOT:
+            return ITEM_SLINGSHOT;
+        case RANGED_FUSE_SLOT_HOOKSHOT:
+            return ITEM_HOOKSHOT;
+        default:
+            return ITEM_NONE;
+    }
+}
+
+void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Actor* victim) {
     if (!play || !victim) {
         return;
     }
@@ -21,8 +47,11 @@ static void EnqueueRangedStun(PlayState* play, Actor* victim, RangedFuseSlot slo
     int materialIdRaw = static_cast<int>(MaterialId::None);
     int curDurability = 0;
     int maxDurability = 0;
-    Fuse_GetRangedFuseStatus(slot, &materialIdRaw, &curDurability, &maxDurability);
+    Fuse_GetRangedFuseStatus(static_cast<RangedFuseSlot>(slot), &materialIdRaw, &curDurability, &maxDurability);
     (void)maxDurability;
+
+    Fuse::Log("[FuseDBG] RangedHit slot=%s mat=%d victim=%p id=0x%04X\n", RangedSlotLabel(slot), materialIdRaw,
+              (void*)victim, victim->id);
 
     if (materialIdRaw == static_cast<int>(MaterialId::None) || curDurability <= 0) {
         return;
@@ -36,7 +65,7 @@ static void EnqueueRangedStun(PlayState* play, Actor* victim, RangedFuseSlot slo
 
     uint8_t stunLevel = 0;
     if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Stun, &stunLevel) && stunLevel > 0) {
-        Fuse_EnqueuePendingStun(victim, stunLevel, materialId, itemId);
+        Fuse_EnqueuePendingStun(victim, 1, materialId, RangedSlotItemId(slot));
     }
 }
 
@@ -81,11 +110,11 @@ void FuseHooks_OnArrowProjectileFired(PlayState* play, int32_t isSeed) {
 
 void FuseHooks_OnRangedProjectileHit(PlayState* play, Actor* victim, int32_t isSeed) {
     if (isSeed) {
-        EnqueueRangedStun(play, victim, RangedFuseSlot::Slingshot, ITEM_SLINGSHOT);
+        Fuse_OnRangedHitActor(play, RANGED_FUSE_SLOT_SLINGSHOT, victim);
         return;
     }
 
-    EnqueueRangedStun(play, victim, RangedFuseSlot::Arrows, ITEM_BOW);
+    Fuse_OnRangedHitActor(play, RANGED_FUSE_SLOT_ARROWS, victim);
 }
 
 void FuseHooks_OnHookshotShotStarted(PlayState* play) {
@@ -96,7 +125,6 @@ void FuseHooks_OnHookshotShotStarted(PlayState* play) {
 void FuseHooks_OnHookshotEnemyHit(PlayState* play, Actor* victim) {
     Fuse::CommitQueuedRangedFuse(RangedFuseSlot::Hookshot, "HookshotEnemyHit");
     LogRangedKnockbackStatus("hookshot", RangedFuseSlot::Hookshot, "enemy-hit");
-    EnqueueRangedStun(play, victim, RangedFuseSlot::Hookshot, ITEM_HOOKSHOT);
 }
 
 void FuseHooks_OnHookshotLatched(PlayState* play) {
