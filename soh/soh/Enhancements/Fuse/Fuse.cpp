@@ -256,6 +256,12 @@ void ApplyFuseKnockback(PlayState* play, Player* player, Actor* victim, uint8_t 
         return;
     }
 
+    if (victim->id == ACTOR_EN_STALCHILD) {
+        Fuse::Log("[FuseDBG] knockback_skip_blacklist: event=%s item=%s victim=%p id=0x%04X\n",
+                  eventLabel ? eventLabel : "hit", itemLabel ? itemLabel : "unknown", (void*)victim, victim->id);
+        return;
+    }
+
     if (!FuseBash_IsEnemyActor(victim)) {
         return;
     }
@@ -688,6 +694,37 @@ extern "C" bool Fuse_ShieldHasNegateKnockback(PlayState* play, int* outMaterialI
     }
 
     return true;
+}
+
+extern "C" void Fuse_ShieldGuardDrain(PlayState* play) {
+    if (!play) {
+        return;
+    }
+
+    const int32_t equipValue =
+        (static_cast<int32_t>(gSaveContext.equips.equipment & gEquipMasks[EQUIP_TYPE_SHIELD]) >>
+         gEquipShifts[EQUIP_TYPE_SHIELD]);
+    if (!IsShieldEquipValue(equipValue)) {
+        return;
+    }
+
+    const ShieldSlotKey key = ShieldSlotKeyFromEquipValue(equipValue);
+    FuseSlot& slot = gFuseSave.GetShieldSlot(key);
+    if (slot.materialId == MaterialId::None || slot.durabilityCur <= 0) {
+        return;
+    }
+
+    const int materialId = static_cast<int>(slot.materialId);
+    const int maxDurability = slot.durabilityMax;
+    const int newCur = std::max(0, slot.durabilityCur - 1);
+    slot.durabilityCur = newCur;
+
+    if (newCur <= 0) {
+        slot.ResetToUnfused();
+    }
+
+    Fuse::Log("[FuseDBG] shield_guard_drain: shield=%s mat=%d dura=%d/%d\n", ShieldSlotName(key), materialId, newCur,
+              maxDurability);
 }
 
 void Fuse_GetRangedFuseStatus(RangedFuseSlot slot, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax) {

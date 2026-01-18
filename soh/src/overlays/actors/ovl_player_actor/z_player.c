@@ -42,6 +42,7 @@
 
 extern bool Fuse_ShieldHasNegateKnockback(PlayState* play, int* outMaterialId, int* outDurabilityCur,
                                           int* outDurabilityMax, uint8_t* outLevel);
+extern void Fuse_ShieldGuardDrain(PlayState* play);
 
 // Some player animations are played at this reduced speed, for reasons yet unclear.
 // This is called "adjusted" for now.
@@ -4871,6 +4872,10 @@ s32 func_808382DC(Player* this, PlayState* play) {
                          (this->cylinder.info.atHit != NULL) && (this->cylinder.info.atHit->atFlags & 0x20000000))) {
 
                 Player_RequestRumble(this, 180, 20, 100, 0);
+
+                if (sp64) {
+                    Fuse_ShieldGuardDrain(play);
+                }
 
                 if (!Player_IsChildWithHylianShield(this)) {
                     if (this->invincibilityTimer >= 0) {
