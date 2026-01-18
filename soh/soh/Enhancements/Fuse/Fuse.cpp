@@ -408,6 +408,12 @@ void LogRangedEvent(const char* tag, RangedFuseSlot slot, MaterialId mat, const 
               reason ? reason : "None");
 }
 
+void LogRangedActiveEvent(const char* tag, RangedFuseSlot slot) {
+    const FuseSlot& active = GetRangedFuseSlot(slot);
+    Fuse::Log("[FuseDBG] %s slot=%s mat=%d dura=%d/%d\n", tag, RangedSlotName(slot),
+              static_cast<int>(active.materialId), active.durabilityCur, active.durabilityMax);
+}
+
 bool IsPlayerAimingRangedSlot(PlayState* play, RangedFuseSlot* outSlot) {
     if (!play) {
         return false;
@@ -1830,8 +1836,9 @@ void Fuse::CommitQueuedRangedFuse(RangedFuseSlot slot, const char* reason) {
     queued.hadSuccess = true;
     queued.pendingRefundMaterial = MaterialId::None;
     queued.pendingRefundFrame = -1;
-    ApplyRangedFuseSlotMaterial(slot, MaterialId::None);
+    ApplyRangedFuseSlotMaterial(slot, mat);
     LogRangedEvent("RangedCommit", slot, mat, reason);
+    LogRangedActiveEvent("RangedCommitActive", slot);
 }
 
 void Fuse::CancelQueuedRangedFuse_Refund(RangedFuseSlot slot, const char* reason) {
@@ -1849,6 +1856,24 @@ void Fuse::CancelQueuedRangedFuse_Refund(RangedFuseSlot slot, const char* reason
     queued.pendingRefundFrame = -1;
     ApplyRangedFuseSlotMaterial(slot, MaterialId::None);
     LogRangedEvent("RangedCancel", slot, mat, reason);
+}
+
+void Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot slot, const char* reason) {
+    FuseSlot& active = GetRangedFuseSlot(slot);
+    if (active.materialId == MaterialId::None || active.durabilityCur <= 0) {
+        return;
+    }
+
+    const int materialId = static_cast<int>(active.materialId);
+    const int maxDurability = active.durabilityMax;
+    LogRangedActiveEvent("RangedHitActive", slot);
+    const int newCur = std::max(0, active.durabilityCur - 1);
+    active.durabilityCur = newCur;
+
+    ApplyRangedFuseSlotMaterial(slot, MaterialId::None);
+
+    Fuse::Log("[FuseDBG] RangedHitFinalize slot=%s mat=%d dura=%d/%d reason=%s\n", RangedSlotName(slot), materialId,
+              newCur, maxDurability, reason ? reason : "None");
 }
 
 void Fuse::OnHookshotShotStarted(const char* reason) {
