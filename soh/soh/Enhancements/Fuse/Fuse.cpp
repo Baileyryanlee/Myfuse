@@ -211,7 +211,7 @@ void ApplyIceArrowFreeze(PlayState* play, Actor* victim, uint8_t level) {
 
     constexpr s16 kBaseFreezeDuration = 40;
     const s16 duration = static_cast<s16>(kBaseFreezeDuration * level);
-    constexpr s16 kIceColorFlagBlue = 0; // Default flag yields the blue ice arrow tint (see z64actor.h)
+    constexpr s16 kIceColorFlagBlue = 0;        // Default flag yields the blue ice arrow tint (see z64actor.h)
     constexpr s16 kNeutralColorIntensity = 180; // Softer tint to look more snow/white than deep blue
 
     // Apply the same immobilization and visual feedback that Ice Arrows use
@@ -256,7 +256,7 @@ void ApplyFuseKnockback(PlayState* play, Player* player, Actor* victim, uint8_t 
         return;
     }
 
-    if (victim->id == ACTOR_EN_STALCHILD) {
+    if (victim->id == ACTOR_EN_SKB) {
         Fuse::Log("[FuseDBG] knockback_skip_blacklist: event=%s item=%s victim=%p id=0x%04X\n",
                   eventLabel ? eventLabel : "hit", itemLabel ? itemLabel : "unknown", (void*)victim, victim->id);
         return;
@@ -701,9 +701,8 @@ extern "C" void Fuse_ShieldGuardDrain(PlayState* play) {
         return;
     }
 
-    const int32_t equipValue =
-        (static_cast<int32_t>(gSaveContext.equips.equipment & gEquipMasks[EQUIP_TYPE_SHIELD]) >>
-         gEquipShifts[EQUIP_TYPE_SHIELD]);
+    const int32_t equipValue = (static_cast<int32_t>(gSaveContext.equips.equipment & gEquipMasks[EQUIP_TYPE_SHIELD]) >>
+                                gEquipShifts[EQUIP_TYPE_SHIELD]);
     if (!IsShieldEquipValue(equipValue)) {
         return;
     }
@@ -911,9 +910,8 @@ void Fuse::SaveDebugOverrides() {
                     }
                 });
 
-                Fuse::Log("[FuseDBG] OverrideSave: mat=%d atkDelta=%d duraOvr=%d\n",
-                          static_cast<int>(kvp.first), kvp.second.attackBonusDelta,
-                          kvp.second.baseDurabilityOverride);
+                Fuse::Log("[FuseDBG] OverrideSave: mat=%d atkDelta=%d duraOvr=%d\n", static_cast<int>(kvp.first),
+                          kvp.second.attackBonusDelta, kvp.second.baseDurabilityOverride);
             }
         });
     });
@@ -1795,8 +1793,7 @@ bool Fuse::DamageHammerFuseDurability(PlayState* play, int amount, const char* r
 
     if (cur == 0) {
         const int frame = play ? play->gameplayFrames : -1;
-        Log("[FuseMVP] Hammer fuse broke at frame=%d; clearing fuse (reason=%s)\n", frame,
-            reason ? reason : "unknown");
+        Log("[FuseMVP] Hammer fuse broke at frame=%d; clearing fuse (reason=%s)\n", frame, reason ? reason : "unknown");
         OnHammerFuseBroken(play);
         return true;
     }
@@ -1887,7 +1884,8 @@ static void UpdateRangedFuseLifecycle(PlayState* play) {
         RangedFuseSlot previousSlot = RangedFuseSlot::Arrows;
         if (HeldItemActionToSlot(gFuseRuntime.lastHeldItemAction, &previousSlot)) {
             RangedQueuedFuse& queued = gFuseRuntime.GetRangedQueuedSlot(previousSlot);
-            if (queued.materialId != MaterialId::None && !(previousSlot == RangedFuseSlot::Hookshot && queued.inFlight)) {
+            if (queued.materialId != MaterialId::None &&
+                !(previousSlot == RangedFuseSlot::Hookshot && queued.inFlight)) {
                 if (!aiming || aimingSlot != previousSlot) {
                     Fuse::CancelQueuedRangedFuse_Refund(previousSlot, "HeldItemSwitch");
                 }
@@ -2017,8 +2015,8 @@ static void ApplyMeleeHitMaterialEffects(PlayState* play, Actor* victim, Materia
     }
 
     uint8_t freezeLevel = 0;
-    const bool shatteredThisHit = (frame >= 0 && sShatterFrame.find(victim) != sShatterFrame.end() &&
-                                   sShatterFrame[victim] == frame);
+    const bool shatteredThisHit =
+        (frame >= 0 && sShatterFrame.find(victim) != sShatterFrame.end() && sShatterFrame[victim] == frame);
     if (!shatteredThisHit && !wasFuseFrozen &&
         HasModifier(def->modifiers, def->modifierCount, ModifierId::Freeze, &freezeLevel) && freezeLevel > 0) {
         EnqueueSwordFreezeRequest(play, victim, freezeLevel);
