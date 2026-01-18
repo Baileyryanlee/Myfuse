@@ -183,9 +183,12 @@ Actor* SpawnVanillaDekuNutFlash(PlayState* play, const Vec3f& pos, int srcItemId
         return nullptr;
     }
 
-    iREG(50) = -1;
-    return Actor_Spawn(&play->actorCtx, play, ACTOR_EN_M_FIRE1, pos.x, pos.y, pos.z, 0, 0, 0, kVanillaDekuNutParams,
-                       true);
+    Actor* flashActor = EnArrow_TriggerDekuNutEffect(play, &pos);
+    if (flashActor != nullptr) {
+        Fuse::Log("[FuseDBG] DekuNutEffect: vanilla_call ok frame=%d src=%s\n", play->gameplayFrames,
+                  GetStunSourceLabel(srcItemId));
+    }
+    return flashActor;
 }
 
 void ApplyDekuNutStunVanilla(PlayState* play, Player* player, Actor* victim, uint8_t level, int srcItemId) {
@@ -206,8 +209,6 @@ void ApplyDekuNutStunVanilla(PlayState* play, Player* player, Actor* victim, uin
 
     if (flashActor) {
         Fuse::Log("[FuseMVP] DekuNut stun: spawned actor id=0x%04X ptr=%p\n", flashActor->id, (void*)flashActor);
-        SoundSource_PlaySfxAtFixedWorldPos(play, &spawnPos, 20, NA_SE_IT_DEKU);
-        EffectSsStone1_Spawn(play, &spawnPos, 0);
     } else {
         Fuse::Log("[FuseMVP] DekuNut stun: spawn failed\n");
     }
@@ -221,12 +222,7 @@ void Fuse_TriggerDekuNutAtPos(PlayState* play, const Vec3f& pos, int srcItemId) 
     Fuse::Log("[FuseDBG] DekuNutAtPos: trigger frame=%d src=%s item=%d pos=(%.2f, %.2f, %.2f)\n", play->gameplayFrames,
               GetStunSourceLabel(srcItemId), srcItemId, pos.x, pos.y, pos.z);
 
-    Actor* flashActor = SpawnVanillaDekuNutFlash(play, pos, srcItemId);
-    if (flashActor) {
-        Vec3f mutablePos = pos;
-        SoundSource_PlaySfxAtFixedWorldPos(play, &mutablePos, 20, NA_SE_IT_DEKU);
-        EffectSsStone1_Spawn(play, &mutablePos, 0);
-    }
+    (void)SpawnVanillaDekuNutFlash(play, pos, srcItemId);
 }
 
 const char* GetStunSourceLabel(int itemId) {
@@ -797,11 +793,7 @@ void Fuse_TriggerMegaStun(PlayState* play, Player* player, MaterialId materialId
         spawnPos.x += Math_SinS(angle) * kMegaStunRadius;
         spawnPos.z += Math_CosS(angle) * kMegaStunRadius;
 
-        Actor* flashActor = SpawnVanillaDekuNutFlash(play, spawnPos, itemId);
-        if (flashActor) {
-            SoundSource_PlaySfxAtFixedWorldPos(play, &spawnPos, 20, NA_SE_IT_DEKU);
-            EffectSsStone1_Spawn(play, &spawnPos, 0);
-        }
+        (void)SpawnVanillaDekuNutFlash(play, spawnPos, itemId);
     }
 
     (void)materialId;
