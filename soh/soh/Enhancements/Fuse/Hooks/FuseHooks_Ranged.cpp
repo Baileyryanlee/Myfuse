@@ -67,6 +67,8 @@ void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Actor* victim
     if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Stun, &stunLevel) && stunLevel > 0) {
         Fuse_TriggerDekuNutAtPos(play, victim->world.pos, RangedSlotItemId(slot));
     }
+
+    Fuse::ClearActiveRangedFuse(static_cast<RangedFuseSlot>(slot), "RangedHitConsumed");
 }
 
 static void LogRangedKnockbackStatus(const char* itemLabel, RangedFuseSlot slot, const char* eventLabel) {

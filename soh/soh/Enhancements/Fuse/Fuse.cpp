@@ -2031,6 +2031,19 @@ void Fuse::CancelQueuedRangedFuse_Refund(RangedFuseSlot slot, const char* reason
               static_cast<int>(mat), reason ? reason : "None");
 }
 
+void Fuse::ClearActiveRangedFuse(RangedFuseSlot slot, const char* reason) {
+    RangedFuseState& active = GetRangedActive(slot);
+    if (active.materialId == MaterialId::None) {
+        return;
+    }
+
+    const int materialId = static_cast<int>(active.materialId);
+    active.ResetToUnfused();
+
+    Fuse::Log("[FuseDBG] RangedClearActive slot=%s mat=%d reason=%s\n", RangedSlotName(slot), materialId,
+              reason ? reason : "None");
+}
+
 void Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot slot, const char* reason) {
     RangedFuseState& active = GetRangedActive(slot);
     if (active.materialId == MaterialId::None || active.durabilityCur <= 0) {
@@ -2044,10 +2057,10 @@ void Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot slot, const char* reason
     Fuse::Log("[FuseDBG] RangedHitActive slot=%s mat=%d dura=%d/%d\n", RangedSlotName(slot), materialId, newCur,
               maxDurability);
 
-    active.ResetToUnfused();
-
     Fuse::Log("[FuseDBG] RangedHitFinalize slot=%s mat=%d dura=%d/%d reason=%s\n", RangedSlotName(slot), materialId,
               newCur, maxDurability, reason ? reason : "None");
+
+    Fuse::ClearActiveRangedFuse(slot, reason);
 }
 
 void Fuse::OnHookshotShotStarted(const char* reason) {
