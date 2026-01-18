@@ -33,12 +33,19 @@ struct SwordFuseSlot {
 using FuseSlot = SwordFuseSlot;
 
 struct RangedFuseState {
-    FuseSlot queued{};
-    FuseSlot active{};
+    MaterialId materialId = MaterialId::None;
+    int durabilityCur = 0;
+    int durabilityMax = 0;
     bool inFlight = false;
     bool hadSuccess = false;
     MaterialId pendingRefundMaterial = MaterialId::None;
     int pendingRefundFrame = -1;
+
+    void ResetToUnfused() {
+        materialId = MaterialId::None;
+        durabilityCur = 0;
+        durabilityMax = 0;
+    }
 };
 
 // Centralized representation of the save data for the currently equipped sword.
@@ -93,7 +100,6 @@ struct FuseRuntimeState {
     bool hammerDrainedThisSwing = false;
     bool hammerHitActorThisSwing = false;
     s16 hammerSwingId = 0;
-    std::array<RangedFuseState, 3> rangedSlots{};
     int32_t lastHeldItemAction = 0;
 
     // Useful for debugging/testing
@@ -102,19 +108,6 @@ struct FuseRuntimeState {
     FuseSlot& GetHammerSlot();
     const FuseSlot& GetHammerSlot() const;
     FuseSlot& GetActiveHammerSlot(const PlayState* play);
-    FuseSlot& GetArrowsSlot();
-    const FuseSlot& GetArrowsSlot() const;
-    FuseSlot& GetActiveArrowsSlot(const PlayState* play);
-    FuseSlot& GetSlingshotSlot();
-    const FuseSlot& GetSlingshotSlot() const;
-    FuseSlot& GetActiveSlingshotSlot(const PlayState* play);
-    FuseSlot& GetHookshotSlot();
-    const FuseSlot& GetHookshotSlot() const;
-    FuseSlot& GetActiveHookshotSlot(const PlayState* play);
-    RangedFuseState& GetRangedQueuedSlot(RangedFuseSlot slot);
-    const RangedFuseState& GetRangedQueuedSlot(RangedFuseSlot slot) const;
-    FuseSlot& GetRangedQueuedMaterialSlot(RangedFuseSlot slot);
-    const FuseSlot& GetRangedQueuedMaterialSlot(RangedFuseSlot slot) const;
 };
 
 namespace FusePersistence {

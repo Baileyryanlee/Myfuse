@@ -33,21 +33,6 @@ using Fuse::MaterialDebugOverride;
 // -----------------------------------------------------------------------------
 // Module-local state
 // -----------------------------------------------------------------------------
-struct RangedFuseState {
-    MaterialId materialId = MaterialId::None;
-    int durabilityCur = 0;
-    int durabilityMax = 0;
-    bool inFlight = false;
-    bool hadSuccess = false;
-    MaterialId pendingRefundMaterial = MaterialId::None;
-    int pendingRefundFrame = -1;
-
-    void ResetActive() {
-        materialId = MaterialId::None;
-        durabilityCur = 0;
-        durabilityMax = 0;
-    }
-};
 
 static FuseSaveData gFuseSave; // persistent-ready (not serialized yet)
 static FuseRuntimeState gFuseRuntime;
@@ -72,20 +57,11 @@ static constexpr int kDekuStunRetryStepFrames = 2;
 static constexpr int kDekuStunMaxAttempts = 8;
 static constexpr int kDekuStunSwordIFrameFrames = 6;
 static constexpr int kDekuStunCooldownFrames = 90;
-static std::vector<struct PendingStunRequest> sPendingStunQueue;
-static std::unordered_map<Actor*, size_t> sPendingStunIndex;
-static std::unordered_map<Actor*, int> sDekuStunCooldownUntil;
-static std::unordered_map<Actor*, int> sDekuLastSwordHitFrame;
-static int sMegaStunCooldownUntil = -1;
-
 struct SwordFreezeRequest {
     Actor* victim = nullptr;
     uint8_t level = 0;
 };
 
-static std::array<std::vector<SwordFreezeRequest>, kSwordFreezeQueueCount> sSwordFreezeQueues;
-static std::array<std::unordered_set<Actor*>, kSwordFreezeQueueCount> sSwordFreezeVictims;
-static std::array<int, kSwordFreezeQueueCount> sSwordFreezeQueueFrames = { -1, -1 };
 struct PendingStunRequest {
     Actor* victim = nullptr;
     uint8_t level = 0;
@@ -95,6 +71,16 @@ struct PendingStunRequest {
     MaterialId materialId = MaterialId::None;
     int itemId = 0;
 };
+
+static std::vector<PendingStunRequest> sPendingStunQueue;
+static std::unordered_map<Actor*, size_t> sPendingStunIndex;
+static std::unordered_map<Actor*, int> sDekuStunCooldownUntil;
+static std::unordered_map<Actor*, int> sDekuLastSwordHitFrame;
+static int sMegaStunCooldownUntil = -1;
+
+static std::array<std::vector<SwordFreezeRequest>, kSwordFreezeQueueCount> sSwordFreezeQueues;
+static std::array<std::unordered_set<Actor*>, kSwordFreezeQueueCount> sSwordFreezeVictims;
+static std::array<int, kSwordFreezeQueueCount> sSwordFreezeQueueFrames = { -1, -1 };
 
 static bool IsFuseFrozen(Actor* actor) {
     if (actor == nullptr) {
@@ -230,8 +216,9 @@ void Fuse_TriggerDekuNutAtPos(PlayState* play, const Vec3f& pos, int srcItemId) 
 
     Actor* flashActor = SpawnVanillaDekuNutFlash(play, pos);
     if (flashActor) {
-        SoundSource_PlaySfxAtFixedWorldPos(play, &pos, 20, NA_SE_IT_DEKU);
-        EffectSsStone1_Spawn(play, &pos, 0);
+        Vec3f mutablePos = pos;
+        SoundSource_PlaySfxAtFixedWorldPos(play, &mutablePos, 20, NA_SE_IT_DEKU);
+        EffectSsStone1_Spawn(play, &mutablePos, 0);
     }
 }
 
@@ -466,28 +453,28 @@ static void DebugAssertDurabilityValues(int durabilityCur, int durabilityMax) {
 }
 #endif
 
-static RangedFuseState* GetRangedQueuedState(RangedFuseSlot slot) {
+static RangedFuseState& GetRangedQueued(RangedFuseSlot slot) {
     const int idx = RangedSlotToIndex(slot);
     if (idx < 0) {
         Fuse::Log("[FuseDBG] RangedSlotInvalid slot=%d\n", static_cast<int>(slot));
-        return nullptr;
+        return gRangedQueued[0];
     }
 #ifndef NDEBUG
     DebugAssertRangedIndex(idx);
 #endif
-    return &gRangedQueued[static_cast<size_t>(idx)];
+    return gRangedQueued[static_cast<size_t>(idx)];
 }
 
-static RangedFuseState* GetRangedActiveState(RangedFuseSlot slot) {
+static RangedFuseState& GetRangedActive(RangedFuseSlot slot) {
     const int idx = RangedSlotToIndex(slot);
     if (idx < 0) {
         Fuse::Log("[FuseDBG] RangedSlotInvalid slot=%d\n", static_cast<int>(slot));
-        return nullptr;
+        return gRangedActive[0];
     }
 #ifndef NDEBUG
     DebugAssertRangedIndex(idx);
 #endif
-    return &gRangedActive[static_cast<size_t>(idx)];
+    return gRangedActive[static_cast<size_t>(idx)];
 }
 
 const char* RangedSlotName(RangedFuseSlot slot) {
@@ -503,37 +490,22 @@ const char* RangedSlotName(RangedFuseSlot slot) {
     }
 }
 
-RangedFuseState* GetRangedFuseSlot(RangedFuseSlot slot) {
-    return GetRangedActiveState(slot);
-}
-
-FuseSlot& GetRangedQueuedFuseSlot(RangedFuseSlot slot) {
-    return gFuseRuntime.GetRangedQueuedMaterialSlot(slot);
-}
-
-const FuseSlot& GetRangedQueuedFuseSlot(RangedFuseSlot slot) {
-    return gFuseRuntime.GetRangedQueuedMaterialSlot(slot);
-}
-
 bool IsRangedActiveBusy(RangedFuseSlot slot) {
-    const FuseSlot& active = GetRangedFuseSlot(slot);
+    const RangedFuseState& active = GetRangedActive(slot);
     return active.materialId != MaterialId::None && active.durabilityCur > 0;
 }
 
 void LogRangedBusy(RangedFuseSlot slot, const char* reason) {
-    const FuseSlot& active = GetRangedFuseSlot(slot);
+    const RangedFuseState& active = GetRangedActive(slot);
     Fuse::Log("[FuseDBG] RangedBusy slot=%s activeMat=%d reason=%s\n", RangedSlotName(slot),
               static_cast<int>(active.materialId), reason ? reason : "None");
 }
 
 void ApplyRangedFuseSlotMaterial(RangedFuseSlot slot, MaterialId mat) {
-    RangedFuseState* active = GetRangedFuseSlot(slot);
-    if (!active) {
-        return;
-    }
+    RangedFuseState& active = GetRangedActive(slot);
 
     if (mat == MaterialId::None) {
-        active->ResetActive();
+        active.ResetToUnfused();
         return;
     }
 
@@ -562,17 +534,13 @@ void LogRangedEvent(const char* tag, RangedFuseSlot slot, MaterialId mat, const 
 }
 
 void LogRangedActiveEvent(const char* tag, RangedFuseSlot slot) {
-    const RangedFuseState* active = GetRangedFuseSlot(slot);
-    if (!active) {
-        return;
-    }
-
+    const RangedFuseState& active = GetRangedActive(slot);
     Fuse::Log("[FuseDBG] %s slot=%s mat=%d dura=%d/%d\n", tag, RangedSlotName(slot),
-              static_cast<int>(active->materialId), active->durabilityCur, active->durabilityMax);
+              static_cast<int>(active.materialId), active.durabilityCur, active.durabilityMax);
 }
 
 void LogRangedQueuedEvent(const char* tag, RangedFuseSlot slot) {
-    const FuseSlot& queued = GetRangedQueuedFuseSlot(slot);
+    const RangedFuseState& queued = GetRangedQueued(slot);
     Fuse::Log("[FuseDBG] %s slot=%s mat=%d dura=%d/%d\n", tag, RangedSlotName(slot),
               static_cast<int>(queued.materialId), queued.durabilityCur, queued.durabilityMax);
 }
@@ -1079,20 +1047,15 @@ void Fuse_GetRangedFuseStatus(RangedFuseSlot slot, int* outMaterialId, int* outD
         *outDurabilityMax = 0;
     }
 
-    const RangedFuseState* active = GetRangedActiveState(slot);
-
-    if (!active) {
-        return;
-    }
-
+    const RangedFuseState& active = GetRangedActive(slot);
     if (outMaterialId) {
-        *outMaterialId = static_cast<int>(active->materialId);
+        *outMaterialId = static_cast<int>(active.materialId);
     }
     if (outDurabilityCur) {
-        *outDurabilityCur = active->durabilityCur;
+        *outDurabilityCur = active.durabilityCur;
     }
     if (outDurabilityMax) {
-        *outDurabilityMax = active->durabilityMax;
+        *outDurabilityMax = active.durabilityMax;
     }
 }
 
@@ -1373,17 +1336,17 @@ bool Fuse::IsHammerFused() {
 }
 
 bool Fuse::IsArrowsFused() {
-    const FuseSlot& slot = GetRangedQueuedFuseSlot(RangedFuseSlot::Arrows);
+    const RangedFuseState& slot = GetRangedQueued(RangedFuseSlot::Arrows);
     return slot.materialId != MaterialId::None && slot.durabilityCur > 0;
 }
 
 bool Fuse::IsSlingshotFused() {
-    const FuseSlot& slot = GetRangedQueuedFuseSlot(RangedFuseSlot::Slingshot);
+    const RangedFuseState& slot = GetRangedQueued(RangedFuseSlot::Slingshot);
     return slot.materialId != MaterialId::None && slot.durabilityCur > 0;
 }
 
 bool Fuse::IsHookshotFused() {
-    const FuseSlot& slot = GetRangedQueuedFuseSlot(RangedFuseSlot::Hookshot);
+    const RangedFuseState& slot = GetRangedQueued(RangedFuseSlot::Hookshot);
     return slot.materialId != MaterialId::None && slot.durabilityCur > 0;
 }
 
@@ -1403,17 +1366,17 @@ MaterialId Fuse::GetHammerMaterial() {
 }
 
 MaterialId Fuse::GetArrowsMaterial() {
-    const FuseSlot& slot = GetRangedQueuedFuseSlot(RangedFuseSlot::Arrows);
+    const RangedFuseState& slot = GetRangedQueued(RangedFuseSlot::Arrows);
     return slot.materialId;
 }
 
 MaterialId Fuse::GetSlingshotMaterial() {
-    const FuseSlot& slot = GetRangedQueuedFuseSlot(RangedFuseSlot::Slingshot);
+    const RangedFuseState& slot = GetRangedQueued(RangedFuseSlot::Slingshot);
     return slot.materialId;
 }
 
 MaterialId Fuse::GetHookshotMaterial() {
-    const FuseSlot& slot = GetRangedQueuedFuseSlot(RangedFuseSlot::Hookshot);
+    const RangedFuseState& slot = GetRangedQueued(RangedFuseSlot::Hookshot);
     return slot.materialId;
 }
 
@@ -1670,25 +1633,22 @@ void Fuse::FuseHammerWithMaterial(MaterialId id, uint16_t maxDurability, bool in
 
 void Fuse::FuseArrowsWithMaterial(MaterialId id, uint16_t maxDurability, bool initializeCurrentDurability,
                                   bool logDurability) {
-    RangedFuseState* slot = GetRangedActiveState(RangedFuseSlot::Arrows);
-    if (!slot) {
-        return;
-    }
+    RangedFuseState& slot = GetRangedActive(RangedFuseSlot::Arrows);
 
 #ifndef NDEBUG
     DebugAssertMaterialId(id);
 #endif
 
     const int newCur =
-        initializeCurrentDurability ? static_cast<int>(maxDurability) : std::clamp<int>(slot->durabilityCur, 0,
+        initializeCurrentDurability ? static_cast<int>(maxDurability) : std::clamp<int>(slot.durabilityCur, 0,
                                                                                         static_cast<int>(maxDurability));
 #ifndef NDEBUG
     DebugAssertDurabilityValues(newCur, maxDurability);
 #endif
 
-    slot->materialId = id;
-    slot->durabilityMax = maxDurability;
-    slot->durabilityCur = newCur;
+    slot.materialId = id;
+    slot.durabilityMax = maxDurability;
+    slot.durabilityCur = newCur;
 
     const MaterialDef* def = Fuse::GetMaterialDef(id);
     if (def) {
@@ -1705,25 +1665,22 @@ void Fuse::FuseArrowsWithMaterial(MaterialId id, uint16_t maxDurability, bool in
 
 void Fuse::FuseSlingshotWithMaterial(MaterialId id, uint16_t maxDurability, bool initializeCurrentDurability,
                                      bool logDurability) {
-    RangedFuseState* slot = GetRangedActiveState(RangedFuseSlot::Slingshot);
-    if (!slot) {
-        return;
-    }
+    RangedFuseState& slot = GetRangedActive(RangedFuseSlot::Slingshot);
 
 #ifndef NDEBUG
     DebugAssertMaterialId(id);
 #endif
 
     const int newCur =
-        initializeCurrentDurability ? static_cast<int>(maxDurability) : std::clamp<int>(slot->durabilityCur, 0,
+        initializeCurrentDurability ? static_cast<int>(maxDurability) : std::clamp<int>(slot.durabilityCur, 0,
                                                                                         static_cast<int>(maxDurability));
 #ifndef NDEBUG
     DebugAssertDurabilityValues(newCur, maxDurability);
 #endif
 
-    slot->materialId = id;
-    slot->durabilityMax = maxDurability;
-    slot->durabilityCur = newCur;
+    slot.materialId = id;
+    slot.durabilityMax = maxDurability;
+    slot.durabilityCur = newCur;
 
     const MaterialDef* def = Fuse::GetMaterialDef(id);
     if (def) {
@@ -1740,25 +1697,22 @@ void Fuse::FuseSlingshotWithMaterial(MaterialId id, uint16_t maxDurability, bool
 
 void Fuse::FuseHookshotWithMaterial(MaterialId id, uint16_t maxDurability, bool initializeCurrentDurability,
                                     bool logDurability) {
-    RangedFuseState* slot = GetRangedActiveState(RangedFuseSlot::Hookshot);
-    if (!slot) {
-        return;
-    }
+    RangedFuseState& slot = GetRangedActive(RangedFuseSlot::Hookshot);
 
 #ifndef NDEBUG
     DebugAssertMaterialId(id);
 #endif
 
     const int newCur =
-        initializeCurrentDurability ? static_cast<int>(maxDurability) : std::clamp<int>(slot->durabilityCur, 0,
+        initializeCurrentDurability ? static_cast<int>(maxDurability) : std::clamp<int>(slot.durabilityCur, 0,
                                                                                         static_cast<int>(maxDurability));
 #ifndef NDEBUG
     DebugAssertDurabilityValues(newCur, maxDurability);
 #endif
 
-    slot->materialId = id;
-    slot->durabilityMax = maxDurability;
-    slot->durabilityCur = newCur;
+    slot.materialId = id;
+    slot.durabilityMax = maxDurability;
+    slot.durabilityCur = newCur;
 
     const MaterialDef* def = Fuse::GetMaterialDef(id);
     if (def) {
@@ -1945,8 +1899,7 @@ Fuse::FuseResult Fuse::TryQueueRangedFuse(RangedFuseSlot slot, MaterialId mat, c
         return FuseResult::NotAllowed;
     }
 
-    RangedFuseState& state = gFuseRuntime.GetRangedQueuedSlot(slot);
-    FuseSlot& queued = state.queued;
+    RangedFuseState& state = GetRangedQueued(slot);
     if (state.inFlight) {
         LogRangedEvent("RangedQueueFail", slot, mat, "inFlight");
         return FuseResult::NotAllowed;
@@ -1961,15 +1914,15 @@ Fuse::FuseResult Fuse::TryQueueRangedFuse(RangedFuseSlot slot, MaterialId mat, c
         state.pendingRefundFrame = -1;
     }
 
-    if (queued->materialId != MaterialId::None) {
+    if (state.materialId != MaterialId::None) {
         Fuse::CancelQueuedRangedFuse_Refund(slot, "QueueReplace");
     }
 
     if (!Fuse::HasMaterial(mat, 1) || !Fuse::ConsumeMaterial(mat, 1)) {
         if (hasPendingSwap && pendingMat != MaterialId::None) {
-            queued.materialId = pendingMat;
-            queued.durabilityMax = Fuse::GetMaterialEffectiveBaseDurability(pendingMat);
-            queued.durabilityCur = queued.durabilityMax;
+            state.materialId = pendingMat;
+            state.durabilityMax = Fuse::GetMaterialEffectiveBaseDurability(pendingMat);
+            state.durabilityCur = state.durabilityMax;
             state.inFlight = false;
             state.hadSuccess = false;
         }
@@ -1983,9 +1936,9 @@ Fuse::FuseResult Fuse::TryQueueRangedFuse(RangedFuseSlot slot, MaterialId mat, c
                   static_cast<int>(pendingMat), "SwapRefund");
     }
 
-    queued.materialId = mat;
-    queued.durabilityMax = Fuse::GetMaterialEffectiveBaseDurability(mat);
-    queued.durabilityCur = queued.durabilityMax;
+    state.materialId = mat;
+    state.durabilityMax = Fuse::GetMaterialEffectiveBaseDurability(mat);
+    state.durabilityCur = state.durabilityMax;
     state.inFlight = false;
     state.hadSuccess = false;
     state.pendingRefundMaterial = MaterialId::None;
@@ -1996,9 +1949,8 @@ Fuse::FuseResult Fuse::TryQueueRangedFuse(RangedFuseSlot slot, MaterialId mat, c
 }
 
 void Fuse::ClearQueuedRangedFuse_NoRefund(RangedFuseSlot slot, const char* reason) {
-    RangedFuseState& state = gFuseRuntime.GetRangedQueuedSlot(slot);
-    FuseSlot& queued = state.queued;
-    if (queued.materialId == MaterialId::None) {
+    RangedFuseState& state = GetRangedQueued(slot);
+    if (state.materialId == MaterialId::None) {
         return;
     }
 
@@ -2007,9 +1959,9 @@ void Fuse::ClearQueuedRangedFuse_NoRefund(RangedFuseSlot slot, const char* reaso
         return;
     }
 
-    state.pendingRefundMaterial = queued.materialId;
+    state.pendingRefundMaterial = state.materialId;
     state.pendingRefundFrame = GetGameplayFrame();
-    queued.ResetToUnfused();
+    state.ResetToUnfused();
     state.inFlight = false;
     state.hadSuccess = false;
 
@@ -2017,16 +1969,17 @@ void Fuse::ClearQueuedRangedFuse_NoRefund(RangedFuseSlot slot, const char* reaso
 }
 
 void Fuse::CommitQueuedRangedFuse(RangedFuseSlot slot, const char* reason) {
-    RangedFuseState& state = gFuseRuntime.GetRangedQueuedSlot(slot);
-    FuseSlot& queued = state.queued;
-    if (queued.materialId == MaterialId::None) {
+    RangedFuseState& state = GetRangedQueued(slot);
+    if (state.materialId == MaterialId::None) {
         return;
     }
 
-    const MaterialId mat = queued.materialId;
-    FuseSlot& active = GetRangedFuseSlot(slot);
-    active = queued;
-    queued.ResetToUnfused();
+    const MaterialId mat = state.materialId;
+    RangedFuseState& active = GetRangedActive(slot);
+    active.materialId = state.materialId;
+    active.durabilityCur = state.durabilityCur;
+    active.durabilityMax = state.durabilityMax;
+    state.ResetToUnfused();
     state.inFlight = false;
     state.hadSuccess = true;
     state.pendingRefundMaterial = MaterialId::None;
@@ -2037,9 +1990,8 @@ void Fuse::CommitQueuedRangedFuse(RangedFuseSlot slot, const char* reason) {
 }
 
 void Fuse::CancelQueuedRangedFuse_Refund(RangedFuseSlot slot, const char* reason) {
-    RangedFuseState& state = gFuseRuntime.GetRangedQueuedSlot(slot);
-    FuseSlot& queued = state.queued;
-    if (queued.materialId == MaterialId::None) {
+    RangedFuseState& state = GetRangedQueued(slot);
+    if (state.materialId == MaterialId::None) {
         return;
     }
 
@@ -2048,9 +2000,9 @@ void Fuse::CancelQueuedRangedFuse_Refund(RangedFuseSlot slot, const char* reason
         return;
     }
 
-    const MaterialId mat = queued.materialId;
+    const MaterialId mat = state.materialId;
     Fuse::AddMaterial(mat, 1);
-    queued.ResetToUnfused();
+    state.ResetToUnfused();
     state.inFlight = false;
     state.hadSuccess = false;
     state.pendingRefundMaterial = MaterialId::None;
@@ -2060,8 +2012,8 @@ void Fuse::CancelQueuedRangedFuse_Refund(RangedFuseSlot slot, const char* reason
 }
 
 void Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot slot, const char* reason) {
-    RangedFuseState* active = GetRangedFuseSlot(slot);
-    if (!active || active->materialId == MaterialId::None || active->durabilityCur <= 0) {
+    RangedFuseState& active = GetRangedActive(slot);
+    if (active.materialId == MaterialId::None || active.durabilityCur <= 0) {
         return;
     }
 
@@ -2079,14 +2031,14 @@ void Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot slot, const char* reason
 }
 
 void Fuse::OnHookshotShotStarted(const char* reason) {
-    RangedFuseState& state = gFuseRuntime.GetRangedQueuedSlot(RangedFuseSlot::Hookshot);
+    RangedFuseState& state = GetRangedQueued(RangedFuseSlot::Hookshot);
     state.inFlight = true;
     state.hadSuccess = false;
     (void)reason;
 }
 
 void Fuse::OnHookshotRetractedOrKilled(const char* reason) {
-    RangedFuseState& state = gFuseRuntime.GetRangedQueuedSlot(RangedFuseSlot::Hookshot);
+    RangedFuseState& state = GetRangedQueued(RangedFuseSlot::Hookshot);
     if (!state.inFlight) {
         state.hadSuccess = false;
         return;
@@ -2266,8 +2218,8 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
 
 static void UpdateRangedFuseLifecycle(PlayState* play) {
     const int currentFrame = GetGameplayFrame();
-    for (size_t i = 0; i < gFuseRuntime.rangedSlots.size(); ++i) {
-        RangedFuseState& state = gFuseRuntime.rangedSlots[i];
+    for (size_t i = 0; i < gRangedQueued.size(); ++i) {
+        RangedFuseState& state = gRangedQueued[i];
         if (state.pendingRefundMaterial != MaterialId::None && state.pendingRefundFrame != currentFrame) {
             state.pendingRefundMaterial = MaterialId::None;
             state.pendingRefundFrame = -1;
@@ -2286,9 +2238,8 @@ static void UpdateRangedFuseLifecycle(PlayState* play) {
     if (gFuseRuntime.lastHeldItemAction != heldAction) {
         RangedFuseSlot previousSlot = RangedFuseSlot::Arrows;
         if (HeldItemActionToSlot(gFuseRuntime.lastHeldItemAction, &previousSlot)) {
-            RangedFuseState& state = gFuseRuntime.GetRangedQueuedSlot(previousSlot);
-            if (state.queued.materialId != MaterialId::None &&
-                !(previousSlot == RangedFuseSlot::Hookshot && state.inFlight)) {
+            RangedFuseState& state = GetRangedQueued(previousSlot);
+            if (state.materialId != MaterialId::None && !(previousSlot == RangedFuseSlot::Hookshot && state.inFlight)) {
                 if (!aiming || aimingSlot != previousSlot) {
                     Fuse::CancelQueuedRangedFuse_Refund(previousSlot, "HeldItemSwitch");
                 }
@@ -2296,10 +2247,10 @@ static void UpdateRangedFuseLifecycle(PlayState* play) {
         }
     }
 
-    for (size_t i = 0; i < gFuseRuntime.rangedSlots.size(); ++i) {
+    for (size_t i = 0; i < gRangedQueued.size(); ++i) {
         const RangedFuseSlot slot = static_cast<RangedFuseSlot>(i);
-        RangedFuseState& state = gFuseRuntime.rangedSlots[i];
-        if (state.queued.materialId == MaterialId::None) {
+        RangedFuseState& state = gRangedQueued[i];
+        if (state.materialId == MaterialId::None) {
             continue;
         }
 
