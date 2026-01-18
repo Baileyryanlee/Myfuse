@@ -607,8 +607,10 @@ void OnPlayerUpdate(PlayState* play) {
             const MaterialId materialId = Fuse::GetHammerMaterial();
             const MaterialDef* def = Fuse::GetMaterialDef(materialId);
             uint8_t poundLevel = 0;
+            uint8_t megaStunLevel = 0;
             if (def) {
                 HasModifier(def->modifiers, def->modifierCount, ModifierId::PoundUp, &poundLevel);
+                HasModifier(def->modifiers, def->modifierCount, ModifierId::MegaStun, &megaStunLevel);
             }
 
             if (poundLevel > 0) {
@@ -616,6 +618,10 @@ void OnPlayerUpdate(PlayState* play) {
                 Fuse::Log("[FuseDBG] HammerPoundUp: event=ground-impact item=hammer mat=%d lvl=%u dura=%d/%d note=no-radius\n",
                           static_cast<int>(materialId), static_cast<unsigned int>(poundLevel), before,
                           Fuse::GetHammerFuseMaxDurability());
+            }
+
+            if (megaStunLevel > 0) {
+                Fuse_TriggerMegaStun(play, player, materialId, ITEM_HAMMER);
             }
         }
 

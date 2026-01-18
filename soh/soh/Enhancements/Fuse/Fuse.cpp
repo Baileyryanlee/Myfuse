@@ -55,6 +55,7 @@ static std::vector<struct PendingStunRequest> sPendingStunQueue;
 static std::unordered_map<Actor*, size_t> sPendingStunIndex;
 static std::unordered_map<Actor*, int> sDekuStunCooldownUntil;
 static std::unordered_map<Actor*, int> sDekuLastSwordHitFrame;
+static int sMegaStunCooldownUntil = -1;
 
 struct SwordFreezeRequest {
     Actor* victim = nullptr;
@@ -166,6 +167,39 @@ void ApplyDekuNutStunVanilla(PlayState* play, Player* player, Actor* victim, uin
         EffectSsStone1_Spawn(play, &spawnPos, 0);
     } else {
         Fuse::Log("[FuseMVP] DekuNut stun: spawn failed\n");
+    }
+}
+
+const char* GetStunSourceLabel(int itemId) {
+    switch (itemId) {
+        case ITEM_SWORD_KOKIRI:
+            return "kokiri_sword";
+        case ITEM_SWORD_MASTER:
+            return "master_sword";
+        case ITEM_SWORD_BGS:
+            return "biggoron_sword";
+        case ITEM_SWORD_KNIFE:
+            return "giant_knife";
+        case ITEM_BOOMERANG:
+            return "boomerang";
+        case ITEM_BOW:
+            return "arrows";
+        case ITEM_SLINGSHOT:
+            return "slingshot";
+        case ITEM_HOOKSHOT:
+            return "hookshot";
+        case ITEM_LONGSHOT:
+            return "longshot";
+        case ITEM_HAMMER:
+            return "hammer";
+        case ITEM_SHIELD_DEKU:
+            return "deku_shield";
+        case ITEM_SHIELD_HYLIAN:
+            return "hylian_shield";
+        case ITEM_SHIELD_MIRROR:
+            return "mirror_shield";
+        default:
+            return "unknown";
     }
 }
 
@@ -522,6 +556,7 @@ void ResetDekuStunQueueInternal() {
     sPendingStunIndex.clear();
     sDekuStunCooldownUntil.clear();
     sDekuLastSwordHitFrame.clear();
+    sMegaStunCooldownUntil = -1;
 }
 
 void EnqueueSwordFreezeRequest(PlayState* play, Actor* victim, uint8_t level) {
@@ -553,6 +588,7 @@ void Fuse_EnqueuePendingStun(Actor* victim, uint8_t level, MaterialId materialId
         return;
     }
 
+    const char* srcLabel = GetStunSourceLabel(itemId);
     const int curFrame = GetGameplayFrame();
     auto cooldownIt = sDekuStunCooldownUntil.find(victim);
     if (curFrame >= 0 && cooldownIt != sDekuStunCooldownUntil.end() && curFrame < cooldownIt->second) {
@@ -570,8 +606,8 @@ void Fuse_EnqueuePendingStun(Actor* victim, uint8_t level, MaterialId materialId
         request.retryStepFrames = kDekuStunRetryStepFrames;
         request.materialId = materialId;
         request.itemId = itemId;
-        Fuse::Log("[FuseDBG] dekunut_enqueue victim=%p id=0x%04X lvl=%u notBefore=%d\n", (void*)victim, victim->id,
-                  level, request.applyNotBeforeFrame);
+        Fuse::Log("[FuseDBG] dekunut_enqueue victim=%p id=0x%04X src=%s notBefore=%d\n", (void*)victim, victim->id,
+                  srcLabel, request.applyNotBeforeFrame);
         return;
     }
 
@@ -585,8 +621,54 @@ void Fuse_EnqueuePendingStun(Actor* victim, uint8_t level, MaterialId materialId
     request.itemId = itemId;
     sPendingStunIndex[victim] = sPendingStunQueue.size();
     sPendingStunQueue.push_back(request);
-    Fuse::Log("[FuseDBG] dekunut_enqueue victim=%p id=0x%04X lvl=%u notBefore=%d\n", (void*)victim, victim->id, level,
-              request.applyNotBeforeFrame);
+    Fuse::Log("[FuseDBG] dekunut_enqueue victim=%p id=0x%04X src=%s notBefore=%d\n", (void*)victim, victim->id,
+              srcLabel, request.applyNotBeforeFrame);
+}
+
+void Fuse_TriggerMegaStun(PlayState* play, Player* player, MaterialId materialId, int itemId) {
+    if (!play || !player) {
+        return;
+    }
+
+    const int curFrame = play->gameplayFrames;
+    if (curFrame >= 0 && sMegaStunCooldownUntil >= 0 && curFrame < sMegaStunCooldownUntil) {
+        return;
+    }
+
+    constexpr int kMegaStunCooldownFrames = 60;
+    constexpr int kMegaStunCount = 6;
+    constexpr float kMegaStunRadius = 160.0f;
+    sMegaStunCooldownUntil = (curFrame >= 0) ? (curFrame + kMegaStunCooldownFrames) : kMegaStunCooldownFrames;
+
+    const char* srcLabel = GetStunSourceLabel(itemId);
+    Fuse::Log("[FuseDBG] megastun_trigger src=%s count=%d\n", srcLabel, kMegaStunCount);
+
+    Vec3f basePos = player->actor.world.pos;
+    const s16 baseYaw = player->actor.shape.rot.y;
+    const s16 angleStep = static_cast<s16>(0x10000 / kMegaStunCount);
+
+    for (int i = 0; i < kMegaStunCount; ++i) {
+        const s16 angle = baseYaw + (angleStep * i);
+        Vec3f spawnPos = basePos;
+        spawnPos.x += Math_SinS(angle) * kMegaStunRadius;
+        spawnPos.z += Math_CosS(angle) * kMegaStunRadius;
+
+        Actor* flashActor = SpawnVanillaDekuNutFlash(play, spawnPos);
+        if (flashActor) {
+            SoundSource_PlaySfxAtFixedWorldPos(play, &spawnPos, 20, NA_SE_IT_DEKU);
+            EffectSsStone1_Spawn(play, &spawnPos, 0);
+        }
+    }
+
+    (void)materialId;
+}
+
+extern "C" void Fuse_ShieldEnqueuePendingStun(Actor* victim, uint8_t level, int materialId, int itemId) {
+    Fuse_EnqueuePendingStun(victim, level, static_cast<MaterialId>(materialId), itemId);
+}
+
+extern "C" void Fuse_ShieldTriggerMegaStun(PlayState* play, Player* player, int materialId, int itemId) {
+    Fuse_TriggerMegaStun(play, player, static_cast<MaterialId>(materialId), itemId);
 }
 
 // -----------------------------------------------------------------------------
@@ -718,8 +800,8 @@ uint16_t Fuse::GetMaterialBaseDurability(MaterialId id) {
     return def ? def->baseMaxDurability : 0;
 }
 
-extern "C" bool Fuse_ShieldHasNegateKnockback(PlayState* play, int* outMaterialId, int* outDurabilityCur,
-                                              int* outDurabilityMax, uint8_t* outLevel) {
+static bool Fuse_ShieldHasModifier(PlayState* play, ModifierId modifierId, int* outMaterialId, int* outDurabilityCur,
+                                   int* outDurabilityMax, uint8_t* outLevel) {
     if (outMaterialId) {
         *outMaterialId = static_cast<int>(MaterialId::None);
     }
@@ -758,7 +840,7 @@ extern "C" bool Fuse_ShieldHasNegateKnockback(PlayState* play, int* outMaterialI
     }
 
     uint8_t level = 0;
-    if (!HasModifier(def->modifiers, def->modifierCount, ModifierId::NegateKnockback, &level) || level == 0) {
+    if (!HasModifier(def->modifiers, def->modifierCount, modifierId, &level) || level == 0) {
         return false;
     }
 
@@ -767,6 +849,24 @@ extern "C" bool Fuse_ShieldHasNegateKnockback(PlayState* play, int* outMaterialI
     }
 
     return true;
+}
+
+extern "C" bool Fuse_ShieldHasNegateKnockback(PlayState* play, int* outMaterialId, int* outDurabilityCur,
+                                              int* outDurabilityMax, uint8_t* outLevel) {
+    return Fuse_ShieldHasModifier(play, ModifierId::NegateKnockback, outMaterialId, outDurabilityCur, outDurabilityMax,
+                                  outLevel);
+}
+
+extern "C" bool Fuse_ShieldHasStun(PlayState* play, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax,
+                                   uint8_t* outLevel) {
+    return Fuse_ShieldHasModifier(play, ModifierId::Stun, outMaterialId, outDurabilityCur, outDurabilityMax,
+                                  outLevel);
+}
+
+extern "C" bool Fuse_ShieldHasMegaStun(PlayState* play, int* outMaterialId, int* outDurabilityCur,
+                                       int* outDurabilityMax, uint8_t* outLevel) {
+    return Fuse_ShieldHasModifier(play, ModifierId::MegaStun, outMaterialId, outDurabilityCur, outDurabilityMax,
+                                  outLevel);
 }
 
 extern "C" void Fuse_ShieldGuardDrain(PlayState* play) {
@@ -2065,8 +2165,8 @@ void Fuse::ProcessPendingStuns(PlayState* play) {
             request.applyNotBeforeFrame = curFrame + request.retryStepFrames;
             --request.attemptsRemaining;
             Fuse::Log(
-                "[FuseDBG] dekunut_wait victim=%p id=0x%04X reason=invincible next=%d attempts=%d\n", (void*)victim,
-                victim->id, request.applyNotBeforeFrame, request.attemptsRemaining);
+                "[FuseDBG] dekunut_wait victim=%p id=0x%04X reason=invincible next=%d\n", (void*)victim, victim->id,
+                request.applyNotBeforeFrame);
             ++i;
             continue;
         }
@@ -2079,7 +2179,9 @@ void Fuse::ProcessPendingStuns(PlayState* play) {
             continue;
         }
 
-        Fuse::Log("[FuseDBG] dekunut_apply victim=%p id=0x%04X frame=%d\n", (void*)victim, victim->id, curFrame);
+        const char* srcLabel = GetStunSourceLabel(request.itemId);
+        Fuse::Log("[FuseDBG] dekunut_apply victim=%p id=0x%04X frame=%d src=%s\n", (void*)victim, victim->id, curFrame,
+                  srcLabel);
         ApplyDekuNutStunVanilla(play, GET_PLAYER(play), victim, request.level);
         sDekuStunCooldownUntil[victim] = curFrame + kDekuStunCooldownFrames;
         removeEntry(i);
@@ -2121,7 +2223,8 @@ void Fuse::ResetSwordFreezeQueue() {
     ResetSwordFreezeQueueInternal();
 }
 
-static void ApplyMeleeHitMaterialEffects(PlayState* play, Actor* victim, MaterialId materialId, int itemId) {
+static void ApplyMeleeHitMaterialEffects(PlayState* play, Actor* victim, MaterialId materialId, int itemId,
+                                         bool allowStun) {
     if (!victim) {
         return;
     }
@@ -2132,7 +2235,7 @@ static void ApplyMeleeHitMaterialEffects(PlayState* play, Actor* victim, Materia
     }
 
     uint8_t stunLevel = 0;
-    if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Stun, &stunLevel) && stunLevel > 0) {
+    if (allowStun && HasModifier(def->modifiers, def->modifierCount, ModifierId::Stun, &stunLevel) && stunLevel > 0) {
         Fuse_EnqueuePendingStun(victim, stunLevel, materialId, itemId);
     }
 
@@ -2214,7 +2317,7 @@ void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim) {
     }
 
     const int itemId = gSaveContext.equips.buttonItems[0];
-    ApplyMeleeHitMaterialEffects(play, victim, Fuse::GetSwordMaterial(), itemId);
+    ApplyMeleeHitMaterialEffects(play, victim, Fuse::GetSwordMaterial(), itemId, true);
 }
 
 void Fuse::OnHammerMeleeHit(PlayState* play, Actor* victim) {
@@ -2222,5 +2325,5 @@ void Fuse::OnHammerMeleeHit(PlayState* play, Actor* victim) {
         return;
     }
 
-    ApplyMeleeHitMaterialEffects(play, victim, Fuse::GetHammerMaterial(), ITEM_HAMMER);
+    ApplyMeleeHitMaterialEffects(play, victim, Fuse::GetHammerMaterial(), ITEM_HAMMER, false);
 }
