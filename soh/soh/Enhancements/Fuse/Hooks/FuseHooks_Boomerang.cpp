@@ -1,3 +1,5 @@
+#include "global.h"
+
 #include "FuseHooks_Boomerang.h"
 #include "soh/Enhancements/Fuse/Fuse.h"
 #include "soh/Enhancements/Fuse/ShieldBashRules.h"
