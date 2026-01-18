@@ -46,11 +46,15 @@ static std::unordered_map<Actor*, s16> sFuseFrozenTimers;
 static std::unordered_map<Actor*, int> sFreezeAppliedFrame;
 static std::unordered_map<Actor*, int> sShatterFrame;
 static std::unordered_map<Actor*, Vec3f> sFuseFrozenPos;
-static constexpr int kDekuStunDelayFrames = 12;
+static constexpr int kDekuStunInitialDelayFrames = 4;
+static constexpr int kDekuStunRetryStepFrames = 2;
+static constexpr int kDekuStunMaxAttempts = 8;
+static constexpr int kDekuStunSwordIFrameFrames = 6;
 static constexpr int kDekuStunCooldownFrames = 90;
 static std::vector<struct PendingStunRequest> sPendingStunQueue;
 static std::unordered_map<Actor*, size_t> sPendingStunIndex;
 static std::unordered_map<Actor*, int> sDekuStunCooldownUntil;
+static std::unordered_map<Actor*, int> sDekuLastSwordHitFrame;
 
 struct SwordFreezeRequest {
     Actor* victim = nullptr;
@@ -64,6 +68,8 @@ struct PendingStunRequest {
     Actor* victim = nullptr;
     uint8_t level = 0;
     int applyNotBeforeFrame = -1;
+    int attemptsRemaining = 0;
+    int retryStepFrames = 0;
     MaterialId materialId = MaterialId::None;
     int itemId = 0;
 };
@@ -515,6 +521,7 @@ void ResetDekuStunQueueInternal() {
     sPendingStunQueue.clear();
     sPendingStunIndex.clear();
     sDekuStunCooldownUntil.clear();
+    sDekuLastSwordHitFrame.clear();
 }
 
 void EnqueueSwordFreezeRequest(PlayState* play, Actor* victim, uint8_t level) {
@@ -553,12 +560,14 @@ void Fuse_EnqueuePendingStun(Actor* victim, uint8_t level, MaterialId materialId
                   cooldownIt->second);
         return;
     }
-    const int applyNotBefore = (curFrame >= 0) ? curFrame + kDekuStunDelayFrames : kDekuStunDelayFrames;
+    const int applyNotBefore = (curFrame >= 0) ? curFrame + kDekuStunInitialDelayFrames : kDekuStunInitialDelayFrames;
     auto existing = sPendingStunIndex.find(victim);
     if (existing != sPendingStunIndex.end()) {
         PendingStunRequest& request = sPendingStunQueue[existing->second];
         request.level = level;
         request.applyNotBeforeFrame = applyNotBefore;
+        request.attemptsRemaining = kDekuStunMaxAttempts;
+        request.retryStepFrames = kDekuStunRetryStepFrames;
         request.materialId = materialId;
         request.itemId = itemId;
         Fuse::Log("[FuseDBG] dekunut_enqueue victim=%p id=0x%04X lvl=%u notBefore=%d\n", (void*)victim, victim->id,
@@ -570,6 +579,8 @@ void Fuse_EnqueuePendingStun(Actor* victim, uint8_t level, MaterialId materialId
     request.victim = victim;
     request.level = level;
     request.applyNotBeforeFrame = applyNotBefore;
+    request.attemptsRemaining = kDekuStunMaxAttempts;
+    request.retryStepFrames = kDekuStunRetryStepFrames;
     request.materialId = materialId;
     request.itemId = itemId;
     sPendingStunIndex[victim] = sPendingStunQueue.size();
@@ -2016,6 +2027,22 @@ void Fuse::ProcessPendingStuns(PlayState* play) {
         sPendingStunQueue.pop_back();
     };
 
+    auto isLikelyInvincible = [&](Actor* target, int currentFrame) {
+        if (!target) {
+            return false;
+        }
+
+        auto hitIt = sDekuLastSwordHitFrame.find(target);
+        if (hitIt != sDekuLastSwordHitFrame.end()) {
+            const int framesSinceHit = currentFrame - hitIt->second;
+            if (framesSinceHit >= 0 && framesSinceHit <= kDekuStunSwordIFrameFrames) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
     for (size_t i = 0; i < sPendingStunQueue.size();) {
         PendingStunRequest& request = sPendingStunQueue[i];
         Actor* victim = request.victim;
@@ -2023,12 +2050,23 @@ void Fuse::ProcessPendingStuns(PlayState* play) {
         if (!victim || !IsActorAliveInPlay(play, victim)) {
             if (victim) {
                 sDekuStunCooldownUntil.erase(victim);
+                sDekuLastSwordHitFrame.erase(victim);
             }
             removeEntry(i);
             continue;
         }
 
         if (curFrame < request.applyNotBeforeFrame) {
+            ++i;
+            continue;
+        }
+
+        if (isLikelyInvincible(victim, curFrame) && request.attemptsRemaining > 0) {
+            request.applyNotBeforeFrame = curFrame + request.retryStepFrames;
+            --request.attemptsRemaining;
+            Fuse::Log(
+                "[FuseDBG] dekunut_wait victim=%p id=0x%04X reason=invincible next=%d attempts=%d\n", (void*)victim,
+                victim->id, request.applyNotBeforeFrame, request.attemptsRemaining);
             ++i;
             continue;
         }
@@ -2157,6 +2195,10 @@ static void ApplyMeleeHitMaterialEffects(PlayState* play, Actor* victim, Materia
 void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim) {
     if (!Fuse::IsSwordFused()) {
         return;
+    }
+
+    if (play && victim) {
+        sDekuLastSwordHitFrame[victim] = play->gameplayFrames;
     }
 
     const MaterialId materialId = Fuse::GetSwordMaterial();
