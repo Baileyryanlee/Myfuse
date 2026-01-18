@@ -46,7 +46,8 @@ static std::unordered_map<Actor*, s16> sFuseFrozenTimers;
 static std::unordered_map<Actor*, int> sFreezeAppliedFrame;
 static std::unordered_map<Actor*, int> sShatterFrame;
 static std::unordered_map<Actor*, Vec3f> sFuseFrozenPos;
-static constexpr int kDekuStunDelayFrames = 2;
+static constexpr int kDekuStunDelayFrames = 12;
+static constexpr int kDekuStunRetryDelayFrames = 6;
 static constexpr int kDekuStunMaxTries = 12;
 static std::vector<struct PendingStunRequest> sPendingStunQueue;
 static std::unordered_map<Actor*, size_t> sPendingStunIndex;
@@ -568,7 +569,7 @@ void Fuse_EnqueuePendingStun(Actor* victim, uint8_t level, MaterialId materialId
     request.level = level;
     request.delayFrames = kDekuStunDelayFrames;
     request.triesRemaining = kDekuStunMaxTries;
-    request.applyNotBeforeFrame = applyNotBefore;
+        request.applyNotBeforeFrame = applyNotBefore;
     request.materialId = materialId;
     request.itemId = itemId;
     request.actorIdAtEnqueue = victim->id;
@@ -2044,14 +2045,26 @@ void Fuse::ProcessPendingStuns(PlayState* play) {
         }
 
         if (IsActorHitThisFrame(victim)) {
+            request.applyNotBeforeFrame = curFrame + kDekuStunDelayFrames;
             Fuse::Log("[FuseDBG] dekunut_retry victim=%p id=0x%04X reason=still_hit\n", (void*)victim, victim->id);
             ++i;
             continue;
         }
 
-        Fuse::Log("[FuseDBG] dekunut_apply victim=%p id=0x%04X lvl=%u\n", (void*)victim, victim->id,
-                  request.level);
+        const int preEffect = victim->colChkInfo.damageEffect;
+        const int preDamage = victim->colChkInfo.damage;
+        Fuse::Log("[FuseDBG] dekunut_apply victim=%p id=0x%04X frame=%d\n", (void*)victim, victim->id, curFrame);
         ApplyDekuNutStunVanilla(play, GET_PLAYER(play), victim, request.level);
+        const int postEffect = victim->colChkInfo.damageEffect;
+        const int postDamage = victim->colChkInfo.damage;
+        Fuse::Log("[FuseDBG] dekunut_postspawn victimEffect=%d victimDamage=%d\n", postEffect, postDamage);
+        if (postEffect == preEffect && postDamage == preDamage) {
+            request.applyNotBeforeFrame = curFrame + kDekuStunRetryDelayFrames;
+            request.triesRemaining--;
+            ++i;
+            continue;
+        }
+
         removeEntry(i);
     }
 }
