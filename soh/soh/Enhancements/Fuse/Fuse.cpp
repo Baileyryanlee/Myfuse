@@ -214,13 +214,10 @@ void ApplyDekuNutStunVanilla(PlayState* play, Player* player, Actor* victim, uin
     }
 }
 
-void Fuse_TriggerDekuNutAtPos(PlayState* play, const Vec3f& pos, int srcItemId) {
+void TriggerDekuNutAtPosInternal(PlayState* play, const Vec3f& pos, int srcItemId) {
     if (!play) {
         return;
     }
-
-    Fuse::Log("[FuseDBG] DekuNutAtPos: trigger frame=%d src=%s item=%d pos=(%.2f, %.2f, %.2f)\n", play->gameplayFrames,
-              GetStunSourceLabel(srcItemId), srcItemId, pos.x, pos.y, pos.z);
 
     (void)SpawnVanillaDekuNutFlash(play, pos, srcItemId);
 }
@@ -722,6 +719,17 @@ void EnqueueSwordFreezeRequest(PlayState* play, Actor* victim, uint8_t level) {
 }
 
 } // namespace
+
+void Fuse_TriggerDekuNutAtPos(PlayState* play, const Vec3f& pos, int srcItemId) {
+    if (!play) {
+        return;
+    }
+
+    Fuse::Log("[FuseDBG] DekuNutAtPos: trigger frame=%d src=%s item=%d pos=(%.2f, %.2f, %.2f)\n", play->gameplayFrames,
+              GetStunSourceLabel(srcItemId), srcItemId, pos.x, pos.y, pos.z);
+
+    TriggerDekuNutAtPosInternal(play, pos, srcItemId);
+}
 
 void Fuse_EnqueuePendingStun(Actor* victim, uint8_t level, MaterialId materialId, int itemId) {
     if (!victim || level == 0) {
