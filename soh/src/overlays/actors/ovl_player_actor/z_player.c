@@ -40,6 +40,9 @@
 #include <stdlib.h>
 #include <assert.h>
 
+extern bool Fuse_ShieldHasNegateKnockback(PlayState* play, int* outMaterialId, int* outDurabilityCur,
+                                          int* outDurabilityMax, uint8_t* outLevel);
+
 // Some player animations are played at this reduced speed, for reasons yet unclear.
 // This is called "adjusted" for now.
 #define PLAYER_ANIM_ADJUSTED_SPEED (2.0f / 3.0f)
@@ -4901,8 +4904,20 @@ s32 func_808382DC(Player* this, PlayState* play) {
 
                     if (!(this->stateFlags1 & (PLAYER_STATE1_HANGING_OFF_LEDGE | PLAYER_STATE1_CLIMBING_LEDGE |
                                                PLAYER_STATE1_CLIMBING_LADDER))) {
-                        this->linearVelocity = -18.0f;
-                        this->yaw = this->actor.shape.rot.y;
+                        int fuseMatId = 0;
+                        int fuseDurabilityCur = 0;
+                        int fuseDurabilityMax = 0;
+                        uint8_t fuseLevel = 0;
+                        if (Fuse_ShieldHasNegateKnockback(play, &fuseMatId, &fuseDurabilityCur, &fuseDurabilityMax,
+                                                          &fuseLevel)) {
+                            osSyncPrintf(
+                                "[FuseDBG] ShieldGuard: event=guard_cancel_knockback item=shield mat=%d lvl=%u "
+                                "dura=%d/%d\n",
+                                fuseMatId, fuseLevel, fuseDurabilityCur, fuseDurabilityMax);
+                        } else {
+                            this->linearVelocity = -18.0f;
+                            this->yaw = this->actor.shape.rot.y;
+                        }
                     }
                 }
 

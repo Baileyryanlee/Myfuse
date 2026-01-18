@@ -5,6 +5,9 @@ namespace {
 
 static const ModifierSpec kRockMods[] = {
     { ModifierId::Hammerize, 1 },
+    { ModifierId::Knockback, 1 },
+    { ModifierId::PoundUp, 1 },
+    { ModifierId::NegateKnockback, 1 },
 };
 
 static const ModifierSpec kDekuNutMods[] = {
@@ -17,7 +20,7 @@ static const ModifierSpec kFrozenShardMods[] = {
 
 constexpr MaterialDef kMaterialDefs[] = {
     { MaterialId::None, "None", 0, nullptr, 0 },
-    { MaterialId::Rock, "ROCK", 20, kRockMods, 1 },
+    { MaterialId::Rock, "ROCK", 10, kRockMods, 4 },
     { MaterialId::DekuNut, "Deku Nut", 5, kDekuNutMods, 1 },
     { MaterialId::FrozenShard, "Frozen Shard", 8, kFrozenShardMods, 1 },
 };
@@ -39,4 +42,3 @@ const MaterialDef* FuseMaterials::GetMaterialDefs(size_t* count) {
     }
     return kMaterialDefs;
 }
-

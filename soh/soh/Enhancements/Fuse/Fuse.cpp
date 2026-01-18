@@ -2,6 +2,7 @@
 #include "FuseMaterials.h"
 #include "FuseState.h"
 #include "soh/Enhancements/Fuse/Hooks/FuseHooks_Objects.h"
+#include "soh/Enhancements/Fuse/ShieldBashRules.h"
 #include "soh/SaveManager.h"
 
 #include <algorithm>
@@ -247,6 +248,44 @@ void ApplyIceArrowFreeze(PlayState* play, Actor* victim, uint8_t level) {
     }
 
     Fuse::Log("[FuseDBG] FreezeApply: victim=%p duration=%d mat=FrozenShard\n", (void*)victim, duration);
+}
+
+void ApplyFuseKnockback(PlayState* play, Player* player, Actor* victim, uint8_t level, const char* itemLabel,
+                        MaterialId materialId, int curDurability, int maxDurability, const char* eventLabel) {
+    if (!play || !player || !victim || level == 0) {
+        return;
+    }
+
+    if (!FuseBash_IsEnemyActor(victim)) {
+        return;
+    }
+
+    Vec3f dir = { victim->world.pos.x - player->actor.world.pos.x, 0.0f,
+                  victim->world.pos.z - player->actor.world.pos.z };
+    float distSq = (dir.x * dir.x) + (dir.z * dir.z);
+    if (distSq < 0.0001f) {
+        dir.x = 0.0f;
+        dir.z = 1.0f;
+    } else {
+        const float invLen = 1.0f / sqrtf(distSq);
+        dir.x *= invLen;
+        dir.z *= invLen;
+    }
+
+    constexpr float kBaseKnockbackSpeed = 5.0f;
+    const float speed = kBaseKnockbackSpeed * (1.0f + (0.25f * (level - 1)));
+
+    victim->velocity.x = dir.x * speed;
+    victim->velocity.z = dir.z * speed;
+    victim->speedXZ = std::max(victim->speedXZ, speed);
+
+    victim->world.rot.y = Math_Atan2S(dir.x, dir.z);
+    victim->shape.rot.y = victim->world.rot.y;
+
+    Fuse::Log("[FuseDBG] Knockback: event=%s item=%s mat=%d lvl=%u victim=%p dura=%d/%d v=(%.2f,%.2f,%.2f)\n",
+              eventLabel ? eventLabel : "hit", itemLabel ? itemLabel : "unknown", static_cast<int>(materialId),
+              static_cast<unsigned int>(level), (void*)victim, curDurability, maxDurability, victim->velocity.x,
+              victim->velocity.y, victim->velocity.z);
 }
 
 const char* RangedSlotName(RangedFuseSlot slot) {
@@ -600,10 +639,109 @@ uint16_t Fuse::GetMaterialBaseDurability(MaterialId id) {
     return def ? def->baseMaxDurability : 0;
 }
 
+extern "C" bool Fuse_ShieldHasNegateKnockback(PlayState* play, int* outMaterialId, int* outDurabilityCur,
+                                              int* outDurabilityMax, uint8_t* outLevel) {
+    if (outMaterialId) {
+        *outMaterialId = static_cast<int>(MaterialId::None);
+    }
+    if (outDurabilityCur) {
+        *outDurabilityCur = 0;
+    }
+    if (outDurabilityMax) {
+        *outDurabilityMax = 0;
+    }
+    if (outLevel) {
+        *outLevel = 0;
+    }
+
+    if (!play) {
+        return false;
+    }
+
+    const FuseSlot& slot = gFuseSave.GetActiveShieldSlot(play);
+    if (slot.materialId == MaterialId::None || slot.durabilityCur <= 0) {
+        return false;
+    }
+
+    if (outMaterialId) {
+        *outMaterialId = static_cast<int>(slot.materialId);
+    }
+    if (outDurabilityCur) {
+        *outDurabilityCur = slot.durabilityCur;
+    }
+    if (outDurabilityMax) {
+        *outDurabilityMax = slot.durabilityMax;
+    }
+
+    const MaterialDef* def = Fuse::GetMaterialDef(slot.materialId);
+    if (!def) {
+        return false;
+    }
+
+    uint8_t level = 0;
+    if (!HasModifier(def->modifiers, def->modifierCount, ModifierId::NegateKnockback, &level) || level == 0) {
+        return false;
+    }
+
+    if (outLevel) {
+        *outLevel = level;
+    }
+
+    return true;
+}
+
+void Fuse_GetRangedFuseStatus(RangedFuseSlot slot, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax) {
+    if (outMaterialId) {
+        *outMaterialId = static_cast<int>(MaterialId::None);
+    }
+    if (outDurabilityCur) {
+        *outDurabilityCur = 0;
+    }
+    if (outDurabilityMax) {
+        *outDurabilityMax = 0;
+    }
+
+    const FuseSlot* active = nullptr;
+    switch (slot) {
+        case RangedFuseSlot::Arrows:
+            active = &gFuseRuntime.GetActiveArrowsSlot(nullptr);
+            break;
+        case RangedFuseSlot::Slingshot:
+            active = &gFuseRuntime.GetActiveSlingshotSlot(nullptr);
+            break;
+        case RangedFuseSlot::Hookshot:
+            active = &gFuseRuntime.GetActiveHookshotSlot(nullptr);
+            break;
+        default:
+            break;
+    }
+
+    if (!active) {
+        return;
+    }
+
+    if (outMaterialId) {
+        *outMaterialId = static_cast<int>(active->materialId);
+    }
+    if (outDurabilityCur) {
+        *outDurabilityCur = active->durabilityCur;
+    }
+    if (outDurabilityMax) {
+        *outDurabilityMax = active->durabilityMax;
+    }
+}
+
 static int GetMaterialBaseAttackBonus(MaterialId id) {
     // Attack bonus defaults are currently implicit (zero) until defined in MaterialDef.
-    (void)id;
-    return 0;
+    switch (id) {
+        case MaterialId::Rock:
+            return 1;
+        case MaterialId::None:
+        case MaterialId::DekuNut:
+        case MaterialId::FrozenShard:
+        default:
+            return 0;
+    }
 }
 
 int Fuse::GetMaterialAttackBonus(MaterialId id) {
@@ -1853,6 +1991,18 @@ static void ApplyMeleeHitMaterialEffects(PlayState* play, Actor* victim, Materia
 void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim) {
     if (!Fuse::IsSwordFused()) {
         return;
+    }
+
+    const MaterialId materialId = Fuse::GetSwordMaterial();
+    const MaterialDef* def = Fuse::GetMaterialDef(materialId);
+    if (def) {
+        uint8_t knockbackLevel = 0;
+        if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Knockback, &knockbackLevel) &&
+            knockbackLevel > 0) {
+            Player* player = GET_PLAYER(play);
+            ApplyFuseKnockback(play, player, victim, knockbackLevel, "Sword", materialId,
+                               Fuse::GetSwordFuseDurability(), Fuse::GetSwordFuseMaxDurability(), "hit");
+        }
     }
 
     ApplyMeleeHitMaterialEffects(play, victim, Fuse::GetSwordMaterial());
