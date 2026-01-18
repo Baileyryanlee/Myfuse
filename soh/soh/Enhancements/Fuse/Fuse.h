@@ -23,6 +23,7 @@ void Fuse_ApplySavedSwordFuse(const PlayState* play, s16 savedMaterialId, s16 sa
                               bool hasSavedCurDurability, u16 savedCurDurability, s16 legacyCurDurability);
 void Fuse_WriteSwordFuseToSave(const PlayState* play);
 void Fuse_ClearSavedSwordFuse(const PlayState* play);
+void Fuse_EnqueuePendingStun(Actor* victim, uint8_t level, MaterialId materialId, int itemId);
 
 FuseWeaponView Fuse_GetEquippedSwordView(const PlayState* play);
 
@@ -38,7 +39,7 @@ void OnLoadGame(int32_t fileNum);
 void OnGameFrameUpdate(PlayState* play);
 void OnSwordMeleeHit(PlayState* play, Actor* victim);
 void OnHammerMeleeHit(PlayState* play, Actor* victim);
-void ProcessDeferredStuns(PlayState* play);
+void ProcessPendingStuns(PlayState* play);
 void ProcessDeferredSwordFreezes(PlayState* play);
 void ResetSwordFreezeQueue();
 

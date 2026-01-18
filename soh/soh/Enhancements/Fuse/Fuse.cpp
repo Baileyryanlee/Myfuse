@@ -40,20 +40,18 @@ static FuseSlot sLoadedHammerSlot;
 static std::unordered_map<MaterialId, uint16_t> sMaterialInventory;
 static bool sMaterialInventoryInitialized = false;
 static constexpr size_t kSwordFreezeQueueCount = 2;
-static constexpr size_t kDekuStunQueueCount = 2;
 static std::unordered_map<MaterialId, MaterialDebugOverride> sMaterialDebugOverrides;
 static bool sUseDebugOverrides = false;
 static std::unordered_map<Actor*, s16> sFuseFrozenTimers;
 static std::unordered_map<Actor*, int> sFreezeAppliedFrame;
 static std::unordered_map<Actor*, int> sShatterFrame;
 static std::unordered_map<Actor*, Vec3f> sFuseFrozenPos;
+static constexpr int kDekuStunDelayFrames = 2;
+static constexpr int kDekuStunMaxTries = 12;
+static std::vector<struct PendingStunRequest> sPendingStunQueue;
+static std::unordered_map<Actor*, size_t> sPendingStunIndex;
 
 struct SwordFreezeRequest {
-    Actor* victim = nullptr;
-    uint8_t level = 0;
-};
-
-struct DekuStunRequest {
     Actor* victim = nullptr;
     uint8_t level = 0;
 };
@@ -61,8 +59,16 @@ struct DekuStunRequest {
 static std::array<std::vector<SwordFreezeRequest>, kSwordFreezeQueueCount> sSwordFreezeQueues;
 static std::array<std::unordered_set<Actor*>, kSwordFreezeQueueCount> sSwordFreezeVictims;
 static std::array<int, kSwordFreezeQueueCount> sSwordFreezeQueueFrames = { -1, -1 };
-static std::array<std::vector<DekuStunRequest>, kDekuStunQueueCount> sDekuStunQueues;
-static std::array<int, kDekuStunQueueCount> sDekuStunQueueFrames = { -1, -1 };
+struct PendingStunRequest {
+    Actor* victim = nullptr;
+    uint8_t level = 0;
+    int delayFrames = kDekuStunDelayFrames;
+    int triesRemaining = kDekuStunMaxTries;
+    int applyNotBeforeFrame = -1;
+    MaterialId materialId = MaterialId::None;
+    int itemId = 0;
+    s16 actorIdAtEnqueue = 0;
+};
 
 static bool IsFuseFrozen(Actor* actor) {
     if (actor == nullptr) {
@@ -501,10 +507,8 @@ void ResetSwordFreezeQueueInternal() {
 }
 
 void ResetDekuStunQueueInternal() {
-    for (size_t i = 0; i < kDekuStunQueueCount; i++) {
-        sDekuStunQueues[i].clear();
-        sDekuStunQueueFrames[i] = -1;
-    }
+    sPendingStunQueue.clear();
+    sPendingStunIndex.clear();
 }
 
 void EnqueueSwordFreezeRequest(PlayState* play, Actor* victim, uint8_t level) {
@@ -529,25 +533,43 @@ void EnqueueSwordFreezeRequest(PlayState* play, Actor* victim, uint8_t level) {
     sSwordFreezeQueues[queueIndex].push_back({ victim, level });
 }
 
-void EnqueueDekuStunRequest(PlayState* play, Actor* victim, uint8_t level) {
-    if (!play || !victim || level == 0) {
+} // namespace
+
+void Fuse_EnqueuePendingStun(Actor* victim, uint8_t level, MaterialId materialId, int itemId) {
+    if (!victim || level == 0) {
         return;
     }
 
-    const int curFrame = play->gameplayFrames;
-    const size_t queueIndex = static_cast<size_t>(curFrame) % kDekuStunQueueCount;
-
-    if (sDekuStunQueueFrames[queueIndex] != curFrame) {
-        sDekuStunQueues[queueIndex].clear();
-        sDekuStunQueueFrames[queueIndex] = curFrame;
+    const int curFrame = GetGameplayFrame();
+    const int applyNotBefore = (curFrame >= 0) ? curFrame + kDekuStunDelayFrames : kDekuStunDelayFrames;
+    auto existing = sPendingStunIndex.find(victim);
+    if (existing != sPendingStunIndex.end()) {
+        PendingStunRequest& request = sPendingStunQueue[existing->second];
+        request.level = level;
+        request.triesRemaining = kDekuStunMaxTries;
+        request.applyNotBeforeFrame = applyNotBefore;
+        request.materialId = materialId;
+        request.itemId = itemId;
+        request.actorIdAtEnqueue = victim->id;
+        Fuse::Log("[FuseDBG] dekunut_enqueue victim=%p id=0x%04X lvl=%u notBefore=%d tries=%d\n", (void*)victim,
+                  victim->id, level, request.applyNotBeforeFrame, request.triesRemaining);
+        return;
     }
 
-    sDekuStunQueues[queueIndex].push_back({ victim, level });
-    Fuse::Log("[FuseDBG] DekuNutStun enqueue victim=%p id=0x%04X lvl=%u frame=%d\n", (void*)victim, victim->id,
-              level, curFrame);
+    PendingStunRequest request{};
+    request.victim = victim;
+    request.level = level;
+    request.delayFrames = kDekuStunDelayFrames;
+    request.triesRemaining = kDekuStunMaxTries;
+    request.applyNotBeforeFrame = applyNotBefore;
+    request.materialId = materialId;
+    request.itemId = itemId;
+    request.actorIdAtEnqueue = victim->id;
+    sPendingStunIndex[victim] = sPendingStunQueue.size();
+    sPendingStunQueue.push_back(request);
+    Fuse::Log("[FuseDBG] dekunut_enqueue victim=%p id=0x%04X lvl=%u notBefore=%d tries=%d\n", (void*)victim,
+              victim->id, level, request.applyNotBeforeFrame, request.triesRemaining);
 }
-
-} // namespace
 
 // -----------------------------------------------------------------------------
 // Logging
@@ -1948,11 +1970,19 @@ static void UpdateRangedFuseLifecycle(PlayState* play) {
 
 void Fuse::OnGameFrameUpdate(PlayState* play) {
     TickFuseFrozenTimers(play);
-    ProcessDeferredStuns(play);
+    ProcessPendingStuns(play);
     UpdateRangedFuseLifecycle(play);
 }
 
-void Fuse::ProcessDeferredStuns(PlayState* play) {
+static bool IsActorHitThisFrame(Actor* victim) {
+    if (!victim) {
+        return false;
+    }
+
+    return victim->colChkInfo.acHitEffect != 0 || victim->colChkInfo.damage != 0;
+}
+
+void Fuse::ProcessPendingStuns(PlayState* play) {
     if (!play) {
         return;
     }
@@ -1967,25 +1997,56 @@ void Fuse::ProcessDeferredStuns(PlayState* play) {
         return;
     }
 
-    const size_t applyIndex = static_cast<size_t>((curFrame + kDekuStunQueueCount - 1) % kDekuStunQueueCount);
-    const int queuedFrame = sDekuStunQueueFrames[applyIndex];
+    auto removeEntry = [](size_t index) {
+        if (index >= sPendingStunQueue.size()) {
+            return;
+        }
 
-    if (queuedFrame == -1 || queuedFrame >= curFrame) {
-        return;
-    }
+        Actor* victim = sPendingStunQueue[index].victim;
+        if (victim) {
+            sPendingStunIndex.erase(victim);
+        }
 
-    for (const auto& request : sDekuStunQueues[applyIndex]) {
-        if (!request.victim) {
+        const size_t last = sPendingStunQueue.size() - 1;
+        if (index != last) {
+            sPendingStunQueue[index] = sPendingStunQueue[last];
+            if (sPendingStunQueue[index].victim) {
+                sPendingStunIndex[sPendingStunQueue[index].victim] = index;
+            }
+        }
+        sPendingStunQueue.pop_back();
+    };
+
+    for (size_t i = 0; i < sPendingStunQueue.size();) {
+        PendingStunRequest& request = sPendingStunQueue[i];
+        Actor* victim = request.victim;
+
+        if (!victim || !IsActorAliveInPlay(play, victim)) {
+            removeEntry(i);
             continue;
         }
 
-        Fuse::Log("[FuseDBG] DekuNutStun apply   victim=%p id=0x%04X lvl=%u frame=%d\n", (void*)request.victim,
-                  request.victim->id, request.level, curFrame);
-        ApplyDekuNutStunVanilla(play, GET_PLAYER(play), request.victim, request.level);
-    }
+        if (request.triesRemaining <= 0) {
+            removeEntry(i);
+            continue;
+        }
 
-    sDekuStunQueues[applyIndex].clear();
-    sDekuStunQueueFrames[applyIndex] = -1;
+        if (curFrame < request.applyNotBeforeFrame) {
+            ++i;
+            continue;
+        }
+
+        if (IsActorHitThisFrame(victim)) {
+            Fuse::Log("[FuseDBG] dekunut_retry victim=%p id=0x%04X reason=still_hit\n", (void*)victim, victim->id);
+            ++i;
+            continue;
+        }
+
+        Fuse::Log("[FuseDBG] dekunut_apply victim=%p id=0x%04X lvl=%u\n", (void*)victim, victim->id,
+                  request.level);
+        ApplyDekuNutStunVanilla(play, GET_PLAYER(play), victim, request.level);
+        removeEntry(i);
+    }
 }
 
 void Fuse::ProcessDeferredSwordFreezes(PlayState* play) {
@@ -2023,7 +2084,7 @@ void Fuse::ResetSwordFreezeQueue() {
     ResetSwordFreezeQueueInternal();
 }
 
-static void ApplyMeleeHitMaterialEffects(PlayState* play, Actor* victim, MaterialId materialId) {
+static void ApplyMeleeHitMaterialEffects(PlayState* play, Actor* victim, MaterialId materialId, int itemId) {
     if (!victim) {
         return;
     }
@@ -2035,7 +2096,7 @@ static void ApplyMeleeHitMaterialEffects(PlayState* play, Actor* victim, Materia
 
     uint8_t stunLevel = 0;
     if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Stun, &stunLevel) && stunLevel > 0) {
-        EnqueueDekuStunRequest(play, victim, stunLevel);
+        Fuse_EnqueuePendingStun(victim, stunLevel, materialId, itemId);
     }
 
     const int frame = play ? play->gameplayFrames : -1;
@@ -2111,7 +2172,8 @@ void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim) {
         }
     }
 
-    ApplyMeleeHitMaterialEffects(play, victim, Fuse::GetSwordMaterial());
+    const int itemId = gSaveContext.equips.buttonItems[0];
+    ApplyMeleeHitMaterialEffects(play, victim, Fuse::GetSwordMaterial(), itemId);
 }
 
 void Fuse::OnHammerMeleeHit(PlayState* play, Actor* victim) {
@@ -2119,5 +2181,5 @@ void Fuse::OnHammerMeleeHit(PlayState* play, Actor* victim) {
         return;
     }
 
-    ApplyMeleeHitMaterialEffects(play, victim, Fuse::GetHammerMaterial());
+    ApplyMeleeHitMaterialEffects(play, victim, Fuse::GetHammerMaterial(), ITEM_HAMMER);
 }
