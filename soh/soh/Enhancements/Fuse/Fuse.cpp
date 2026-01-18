@@ -154,7 +154,7 @@ void AddDekuNutAmmo(int amount) {
     }
 }
 
-void Fuse_AddMaterialToInventory(MaterialId mat, int amount) {
+void Fuse_AddMaterialOrAmmo(MaterialId mat, int amount) {
     if (amount <= 0 || mat == MaterialId::None) {
         return;
     }
@@ -1937,7 +1937,11 @@ Fuse::FuseResult Fuse::TryQueueRangedFuse(RangedFuseSlot slot, MaterialId mat, c
     }
 
     if (hasPendingSwap && pendingMat != MaterialId::None) {
-        Fuse::AddMaterial(pendingMat, 1);
+        const int before = Fuse::GetMaterialCount(pendingMat);
+        Fuse_AddMaterialOrAmmo(pendingMat, 1);
+        const int after = Fuse::GetMaterialCount(pendingMat);
+        Fuse::Log("[FuseDBG] Refund mat=%d amount=1 before=%d after=%d reason=%s\n", static_cast<int>(pendingMat),
+                  before, after, "SwapRefund");
         Fuse::Log("[FuseDBG] RangedRefundQueued slot=%s mat=%d amount=1 reason=%s\n", RangedSlotName(slot),
                   static_cast<int>(pendingMat), "SwapRefund");
     }
@@ -1965,13 +1969,19 @@ void Fuse::ClearQueuedRangedFuse_NoRefund(RangedFuseSlot slot, const char* reaso
         return;
     }
 
-    state.pendingRefundMaterial = state.materialId;
-    state.pendingRefundFrame = GetGameplayFrame();
+    const MaterialId mat = state.materialId;
+    const int before = Fuse::GetMaterialCount(mat);
+    Fuse_AddMaterialOrAmmo(mat, 1);
+    const int after = Fuse::GetMaterialCount(mat);
+    Fuse::Log("[FuseDBG] Refund mat=%d amount=1 before=%d after=%d reason=%s\n", static_cast<int>(mat), before, after,
+              reason ? reason : "None");
+    state.pendingRefundMaterial = MaterialId::None;
+    state.pendingRefundFrame = -1;
     state.ResetToUnfused();
     state.inFlight = false;
     state.hadSuccess = false;
 
-    LogRangedEvent("RangedClear", slot, state.pendingRefundMaterial, reason);
+    LogRangedEvent("RangedClear", slot, mat, reason);
 }
 
 void Fuse::CommitQueuedRangedFuse(RangedFuseSlot slot, const char* reason) {
@@ -2007,7 +2017,11 @@ void Fuse::CancelQueuedRangedFuse_Refund(RangedFuseSlot slot, const char* reason
     }
 
     const MaterialId mat = state.materialId;
-    Fuse::AddMaterial(mat, 1);
+    const int before = Fuse::GetMaterialCount(mat);
+    Fuse_AddMaterialOrAmmo(mat, 1);
+    const int after = Fuse::GetMaterialCount(mat);
+    Fuse::Log("[FuseDBG] Refund mat=%d amount=1 before=%d after=%d reason=%s\n", static_cast<int>(mat), before, after,
+              reason ? reason : "None");
     state.ResetToUnfused();
     state.inFlight = false;
     state.hadSuccess = false;
