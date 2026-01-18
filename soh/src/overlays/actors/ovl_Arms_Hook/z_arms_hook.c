@@ -178,6 +178,7 @@ void ArmsHook_Shoot(ArmsHook* this, PlayState* play) {
         touchedActor = this->collider.base.at;
         if ((touchedActor != NULL) && (touchedActor->category == ACTORCAT_ENEMY)) {
             FuseHooks_OnHookshotEnemyHit(play, touchedActor);
+            Fuse_OnRangedHitActor(play, RANGED_FUSE_SLOT_HOOKSHOT, touchedActor);
         }
         if ((touchedActor->update != NULL) &&
             (touchedActor->flags & (ACTOR_FLAG_HOOKSHOT_PULLS_ACTOR | ACTOR_FLAG_HOOKSHOT_PULLS_PLAYER))) {

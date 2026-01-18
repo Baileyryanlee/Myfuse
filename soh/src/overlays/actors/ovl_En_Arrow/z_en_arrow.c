@@ -324,7 +324,7 @@ void EnArrow_Fly(EnArrow* this, PlayState* play) {
 
                 hitActor = this->collider.base.at;
                 if (hitActor != NULL) {
-                    FuseHooks_OnRangedProjectileHit(play, hitActor, true);
+                    Fuse_OnRangedHitActor(play, RANGED_FUSE_SLOT_SLINGSHOT, hitActor);
                 }
             }
 
@@ -346,7 +346,7 @@ void EnArrow_Fly(EnArrow* this, PlayState* play) {
             if (atTouched && (this->collider.info.atHitInfo->elemType != ELEMTYPE_UNK4)) {
                 hitActor = this->collider.base.at;
                 if (hitActor != NULL) {
-                    FuseHooks_OnRangedProjectileHit(play, hitActor, false);
+                    Fuse_OnRangedHitActor(play, RANGED_FUSE_SLOT_ARROWS, hitActor);
                 }
 
                 if ((hitActor->update != NULL) && (!(this->collider.base.atFlags & AT_BOUNCED)) &&

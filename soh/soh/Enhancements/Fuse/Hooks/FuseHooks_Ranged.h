@@ -6,6 +6,13 @@
 extern "C" {
 #endif
 
+	typedef enum RangedFuseSlotId {
+		RANGED_FUSE_SLOT_ARROWS = 0,
+		RANGED_FUSE_SLOT_SLINGSHOT = 1,
+		RANGED_FUSE_SLOT_HOOKSHOT = 2,
+	} RangedFuseSlotId;
+
+	void Fuse_OnRangedHitActor(struct PlayState* play, RangedFuseSlotId slot, struct Actor* victim);
 	void FuseHooks_OnArrowProjectileFired(struct PlayState* play, int32_t isSeed);
 	void FuseHooks_OnRangedProjectileHit(struct PlayState* play, struct Actor* victim, int32_t isSeed);
 	void FuseHooks_OnHookshotShotStarted(PlayState* play);
