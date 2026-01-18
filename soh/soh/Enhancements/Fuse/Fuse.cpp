@@ -4,6 +4,7 @@
 #include "soh/Enhancements/Fuse/Hooks/FuseHooks_Objects.h"
 #include "soh/Enhancements/Fuse/ShieldBashRules.h"
 #include "soh/SaveManager.h"
+#include "libultraship/bridge/consolevariablebridge.h"
 
 #include <algorithm>
 #include <cassert>
@@ -196,8 +197,8 @@ void ApplyDekuNutStunVanilla(PlayState* play, Player* player, Actor* victim, uin
 
     Vec3f spawnPos = victim->world.pos;
     Fuse::Log("[FuseDBG] DekuNutVanilla: trigger frame=%d victim=%p params=%d radius=%.2f pos=(%.2f, %.2f, %.2f)\n",
-              play->gameplayFrames, (void*)victim, kVanillaDekuNutParams, kVanillaDekuNutRadius, spawnPos.x,
-              spawnPos.y, spawnPos.z);
+              play->gameplayFrames, (void*)victim, kVanillaDekuNutParams, kVanillaDekuNutRadius, spawnPos.x, spawnPos.y,
+              spawnPos.z);
     Fuse::Log("[FuseMVP] DekuNut stun: using vanilla nut effect frame=%d victim=%p\n", play->gameplayFrames,
               (void*)victim);
 
@@ -217,8 +218,8 @@ void Fuse_TriggerDekuNutAtPos(PlayState* play, const Vec3f& pos, int srcItemId) 
         return;
     }
 
-    Fuse::Log("[FuseDBG] DekuNutAtPos: trigger frame=%d src=%s item=%d pos=(%.2f, %.2f, %.2f)\n",
-              play->gameplayFrames, GetStunSourceLabel(srcItemId), srcItemId, pos.x, pos.y, pos.z);
+    Fuse::Log("[FuseDBG] DekuNutAtPos: trigger frame=%d src=%s item=%d pos=(%.2f, %.2f, %.2f)\n", play->gameplayFrames,
+              GetStunSourceLabel(srcItemId), srcItemId, pos.x, pos.y, pos.z);
 
     Actor* flashActor = SpawnVanillaDekuNutFlash(play, pos, srcItemId);
     if (flashActor) {
@@ -1002,8 +1003,7 @@ extern "C" bool Fuse_ShieldHasNegateKnockback(PlayState* play, int* outMaterialI
 
 extern "C" bool Fuse_ShieldHasStun(PlayState* play, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax,
                                    uint8_t* outLevel) {
-    return Fuse_ShieldHasModifier(play, ModifierId::Stun, outMaterialId, outDurabilityCur, outDurabilityMax,
-                                  outLevel);
+    return Fuse_ShieldHasModifier(play, ModifierId::Stun, outMaterialId, outDurabilityCur, outDurabilityMax, outLevel);
 }
 
 extern "C" bool Fuse_ShieldHasMegaStun(PlayState* play, int* outMaterialId, int* outDurabilityCur,
@@ -1645,9 +1645,9 @@ void Fuse::FuseArrowsWithMaterial(MaterialId id, uint16_t maxDurability, bool in
     DebugAssertMaterialId(id);
 #endif
 
-    const int newCur =
-        initializeCurrentDurability ? static_cast<int>(maxDurability) : std::clamp<int>(slot.durabilityCur, 0,
-                                                                                        static_cast<int>(maxDurability));
+    const int newCur = initializeCurrentDurability
+                           ? static_cast<int>(maxDurability)
+                           : std::clamp<int>(slot.durabilityCur, 0, static_cast<int>(maxDurability));
 #ifndef NDEBUG
     DebugAssertDurabilityValues(newCur, maxDurability);
 #endif
@@ -1677,9 +1677,9 @@ void Fuse::FuseSlingshotWithMaterial(MaterialId id, uint16_t maxDurability, bool
     DebugAssertMaterialId(id);
 #endif
 
-    const int newCur =
-        initializeCurrentDurability ? static_cast<int>(maxDurability) : std::clamp<int>(slot.durabilityCur, 0,
-                                                                                        static_cast<int>(maxDurability));
+    const int newCur = initializeCurrentDurability
+                           ? static_cast<int>(maxDurability)
+                           : std::clamp<int>(slot.durabilityCur, 0, static_cast<int>(maxDurability));
 #ifndef NDEBUG
     DebugAssertDurabilityValues(newCur, maxDurability);
 #endif
@@ -1709,9 +1709,9 @@ void Fuse::FuseHookshotWithMaterial(MaterialId id, uint16_t maxDurability, bool 
     DebugAssertMaterialId(id);
 #endif
 
-    const int newCur =
-        initializeCurrentDurability ? static_cast<int>(maxDurability) : std::clamp<int>(slot.durabilityCur, 0,
-                                                                                        static_cast<int>(maxDurability));
+    const int newCur = initializeCurrentDurability
+                           ? static_cast<int>(maxDurability)
+                           : std::clamp<int>(slot.durabilityCur, 0, static_cast<int>(maxDurability));
 #ifndef NDEBUG
     DebugAssertDurabilityValues(newCur, maxDurability);
 #endif
@@ -1990,8 +1990,8 @@ void Fuse::CommitQueuedRangedFuse(RangedFuseSlot slot, const char* reason) {
     state.hadSuccess = true;
     state.pendingRefundMaterial = MaterialId::None;
     state.pendingRefundFrame = -1;
-    Fuse::Log("[FuseDBG] RangedCommitActive slot=%s mat=%d dura=%d/%d\n", RangedSlotName(slot),
-              static_cast<int>(mat), active.durabilityCur, active.durabilityMax);
+    Fuse::Log("[FuseDBG] RangedCommitActive slot=%s mat=%d dura=%d/%d\n", RangedSlotName(slot), static_cast<int>(mat),
+              active.durabilityCur, active.durabilityMax);
     LogRangedEvent("RangedCommit", slot, mat, reason);
 }
 
@@ -2350,9 +2350,8 @@ void Fuse::ProcessPendingStuns(PlayState* play) {
         if (isLikelyInvincible(victim, curFrame) && request.attemptsRemaining > 0) {
             request.applyNotBeforeFrame = curFrame + request.retryStepFrames;
             --request.attemptsRemaining;
-            Fuse::Log(
-                "[FuseDBG] dekunut_wait victim=%p id=0x%04X reason=invincible next=%d\n", (void*)victim, victim->id,
-                request.applyNotBeforeFrame);
+            Fuse::Log("[FuseDBG] dekunut_wait victim=%p id=0x%04X reason=invincible next=%d\n", (void*)victim,
+                      victim->id, request.applyNotBeforeFrame);
             ++i;
             continue;
         }
