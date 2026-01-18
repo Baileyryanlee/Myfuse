@@ -40,6 +40,7 @@ static FuseSlot sLoadedHammerSlot;
 static std::unordered_map<MaterialId, uint16_t> sMaterialInventory;
 static bool sMaterialInventoryInitialized = false;
 static constexpr size_t kSwordFreezeQueueCount = 2;
+static constexpr size_t kDekuStunQueueCount = 2;
 static std::unordered_map<MaterialId, MaterialDebugOverride> sMaterialDebugOverrides;
 static bool sUseDebugOverrides = false;
 static std::unordered_map<Actor*, s16> sFuseFrozenTimers;
@@ -52,9 +53,16 @@ struct SwordFreezeRequest {
     uint8_t level = 0;
 };
 
+struct DekuStunRequest {
+    Actor* victim = nullptr;
+    uint8_t level = 0;
+};
+
 static std::array<std::vector<SwordFreezeRequest>, kSwordFreezeQueueCount> sSwordFreezeQueues;
 static std::array<std::unordered_set<Actor*>, kSwordFreezeQueueCount> sSwordFreezeVictims;
 static std::array<int, kSwordFreezeQueueCount> sSwordFreezeQueueFrames = { -1, -1 };
+static std::array<std::vector<DekuStunRequest>, kDekuStunQueueCount> sDekuStunQueues;
+static std::array<int, kDekuStunQueueCount> sDekuStunQueueFrames = { -1, -1 };
 
 static bool IsFuseFrozen(Actor* actor) {
     if (actor == nullptr) {
@@ -492,6 +500,13 @@ void ResetSwordFreezeQueueInternal() {
     }
 }
 
+void ResetDekuStunQueueInternal() {
+    for (size_t i = 0; i < kDekuStunQueueCount; i++) {
+        sDekuStunQueues[i].clear();
+        sDekuStunQueueFrames[i] = -1;
+    }
+}
+
 void EnqueueSwordFreezeRequest(PlayState* play, Actor* victim, uint8_t level) {
     if (!play || !victim || level == 0) {
         return;
@@ -512,6 +527,24 @@ void EnqueueSwordFreezeRequest(PlayState* play, Actor* victim, uint8_t level) {
 
     sSwordFreezeVictims[queueIndex].insert(victim);
     sSwordFreezeQueues[queueIndex].push_back({ victim, level });
+}
+
+void EnqueueDekuStunRequest(PlayState* play, Actor* victim, uint8_t level) {
+    if (!play || !victim || level == 0) {
+        return;
+    }
+
+    const int curFrame = play->gameplayFrames;
+    const size_t queueIndex = static_cast<size_t>(curFrame) % kDekuStunQueueCount;
+
+    if (sDekuStunQueueFrames[queueIndex] != curFrame) {
+        sDekuStunQueues[queueIndex].clear();
+        sDekuStunQueueFrames[queueIndex] = curFrame;
+    }
+
+    sDekuStunQueues[queueIndex].push_back({ victim, level });
+    Fuse::Log("[FuseDBG] DekuNutStun enqueue victim=%p id=0x%04X lvl=%u frame=%d\n", (void*)victim, victim->id,
+              level, curFrame);
 }
 
 } // namespace
@@ -1842,6 +1875,7 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
     }
 
     ResetSwordFreezeQueueInternal();
+    ResetDekuStunQueueInternal();
     sFuseFrozenTimers.clear();
     sFreezeAppliedFrame.clear();
     sShatterFrame.clear();
@@ -1914,7 +1948,44 @@ static void UpdateRangedFuseLifecycle(PlayState* play) {
 
 void Fuse::OnGameFrameUpdate(PlayState* play) {
     TickFuseFrozenTimers(play);
+    ProcessDeferredStuns(play);
     UpdateRangedFuseLifecycle(play);
+}
+
+void Fuse::ProcessDeferredStuns(PlayState* play) {
+    if (!play) {
+        return;
+    }
+
+    if (!Fuse::IsEnabled()) {
+        ResetDekuStunQueueInternal();
+        return;
+    }
+
+    const int curFrame = play->gameplayFrames;
+    if (curFrame < 0) {
+        return;
+    }
+
+    const size_t applyIndex = static_cast<size_t>((curFrame + kDekuStunQueueCount - 1) % kDekuStunQueueCount);
+    const int queuedFrame = sDekuStunQueueFrames[applyIndex];
+
+    if (queuedFrame == -1 || queuedFrame >= curFrame) {
+        return;
+    }
+
+    for (const auto& request : sDekuStunQueues[applyIndex]) {
+        if (!request.victim) {
+            continue;
+        }
+
+        Fuse::Log("[FuseDBG] DekuNutStun apply   victim=%p id=0x%04X lvl=%u frame=%d\n", (void*)request.victim,
+                  request.victim->id, request.level, curFrame);
+        ApplyDekuNutStunVanilla(play, GET_PLAYER(play), request.victim, request.level);
+    }
+
+    sDekuStunQueues[applyIndex].clear();
+    sDekuStunQueueFrames[applyIndex] = -1;
 }
 
 void Fuse::ProcessDeferredSwordFreezes(PlayState* play) {
@@ -1964,7 +2035,7 @@ static void ApplyMeleeHitMaterialEffects(PlayState* play, Actor* victim, Materia
 
     uint8_t stunLevel = 0;
     if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Stun, &stunLevel) && stunLevel > 0) {
-        ApplyDekuNutStunVanilla(play, GET_PLAYER(play), victim, stunLevel);
+        EnqueueDekuStunRequest(play, victim, stunLevel);
     }
 
     const int frame = play ? play->gameplayFrames : -1;
