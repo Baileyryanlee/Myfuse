@@ -65,7 +65,7 @@ void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Actor* victim
 
     uint8_t stunLevel = 0;
     if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Stun, &stunLevel) && stunLevel > 0) {
-        Fuse_EnqueuePendingStun(victim, 1, materialId, RangedSlotItemId(slot));
+        Fuse_TriggerDekuNutAtPos(play, victim->world.pos, RangedSlotItemId(slot));
     }
 }
 
