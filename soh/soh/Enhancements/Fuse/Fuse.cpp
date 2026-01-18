@@ -127,13 +127,17 @@ bool ConsumeDekuNutAmmo(int amount) {
     return true;
 }
 
-Actor* SpawnDekuNutFlash(PlayState* play, const Vec3f& pos) {
+constexpr s16 kVanillaDekuNutParams = 0;
+constexpr float kVanillaDekuNutRadius = 200.0f;
+
+Actor* SpawnVanillaDekuNutFlash(PlayState* play, const Vec3f& pos) {
     if (!play) {
         return nullptr;
     }
 
     iREG(50) = -1;
-    return Actor_Spawn(&play->actorCtx, play, ACTOR_EN_M_FIRE1, pos.x, pos.y, pos.z, 0, 0, 0, 0, true);
+    return Actor_Spawn(&play->actorCtx, play, ACTOR_EN_M_FIRE1, pos.x, pos.y, pos.z, 0, 0, 0, kVanillaDekuNutParams,
+                       true);
 }
 
 void ApplyDekuNutStunVanilla(PlayState* play, Player* player, Actor* victim, uint8_t level) {
@@ -144,10 +148,13 @@ void ApplyDekuNutStunVanilla(PlayState* play, Player* player, Actor* victim, uin
     }
 
     Vec3f spawnPos = victim->world.pos;
+    Fuse::Log("[FuseDBG] DekuNutVanilla: trigger frame=%d victim=%p params=%d radius=%.2f pos=(%.2f, %.2f, %.2f)\n",
+              play->gameplayFrames, (void*)victim, kVanillaDekuNutParams, kVanillaDekuNutRadius, spawnPos.x,
+              spawnPos.y, spawnPos.z);
     Fuse::Log("[FuseMVP] DekuNut stun: using vanilla nut effect frame=%d victim=%p\n", play->gameplayFrames,
               (void*)victim);
 
-    Actor* flashActor = SpawnDekuNutFlash(play, spawnPos);
+    Actor* flashActor = SpawnVanillaDekuNutFlash(play, spawnPos);
 
     if (flashActor) {
         Fuse::Log("[FuseMVP] DekuNut stun: spawned actor id=0x%04X ptr=%p\n", flashActor->id, (void*)flashActor);
