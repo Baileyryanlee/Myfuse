@@ -2307,13 +2307,12 @@ static void UpdateRangedFuseLifecycle(PlayState* play) {
         RangedFuseSlot previousSlot = RangedFuseSlot::Arrows;
         if (HeldItemActionToSlot(gFuseRuntime.lastHeldItemAction, &previousSlot)) {
             RangedFuseState& state = GetRangedQueued(previousSlot);
-            if (state.materialId != MaterialId::None &&
-                !(previousSlot == RangedFuseSlot::Hookshot && state.inFlight)) {
-                if (state.hitResolved) {
-                    continue;
-                }
-                if (!aiming || aimingSlot != previousSlot) {
-                    Fuse::CancelQueuedRangedFuse_Refund(previousSlot, "HeldItemSwitch");
+            if (state.materialId != MaterialId::None && !(previousSlot == RangedFuseSlot::Hookshot && state.inFlight)) {
+                // If the slot already resolved via a successful hit, don't allow HeldItemSwitch cancel/refund logic.
+                if (!state.hitResolved) {
+                    if (!aiming || aimingSlot != previousSlot) {
+                        Fuse::CancelQueuedRangedFuse_Refund(previousSlot, "HeldItemSwitch");
+                    }
                 }
             }
         }
