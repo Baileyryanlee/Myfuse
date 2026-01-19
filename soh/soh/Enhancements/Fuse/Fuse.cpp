@@ -769,7 +769,7 @@ bool EnqueueSwordFreezeRequest(PlayState* play, Actor* victim, uint8_t level) {
     return true;
 }
 
-void Fuse::EnqueueFreezeRequest(PlayState* play, Actor* victim, uint8_t level, const char* srcLabel,
+void QueueSwordFreeze(PlayState* play, Actor* victim, uint8_t level, const char* srcLabel,
                                 const char* slotLabel, MaterialId materialId) {
     if (!play || !victim || level == 0) {
         return;
