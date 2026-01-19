@@ -68,6 +68,11 @@ void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Actor* victim
         Fuse_TriggerDekuNutAtPos(play, victim->world.pos, RangedSlotItemId(slot));
     }
 
+    uint8_t freezeLevel = 0;
+    if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Freeze, &freezeLevel) && freezeLevel > 0) {
+        Fuse::EnqueueFreezeRequest(play, victim, freezeLevel, "ranged", RangedSlotLabel(slot), materialId);
+    }
+
     Fuse::MarkRangedHitResolved(static_cast<RangedFuseSlot>(slot), "HitSuccess");
     Fuse::ClearActiveRangedFuse(static_cast<RangedFuseSlot>(slot), "HitSuccess");
 }

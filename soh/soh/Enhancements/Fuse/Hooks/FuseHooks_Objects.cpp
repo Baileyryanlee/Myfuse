@@ -380,7 +380,8 @@ extern "C" void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollid
         Fuse::SetHammerDrainedThisSwing(true);
     }
 
-    if (victimActor && victimActor->freezeTimer > 0 && victimPtr && gSwordATVictimCooldown.count(victimPtr) == 0) {
+    if (victimActor && victimActor->freezeTimer > 0 && victimPtr && gSwordATVictimCooldown.count(victimPtr) == 0 &&
+        !Fuse::IsFuseFrozen(victimActor)) {
         int baseDamage = 0;
 
         if (atInfo) {

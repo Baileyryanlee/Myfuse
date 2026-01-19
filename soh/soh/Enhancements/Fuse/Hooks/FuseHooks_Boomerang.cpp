@@ -61,9 +61,11 @@ extern "C" void FuseHooks_OnBoomerangHitActor(PlayState* play, Actor* victim) {
         const MaterialDef* def = Fuse::GetMaterialDef(materialId);
         uint8_t knockbackLevel = 0;
         uint8_t stunLevel = 0;
+        uint8_t freezeLevel = 0;
         if (def) {
             HasModifier(def->modifiers, def->modifierCount, ModifierId::Knockback, &knockbackLevel);
             HasModifier(def->modifiers, def->modifierCount, ModifierId::Stun, &stunLevel);
+            HasModifier(def->modifiers, def->modifierCount, ModifierId::Freeze, &freezeLevel);
         }
 
         Fuse::Log("[FuseDBG] BoomerangHit: item=boomerang mat=%d lvl=%u victim=%p dura=%d/%d event=hit\n",
@@ -77,6 +79,10 @@ extern "C" void FuseHooks_OnBoomerangHitActor(PlayState* play, Actor* victim) {
 
         if (def && stunLevel > 0 && FuseBash_IsEnemyActor(victim)) {
             Fuse_EnqueuePendingStun(victim, stunLevel, materialId, ITEM_BOOMERANG);
+        }
+
+        if (def && freezeLevel > 0) {
+            Fuse::EnqueueFreezeRequest(play, victim, freezeLevel, "boomerang", "Boomerang", materialId);
         }
     }
 
