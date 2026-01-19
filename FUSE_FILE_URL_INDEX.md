@@ -198,6 +198,7 @@
 - [soh/soh/Enhancements/randomizer/settings.cpp](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/soh/Enhancements/randomizer/settings.cpp)
 - [soh/soh/GbiWrap.cpp](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/soh/GbiWrap.cpp)
 - [soh/soh/Network/Anchor/Anchor.cpp](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/soh/Network/Anchor/Anchor.cpp)
+
 - [soh/soh/Network/Anchor/DummyPlayer.cpp](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/soh/Network/Anchor/DummyPlayer.cpp)
 - [soh/soh/Network/CrowdControl/CrowdControl.cpp](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/soh/Network/CrowdControl/CrowdControl.cpp)
 - [soh/soh/Network/CrowdControl/ShipOfHarkinian.cs](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/soh/Network/CrowdControl/ShipOfHarkinian.cs)
@@ -224,3 +225,48 @@
 - [soh/soh/resource/type/scenecommand/SetCollisionHeader.cpp](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/soh/resource/type/scenecommand/SetCollisionHeader.cpp)
 - [soh/soh/resource/type/scenecommand/SetCollisionHeader.h](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/soh/resource/type/scenecommand/SetCollisionHeader.h)
 - [soh/soh/z_scene_otr.cpp](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/soh/z_scene_otr.cpp)
+
+## SoH Overlay Touchpoints (misc + actors)
+
+### overlays/misc (Fuse-relevant)
+_No fuse-relevant matches found in overlays/misc from the keyword scan._
+
+### overlays/actors (Fuse-relevant)
+- [soh/src/overlays/actors/ovl_Arms_Hook/z_arms_hook.c](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_Arms_Hook/z_arms_hook.c)
+- [soh/src/overlays/actors/ovl_Arms_Hook/z_arms_hook.h](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_Arms_Hook/z_arms_hook.h)
+- [soh/src/overlays/actors/ovl_En_Arrow/z_en_arrow.c](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_En_Arrow/z_en_arrow.c)
+- [soh/src/overlays/actors/ovl_En_Arrow/z_en_arrow.h](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_En_Arrow/z_en_arrow.h)
+- [soh/src/overlays/actors/ovl_Arrow_Fire/z_arrow_fire.c](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_Arrow_Fire/z_arrow_fire.c)
+- [soh/src/overlays/actors/ovl_Arrow_Fire/z_arrow_fire.h](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_Arrow_Fire/z_arrow_fire.h)
+- [soh/src/overlays/actors/ovl_Arrow_Ice/z_arrow_ice.c](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_Arrow_Ice/z_arrow_ice.c)
+- [soh/src/overlays/actors/ovl_Arrow_Ice/z_arrow_ice.h](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_Arrow_Ice/z_arrow_ice.h)
+- [soh/src/overlays/actors/ovl_Arrow_Light/z_arrow_light.c](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_Arrow_Light/z_arrow_light.c)
+- [soh/src/overlays/actors/ovl_Arrow_Light/z_arrow_light.h](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_Arrow_Light/z_arrow_light.h)
+- [soh/src/overlays/actors/ovl_En_Boom/z_en_boom.c](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_En_Boom/z_en_boom.c)
+- [soh/src/overlays/actors/ovl_En_Boom/z_en_boom.h](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_En_Boom/z_en_boom.h)
+- [soh/src/overlays/actors/ovl_En_Bom/z_en_bom.c](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_En_Bom/z_en_bom.c)
+- [soh/src/overlays/actors/ovl_En_Bom/z_en_bom.h](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_En_Bom/z_en_bom.h)
+- [soh/src/overlays/actors/ovl_En_Bombf/z_en_bombf.c](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_En_Bombf/z_en_bombf.c)
+- [soh/src/overlays/actors/ovl_En_Bombf/z_en_bombf.h](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_En_Bombf/z_en_bombf.h)
+- [soh/src/overlays/actors/ovl_En_Bom_Chu/z_en_bom_chu.c](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_En_Bom_Chu/z_en_bom_chu.c)
+- [soh/src/overlays/actors/ovl_En_Bom_Chu/z_en_bom_chu.h](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_En_Bom_Chu/z_en_bom_chu.h)
+- [soh/src/overlays/actors/ovl_En_Dekunuts/z_en_dekunuts.c](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_En_Dekunuts/z_en_dekunuts.c)
+- [soh/src/overlays/actors/ovl_En_Dekunuts/z_en_dekunuts.h](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_En_Dekunuts/z_en_dekunuts.h)
+- [soh/src/overlays/actors/ovl_En_Dodongo/z_en_dodongo.c](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_En_Dodongo/z_en_dodongo.c)
+- [soh/src/overlays/actors/ovl_En_Dodongo/z_en_dodongo.h](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_En_Dodongo/z_en_dodongo.h)
+- [soh/src/overlays/actors/ovl_En_Hintnuts/z_en_hintnuts.c](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_En_Hintnuts/z_en_hintnuts.c)
+- [soh/src/overlays/actors/ovl_En_Hintnuts/z_en_hintnuts.h](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_En_Hintnuts/z_en_hintnuts.h)
+- [soh/src/overlays/actors/ovl_En_M_Fire1/z_en_m_fire1.c](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_En_M_Fire1/z_en_m_fire1.c)
+- [soh/src/overlays/actors/ovl_En_M_Fire1/z_en_m_fire1.h](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_En_M_Fire1/z_en_m_fire1.h)
+- [soh/src/overlays/actors/ovl_En_Nutsball/z_en_nutsball.c](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_En_Nutsball/z_en_nutsball.c)
+- [soh/src/overlays/actors/ovl_En_Nutsball/z_en_nutsball.h](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_En_Nutsball/z_en_nutsball.h)
+- [soh/src/overlays/actors/ovl_En_Sb/z_en_sb.c](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_En_Sb/z_en_sb.c)
+- [soh/src/overlays/actors/ovl_En_Sb/z_en_sb.h](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_En_Sb/z_en_sb.h)
+- [soh/src/overlays/actors/ovl_Shot_Sun/z_shot_sun.c](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_Shot_Sun/z_shot_sun.c)
+- [soh/src/overlays/actors/ovl_Shot_Sun/z_shot_sun.h](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_Shot_Sun/z_shot_sun.h)
+- [soh/src/overlays/actors/ovl_player_actor/z_player.c](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/src/overlays/actors/ovl_player_actor/z_player.c)
+
+#### Full overlay directories (unfiltered)
+If you want exhaustive lists later, add a link to the directory tree pages (tree links are okay ONLY in this fallback note).
+- https://github.com/Baileyryanlee/Myfuse/tree/main/soh/src/overlays/misc
+- https://github.com/Baileyryanlee/Myfuse/tree/main/soh/src/overlays/actors
