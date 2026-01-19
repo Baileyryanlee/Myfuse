@@ -361,7 +361,8 @@ void ApplyIceArrowFreeze(PlayState* play, Actor* victim, uint8_t level) {
     // Apply the same immobilization and visual feedback that Ice Arrows use
     sFuseFrozenTimers[victim] = std::max<s16>(sFuseFrozenTimers[victim], duration);
     Actor_SetColorFilter(victim, kIceColorFlagBlue, kNeutralColorIntensity, 0, duration);
-    const bool isAirborne = (victim->bgCheckFlags & BGCHECKFLAG_GROUND_TOUCH) == 0;
+    static constexpr uint16_t kBgGroundStanding = 0x0001;
+    const bool isAirborne = (victim->bgCheckFlags & kBgGroundStanding) == 0;
     sFuseFrozenPinned[victim] = !isAirborne;
     if (isAirborne) {
         victim->velocity.x = 0.0f;
@@ -770,8 +771,8 @@ bool EnqueueSwordFreezeRequest(PlayState* play, Actor* victim, uint8_t level) {
     return true;
 }
 
-void QueueSwordFreeze(PlayState* play, Actor* victim, uint8_t level, const char* srcLabel,
-                                const char* slotLabel, MaterialId materialId) {
+void QueueSwordFreezeInternal(PlayState* play, Actor* victim, uint8_t level, const char* srcLabel,
+                              const char* slotLabel, MaterialId materialId) {
     if (!play || !victim || level == 0) {
         return;
     }
@@ -786,6 +787,11 @@ void QueueSwordFreeze(PlayState* play, Actor* victim, uint8_t level, const char*
 }
 
 } // namespace
+
+void Fuse::QueueSwordFreeze(PlayState* play, Actor* victim, uint8_t level, const char* srcLabel,
+                            const char* slotLabel, MaterialId materialId) {
+    QueueSwordFreezeInternal(play, victim, level, srcLabel, slotLabel, materialId);
+}
 
 void Fuse_TriggerDekuNutAtPos(PlayState* play, const Vec3f& pos, int srcItemId) {
     if (!play) {

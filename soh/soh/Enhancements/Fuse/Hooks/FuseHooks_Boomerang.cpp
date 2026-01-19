@@ -82,7 +82,7 @@ extern "C" void FuseHooks_OnBoomerangHitActor(PlayState* play, Actor* victim) {
         }
 
         if (def && freezeLevel > 0) {
-            Fuse::EnqueueFreezeRequest(play, victim, freezeLevel, "boomerang", "Boomerang", materialId);
+            Fuse::QueueSwordFreeze(play, victim, freezeLevel, "boomerang", "Boomerang", materialId);
         }
     }
 

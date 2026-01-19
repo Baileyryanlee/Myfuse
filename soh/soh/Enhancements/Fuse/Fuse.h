@@ -46,8 +46,8 @@ void OnHammerMeleeHit(PlayState* play, Actor* victim);
 void ProcessPendingStuns(PlayState* play);
 void ProcessDeferredSwordFreezes(PlayState* play);
 void ResetSwordFreezeQueue();
-void EnqueueFreezeRequest(PlayState* play, Actor* victim, uint8_t level, const char* srcLabel, const char* slotLabel,
-                          MaterialId materialId);
+void QueueSwordFreeze(PlayState* play, Actor* victim, uint8_t level, const char* srcLabel, const char* slotLabel,
+                      MaterialId materialId);
 bool IsFuseFrozen(Actor* actor);
 
 // Core state

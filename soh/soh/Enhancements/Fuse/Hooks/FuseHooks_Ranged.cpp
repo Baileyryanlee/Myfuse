@@ -35,7 +35,7 @@ static int RangedSlotItemId(RangedFuseSlotId slot) {
     }
 }
 
-void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Actor* victim) {
+extern "C" void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Actor* victim) {
     if (!play || !victim) {
         return;
     }
@@ -70,7 +70,7 @@ void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Actor* victim
 
     uint8_t freezeLevel = 0;
     if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Freeze, &freezeLevel) && freezeLevel > 0) {
-        Fuse::EnqueueFreezeRequest(play, victim, freezeLevel, "ranged", RangedSlotLabel(slot), materialId);
+        Fuse::QueueSwordFreeze(play, victim, freezeLevel, "ranged", RangedSlotLabel(slot), materialId);
     }
 
     Fuse::MarkRangedHitResolved(static_cast<RangedFuseSlot>(slot), "HitSuccess");
@@ -105,7 +105,7 @@ static void LogRangedKnockbackStatus(const char* itemLabel, RangedFuseSlot slot,
     }
 }
 
-void FuseHooks_OnArrowProjectileFired(PlayState* play, int32_t isSeed) {
+extern "C" void FuseHooks_OnArrowProjectileFired(PlayState* play, int32_t isSeed) {
     (void)play;
     if (isSeed) {
         Fuse::CommitQueuedRangedFuse(RangedFuseSlot::Slingshot, "ArrowProjectileFired");
@@ -116,7 +116,7 @@ void FuseHooks_OnArrowProjectileFired(PlayState* play, int32_t isSeed) {
     LogRangedKnockbackStatus("arrows", RangedFuseSlot::Arrows, "fired");
 }
 
-void FuseHooks_OnRangedProjectileHit(PlayState* play, Actor* victim, int32_t isSeed) {
+extern "C" void FuseHooks_OnRangedProjectileHit(PlayState* play, Actor* victim, int32_t isSeed) {
     if (isSeed) {
         Fuse_OnRangedHitActor(play, RANGED_FUSE_SLOT_SLINGSHOT, victim);
         Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot::Slingshot, "ProjectileHit");
@@ -127,31 +127,31 @@ void FuseHooks_OnRangedProjectileHit(PlayState* play, Actor* victim, int32_t isS
     Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot::Arrows, "ProjectileHit");
 }
 
-void FuseHooks_OnHookshotShotStarted(PlayState* play) {
+extern "C" void FuseHooks_OnHookshotShotStarted(PlayState* play) {
     (void)play;
     Fuse::OnHookshotShotStarted("HookshotShotStarted");
 }
 
-void FuseHooks_OnHookshotEnemyHit(PlayState* play, Actor* victim) {
+extern "C" void FuseHooks_OnHookshotEnemyHit(PlayState* play, Actor* victim) {
     Fuse::CommitQueuedRangedFuse(RangedFuseSlot::Hookshot, "HookshotEnemyHit");
     LogRangedKnockbackStatus("hookshot", RangedFuseSlot::Hookshot, "enemy-hit");
     Fuse_OnRangedHitActor(play, RANGED_FUSE_SLOT_HOOKSHOT, victim);
     Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot::Hookshot, "HookshotEnemyHit");
 }
 
-void FuseHooks_OnHookshotLatched(PlayState* play) {
+extern "C" void FuseHooks_OnHookshotLatched(PlayState* play) {
     (void)play;
     Fuse::CommitQueuedRangedFuse(RangedFuseSlot::Hookshot, "HookshotLatched");
     LogRangedKnockbackStatus("hookshot", RangedFuseSlot::Hookshot, "latch");
     Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot::Hookshot, "HookshotLatched");
 }
 
-void FuseHooks_OnHookshotRetracted(PlayState* play) {
+extern "C" void FuseHooks_OnHookshotRetracted(PlayState* play) {
     (void)play;
     Fuse::OnHookshotRetractedOrKilled("HookshotRetracted");
 }
 
-void FuseHooks_OnHookshotKilled(PlayState* play) {
+extern "C" void FuseHooks_OnHookshotKilled(PlayState* play) {
     (void)play;
     Fuse::OnHookshotRetractedOrKilled("HookshotKilled");
 }
