@@ -68,7 +68,8 @@ void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Actor* victim
         Fuse_TriggerDekuNutAtPos(play, victim->world.pos, RangedSlotItemId(slot));
     }
 
-    Fuse::ClearActiveRangedFuse(static_cast<RangedFuseSlot>(slot), "RangedHitConsumed");
+    Fuse::MarkRangedHitResolved(static_cast<RangedFuseSlot>(slot), "HitSuccess");
+    Fuse::ClearActiveRangedFuse(static_cast<RangedFuseSlot>(slot), "HitSuccess");
 }
 
 static void LogRangedKnockbackStatus(const char* itemLabel, RangedFuseSlot slot, const char* eventLabel) {

@@ -23,7 +23,8 @@ typedef struct EnArrow {
     /* 0x024C */ Actor* hitActor;
     /* 0x0250 */ Vec3f unk_250;
     /* 0x025C */ EnArrowActionFunc actionFunc;
-} EnArrow; // size = 0x0260
+    /* 0x0260 */ u8 fuseHitApplied;
+} EnArrow; // size = 0x0264
 
 typedef enum {
     /* -10 */ ARROW_CS_NUT = -10, // cutscene deku nuts are allowed to update in blocking mode

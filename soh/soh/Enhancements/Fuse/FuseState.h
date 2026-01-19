@@ -38,6 +38,7 @@ struct RangedFuseState {
     int durabilityMax = 0;
     bool inFlight = false;
     bool hadSuccess = false;
+    bool hitResolved = false;
     MaterialId pendingRefundMaterial = MaterialId::None;
     int pendingRefundFrame = -1;
 
@@ -45,6 +46,7 @@ struct RangedFuseState {
         materialId = MaterialId::None;
         durabilityCur = 0;
         durabilityMax = 0;
+        hitResolved = false;
     }
 };
 
