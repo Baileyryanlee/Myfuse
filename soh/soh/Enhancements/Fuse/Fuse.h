@@ -29,6 +29,8 @@ void Fuse_TriggerMegaStun(PlayState* play, Player* player, MaterialId materialId
 
 FuseWeaponView Fuse_GetEquippedSwordView(const PlayState* play);
 
+extern "C" int32_t Fuse_GetPlayerMeleeHammerizeLevel(PlayState* play);
+
 namespace Fuse {
 
 struct MaterialDebugOverride {
