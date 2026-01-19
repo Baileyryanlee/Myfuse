@@ -99,6 +99,7 @@ void EnArrow_Init(Actor* thisx, PlayState* play) {
         0x00002000, 0x00010000, 0x00004000, 0x00008000, 0x00000004,
     };
     EnArrow* this = (EnArrow*)thisx;
+    this->fuseHitApplied = 0;
 
     if (CVarGetInteger(CVAR_COSMETIC("Arrows.NormalPrimary.Changed"), 0)) {
         blureNormal.altEnvColor =
@@ -338,8 +339,9 @@ void EnArrow_Fly(EnArrow* this, PlayState* play) {
                 this->actor.world.pos.z = (this->actor.world.pos.z + this->actor.prevPos.z) * 0.5f;
 
                 hitActor = this->collider.base.at;
-                if (hitActor != NULL) {
-                    Fuse_OnRangedHitActor(play, RANGED_FUSE_SLOT_SLINGSHOT, hitActor);
+                if ((hitActor != NULL) && (hitActor->category == ACTORCAT_ENEMY) && !this->fuseHitApplied) {
+                    this->fuseHitApplied = 1;
+                    FuseHooks_OnRangedProjectileHit(play, hitActor, true);
                 }
             }
 
@@ -357,8 +359,9 @@ void EnArrow_Fly(EnArrow* this, PlayState* play) {
 
             if (atTouched && (this->collider.info.atHitInfo->elemType != ELEMTYPE_UNK4)) {
                 hitActor = this->collider.base.at;
-                if (hitActor != NULL) {
-                    Fuse_OnRangedHitActor(play, RANGED_FUSE_SLOT_ARROWS, hitActor);
+                if ((hitActor != NULL) && (hitActor->category == ACTORCAT_ENEMY) && !this->fuseHitApplied) {
+                    this->fuseHitApplied = 1;
+                    FuseHooks_OnRangedProjectileHit(play, hitActor, false);
                 }
 
                 if ((hitActor->update != NULL) && (!(this->collider.base.atFlags & AT_BOUNCED)) &&

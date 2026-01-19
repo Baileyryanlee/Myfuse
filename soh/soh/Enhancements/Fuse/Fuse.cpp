@@ -1931,6 +1931,7 @@ Fuse::FuseResult Fuse::TryQueueRangedFuse(RangedFuseSlot slot, MaterialId mat, c
             state.durabilityCur = state.durabilityMax;
             state.inFlight = false;
             state.hadSuccess = false;
+            state.hitResolved = false;
         }
         LogRangedEvent("RangedQueueFail", slot, mat, reason);
         return FuseResult::NotEnoughMaterial;
@@ -1951,6 +1952,7 @@ Fuse::FuseResult Fuse::TryQueueRangedFuse(RangedFuseSlot slot, MaterialId mat, c
     state.durabilityCur = state.durabilityMax;
     state.inFlight = false;
     state.hadSuccess = false;
+    state.hitResolved = false;
     state.pendingRefundMaterial = MaterialId::None;
     state.pendingRefundFrame = -1;
     LogRangedEvent("RangedQueue", slot, mat, reason);
@@ -2044,6 +2046,15 @@ void Fuse::ClearActiveRangedFuse(RangedFuseSlot slot, const char* reason) {
               reason ? reason : "None");
 }
 
+void Fuse::MarkRangedHitResolved(RangedFuseSlot slot, const char* reason) {
+    RangedFuseState& state = GetRangedQueued(slot);
+    state.hitResolved = true;
+    state.inFlight = false;
+    state.pendingRefundMaterial = MaterialId::None;
+    state.pendingRefundFrame = -1;
+    (void)reason;
+}
+
 void Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot slot, const char* reason) {
     RangedFuseState& active = GetRangedActive(slot);
     if (active.materialId == MaterialId::None || active.durabilityCur <= 0) {
@@ -2067,6 +2078,7 @@ void Fuse::OnHookshotShotStarted(const char* reason) {
     RangedFuseState& state = GetRangedQueued(RangedFuseSlot::Hookshot);
     state.inFlight = true;
     state.hadSuccess = false;
+    state.hitResolved = false;
     (void)reason;
 }
 
@@ -2272,7 +2284,11 @@ static void UpdateRangedFuseLifecycle(PlayState* play) {
         RangedFuseSlot previousSlot = RangedFuseSlot::Arrows;
         if (HeldItemActionToSlot(gFuseRuntime.lastHeldItemAction, &previousSlot)) {
             RangedFuseState& state = GetRangedQueued(previousSlot);
-            if (state.materialId != MaterialId::None && !(previousSlot == RangedFuseSlot::Hookshot && state.inFlight)) {
+            if (state.materialId != MaterialId::None &&
+                !(previousSlot == RangedFuseSlot::Hookshot && state.inFlight)) {
+                if (state.hitResolved) {
+                    continue;
+                }
                 if (!aiming || aimingSlot != previousSlot) {
                     Fuse::CancelQueuedRangedFuse_Refund(previousSlot, "HeldItemSwitch");
                 }
@@ -2284,6 +2300,10 @@ static void UpdateRangedFuseLifecycle(PlayState* play) {
         const RangedFuseSlot slot = static_cast<RangedFuseSlot>(i);
         RangedFuseState& state = gRangedQueued[i];
         if (state.materialId == MaterialId::None) {
+            continue;
+        }
+
+        if (state.hitResolved) {
             continue;
         }
 

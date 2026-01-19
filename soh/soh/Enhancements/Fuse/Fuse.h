@@ -158,6 +158,7 @@ void ClearQueuedRangedFuse_NoRefund(RangedFuseSlot slot, const char* reason);
 void CommitQueuedRangedFuse(RangedFuseSlot slot, const char* reason);
 void CancelQueuedRangedFuse_Refund(RangedFuseSlot slot, const char* reason);
 void ClearActiveRangedFuse(RangedFuseSlot slot, const char* reason);
+void MarkRangedHitResolved(RangedFuseSlot slot, const char* reason);
 void OnRangedProjectileHitFinalize(RangedFuseSlot slot, const char* reason);
 void OnHookshotShotStarted(const char* reason);
 void OnHookshotRetractedOrKilled(const char* reason);

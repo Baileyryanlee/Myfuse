@@ -71,6 +71,7 @@ void ArmsHook_Init(Actor* thisx, PlayState* play) {
     Collider_SetQuad(play, &this->collider, &this->actor, &sQuadInit);
     ArmsHook_SetupAction(this, ArmsHook_Wait);
     this->unk_1E8 = this->actor.world.pos;
+    this->fuseHitApplied = 0;
 }
 
 void ArmsHook_Destroy(Actor* thisx, PlayState* play) {
@@ -176,9 +177,9 @@ void ArmsHook_Shoot(ArmsHook* this, PlayState* play) {
     if ((this->timer != 0) && (this->collider.base.atFlags & AT_HIT) &&
         (this->collider.info.atHitInfo->elemType != ELEMTYPE_UNK4)) {
         touchedActor = this->collider.base.at;
-        if ((touchedActor != NULL) && (touchedActor->category == ACTORCAT_ENEMY)) {
+        if ((touchedActor != NULL) && (touchedActor->category == ACTORCAT_ENEMY) && !this->fuseHitApplied) {
+            this->fuseHitApplied = 1;
             FuseHooks_OnHookshotEnemyHit(play, touchedActor);
-            Fuse_OnRangedHitActor(play, RANGED_FUSE_SLOT_HOOKSHOT, touchedActor);
         }
         if ((touchedActor->update != NULL) &&
             (touchedActor->flags & (ACTOR_FLAG_HOOKSHOT_PULLS_ACTOR | ACTOR_FLAG_HOOKSHOT_PULLS_PLAYER))) {
