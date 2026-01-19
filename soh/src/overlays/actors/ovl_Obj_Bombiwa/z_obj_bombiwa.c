@@ -18,6 +18,8 @@ void ObjBombiwa_Draw(Actor* thisx, PlayState* play);
 
 void ObjBombiwa_Break(ObjBombiwa* this, PlayState* play);
 
+int32_t Fuse_GetPlayerMeleeHammerizeLevel(PlayState* play);
+
 const ActorInit Obj_Bombiwa_InitVars = {
     ACTOR_OBJ_BOMBIWA,
     ACTORCAT_PROP,
@@ -75,6 +77,7 @@ void ObjBombiwa_InitCollision(Actor* thisx, PlayState* play) {
 void ObjBombiwa_Init(Actor* thisx, PlayState* play) {
     Actor_ProcessInitChain(thisx, sInitChain);
     ObjBombiwa_InitCollision(thisx, play);
+    ((ObjBombiwa*)thisx)->hammerizeHitCount = 0;
     if ((Flags_GetSwitch(play, thisx->params & 0x3F) != 0)) {
         Actor_Kill(thisx);
     } else {
@@ -124,9 +127,38 @@ void ObjBombiwa_Break(ObjBombiwa* this, PlayState* play) {
 void ObjBombiwa_Update(Actor* thisx, PlayState* play) {
     ObjBombiwa* this = (ObjBombiwa*)thisx;
     s32 pad;
+    bool shouldBreak = false;
 
     if ((func_80033684(play, &this->actor) != NULL) ||
         ((this->collider.base.acFlags & AC_HIT) && (this->collider.info.acHitInfo->toucher.dmgFlags & 0x40000040))) {
+        shouldBreak = true;
+    } else if (this->collider.base.acFlags & AC_HIT) {
+        ColliderInfo* hitInfo = this->collider.info.acHitInfo;
+
+        if (hitInfo != NULL && CollisionCheck_GetSwordDamage(hitInfo->toucher.dmgFlags, play) > 0) {
+            int32_t hammerizeLevel = Fuse_GetPlayerMeleeHammerizeLevel(play);
+
+            if (hammerizeLevel >= 1) {
+                int32_t requiredHits = (hammerizeLevel >= 2) ? 1 : 2;
+
+                if (this->hammerizeHitCount < requiredHits) {
+                    this->hammerizeHitCount++;
+                }
+
+                osSyncPrintf("[FuseDBG] BombiwaHammerizeHit: lvl=%d hits=%d/%d\n", hammerizeLevel,
+                             this->hammerizeHitCount, requiredHits);
+
+                if (this->hammerizeHitCount >= requiredHits) {
+                    shouldBreak = true;
+                } else {
+                    Audio_PlayActorSound2(&this->actor, NA_SE_IT_SWORD_STRIKE_HARD);
+                    func_8002F71C(play, &this->actor, 8.0f, this->actor.yawTowardsPlayer, 8.0f);
+                }
+            }
+        }
+    }
+
+    if (shouldBreak) {
         ObjBombiwa_Break(this, play);
         Flags_SetSwitch(play, this->actor.params & 0x3F);
         SoundSource_PlaySfxAtFixedWorldPos(play, &this->actor.world.pos, 80, NA_SE_EV_WALL_BROKEN);
@@ -134,12 +166,13 @@ void ObjBombiwa_Update(Actor* thisx, PlayState* play) {
             Sfx_PlaySfxCentered(NA_SE_SY_CORRECT_CHIME);
         }
         Actor_Kill(&this->actor);
-    } else {
-        this->collider.base.acFlags &= ~AC_HIT;
-        if (this->actor.xzDistToPlayer < 800.0f) {
-            CollisionCheck_SetAC(play, &play->colChkCtx, &this->collider.base);
-            CollisionCheck_SetOC(play, &play->colChkCtx, &this->collider.base);
-        }
+        return;
+    }
+
+    this->collider.base.acFlags &= ~AC_HIT;
+    if (this->actor.xzDistToPlayer < 800.0f) {
+        CollisionCheck_SetAC(play, &play->colChkCtx, &this->collider.base);
+        CollisionCheck_SetOC(play, &play->colChkCtx, &this->collider.base);
     }
 }
 

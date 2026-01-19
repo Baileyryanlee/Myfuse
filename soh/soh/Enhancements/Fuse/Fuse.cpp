@@ -108,6 +108,29 @@ static void ResetSavedSwordFuseFields() {
     FusePersistence::WriteSwordStateToContext(FusePersistence::ClearedSwordState());
 }
 
+extern "C" int32_t Fuse_GetPlayerMeleeHammerizeLevel(PlayState* play) {
+    if (!Fuse::IsEnabled()) {
+        return 0;
+    }
+
+    const SwordFuseSlot& slot = gFuseSave.GetActiveSwordSlot(play);
+    if (slot.materialId == MaterialId::None || slot.durabilityCur <= 0) {
+        return 0;
+    }
+
+    const MaterialDef* def = Fuse::GetMaterialDef(slot.materialId);
+    if (!def) {
+        return 0;
+    }
+
+    uint8_t level = 0;
+    if (!HasModifier(def->modifiers, def->modifierCount, ModifierId::Hammerize, &level) || level == 0) {
+        return 0;
+    }
+
+    return std::min<int32_t>(level, 2);
+}
+
 // -----------------------------------------------------------------------------
 // Modifier helpers (module-local)
 // -----------------------------------------------------------------------------
