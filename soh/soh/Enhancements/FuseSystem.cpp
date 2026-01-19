@@ -118,7 +118,7 @@ static void RegisterFuseMod() {
 
     COND_HOOK(OnLoadGame, true, [](int32_t fileNum) {
         Fuse::OnLoadGame(fileNum);
-        FuseHooks::OnLoadGame_ResetObjects();
+        FuseHooks::OnLoadGame_RestoreObjects();
     });
 
     // Create/register window once

@@ -523,7 +523,7 @@ void OnSwordFuseBroken(PlayState* play) {
     Fuse::OnSwordFuseBroken(play);
 }
 
-void OnLoadGame_ResetObjects() {
+void OnLoadGame_RestoreObjects() {
     gHammerizeAppliedFrame = -1;
     gPrevHeldActor = nullptr;
     gPendingThrownRockCheck = false;
