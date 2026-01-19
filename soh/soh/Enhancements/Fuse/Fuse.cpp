@@ -47,12 +47,17 @@ static constexpr std::array<RangedFuseSlot, 3> kRangedSlots = { RangedFuseSlot::
 static std::unordered_map<MaterialId, uint16_t> sMaterialInventory;
 static bool sMaterialInventoryInitialized = false;
 static constexpr size_t kSwordFreezeQueueCount = 2;
+static constexpr s16 kFreezeDurationFramesBase = 120;
+static constexpr float kFreezeShatterDamageMult = 1.5f;
+static constexpr float kFreezeShatterKnockbackSpeed = 18.0f;
+static constexpr float kFreezeShatterKnockbackYBoost = 3.0f;
 static std::unordered_map<MaterialId, MaterialDebugOverride> sMaterialDebugOverrides;
 static bool sUseDebugOverrides = false;
 static std::unordered_map<Actor*, s16> sFuseFrozenTimers;
 static std::unordered_map<Actor*, int> sFreezeAppliedFrame;
 static std::unordered_map<Actor*, int> sShatterFrame;
 static std::unordered_map<Actor*, Vec3f> sFuseFrozenPos;
+static std::unordered_map<Actor*, bool> sFuseFrozenPinned;
 static constexpr int kDekuStunInitialDelayFrames = 4;
 static constexpr int kDekuStunRetryStepFrames = 2;
 static constexpr int kDekuStunMaxAttempts = 8;
@@ -83,13 +88,17 @@ static std::array<std::vector<SwordFreezeRequest>, kSwordFreezeQueueCount> sSwor
 static std::array<std::unordered_set<Actor*>, kSwordFreezeQueueCount> sSwordFreezeVictims;
 static std::array<int, kSwordFreezeQueueCount> sSwordFreezeQueueFrames = { -1, -1 };
 
-static bool IsFuseFrozen(Actor* actor) {
+static bool IsFuseFrozenInternal(Actor* actor) {
     if (actor == nullptr) {
         return false;
     }
 
     auto it = sFuseFrozenTimers.find(actor);
     return it != sFuseFrozenTimers.end() && it->second > 0;
+}
+
+bool Fuse::IsFuseFrozen(Actor* actor) {
+    return IsFuseFrozenInternal(actor);
 }
 
 static void ClearFuseFreeze(Actor* actor) {
@@ -101,6 +110,7 @@ static void ClearFuseFreeze(Actor* actor) {
     sFreezeAppliedFrame.erase(actor);
     sShatterFrame.erase(actor);
     sFuseFrozenPos.erase(actor);
+    sFuseFrozenPinned.erase(actor);
     actor->colorFilterTimer = 0;
 }
 
@@ -343,14 +353,22 @@ void ApplyIceArrowFreeze(PlayState* play, Actor* victim, uint8_t level) {
         return;
     }
 
-    constexpr s16 kBaseFreezeDuration = 40;
-    const s16 duration = static_cast<s16>(kBaseFreezeDuration * level);
+    const s16 duration = static_cast<s16>(kFreezeDurationFramesBase * level);
     constexpr s16 kIceColorFlagBlue = 0;        // Default flag yields the blue ice arrow tint (see z64actor.h)
     constexpr s16 kNeutralColorIntensity = 180; // Softer tint to look more snow/white than deep blue
 
     // Apply the same immobilization and visual feedback that Ice Arrows use
     sFuseFrozenTimers[victim] = std::max<s16>(sFuseFrozenTimers[victim], duration);
     Actor_SetColorFilter(victim, kIceColorFlagBlue, kNeutralColorIntensity, 0, duration);
+    const bool isAirborne = (victim->bgCheckFlags & BGCHECKFLAG_GROUND) == 0;
+    sFuseFrozenPinned[victim] = !isAirborne;
+    if (isAirborne) {
+        victim->velocity.x = 0.0f;
+        victim->velocity.z = 0.0f;
+        victim->speedXZ = 0.0f;
+        victim->velocity.y = std::min(victim->velocity.y, 0.0f);
+        sFuseFrozenPos.erase(victim);
+    }
 
     if (play != nullptr) {
         sFreezeAppliedFrame[victim] = play->gameplayFrames;
@@ -668,6 +686,7 @@ static void TickFuseFrozenTimers(PlayState* play) {
             sFreezeAppliedFrame.erase(actor);
             sShatterFrame.erase(actor);
             sFuseFrozenPos.erase(actor);
+            sFuseFrozenPinned.erase(actor);
             it = sFuseFrozenTimers.erase(it);
             continue;
         }
@@ -686,17 +705,25 @@ static void TickFuseFrozenTimers(PlayState* play) {
                 continue;
             }
 
+            const auto pinnedIt = sFuseFrozenPinned.find(actor);
+            const bool pinPosition = (pinnedIt == sFuseFrozenPinned.end()) ? true : pinnedIt->second;
             actor->velocity.x = 0.0f;
-            actor->velocity.y = 0.0f;
             actor->velocity.z = 0.0f;
             actor->speedXZ = 0.0f;
-            actor->gravity = 0.0f;
 
-            auto posIt = sFuseFrozenPos.find(actor);
-            if (posIt == sFuseFrozenPos.end()) {
-                sFuseFrozenPos[actor] = actor->world.pos;
+            if (pinPosition) {
+                actor->velocity.y = 0.0f;
+                actor->gravity = 0.0f;
+
+                auto posIt = sFuseFrozenPos.find(actor);
+                if (posIt == sFuseFrozenPos.end()) {
+                    sFuseFrozenPos[actor] = actor->world.pos;
+                } else {
+                    actor->world.pos = posIt->second;
+                }
             } else {
-                actor->world.pos = posIt->second;
+                actor->velocity.y = std::min(actor->velocity.y, 0.0f);
+                sFuseFrozenPos.erase(actor);
             }
             ++it;
         }
@@ -719,9 +746,9 @@ void ResetDekuStunQueueInternal() {
     sMegaStunCooldownUntil = -1;
 }
 
-void EnqueueSwordFreezeRequest(PlayState* play, Actor* victim, uint8_t level) {
+bool EnqueueSwordFreezeRequest(PlayState* play, Actor* victim, uint8_t level) {
     if (!play || !victim || level == 0) {
-        return;
+        return false;
     }
 
     const int curFrame = play->gameplayFrames;
@@ -734,11 +761,27 @@ void EnqueueSwordFreezeRequest(PlayState* play, Actor* victim, uint8_t level) {
     }
 
     if (sSwordFreezeVictims[queueIndex].count(victim) > 0) {
-        return;
+        return false;
     }
 
     sSwordFreezeVictims[queueIndex].insert(victim);
     sSwordFreezeQueues[queueIndex].push_back({ victim, level });
+    return true;
+}
+
+void Fuse::EnqueueFreezeRequest(PlayState* play, Actor* victim, uint8_t level, const char* srcLabel,
+                                const char* slotLabel, MaterialId materialId) {
+    if (!play || !victim || level == 0) {
+        return;
+    }
+
+    if (!EnqueueSwordFreezeRequest(play, victim, level)) {
+        return;
+    }
+
+    Fuse::Log("[FuseDBG] FreezeApply: src=%s slot=%s mat=%d lvl=%u victim=%p\n", srcLabel ? srcLabel : "unknown",
+              slotLabel ? slotLabel : "unknown", static_cast<int>(materialId), static_cast<unsigned int>(level),
+              (void*)victim);
 }
 
 } // namespace
@@ -2269,6 +2312,7 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
     sFreezeAppliedFrame.clear();
     sShatterFrame.clear();
     sFuseFrozenPos.clear();
+    sFuseFrozenPinned.clear();
 
     EnsureMaterialInventoryInitialized();
 
@@ -2494,14 +2538,27 @@ static void ApplyMeleeHitMaterialEffects(PlayState* play, Actor* victim, Materia
     }
 
     const int frame = play ? play->gameplayFrames : -1;
-    const bool wasFuseFrozen = IsFuseFrozen(victim);
+    const bool wasFuseFrozen = IsFuseFrozenInternal(victim);
     const auto applyIt = sFreezeAppliedFrame.find(victim);
     const bool freezeAppliedThisFrame = (applyIt != sFreezeAppliedFrame.end() && applyIt->second == frame);
     const bool shouldShatter = wasFuseFrozen && !freezeAppliedThisFrame;
     if (shouldShatter) {
         ClearFuseFreeze(victim);
-        Actor_ApplyDamage(victim);
-        Fuse::Log("[FuseDBG] FreezeShatter: victim=%p doubleDamage=1\n", (void*)victim);
+        const int baseDamage = std::max(0, static_cast<int>(victim->colChkInfo.damage));
+        const int bonusDamage = static_cast<int>(std::ceil(baseDamage * (kFreezeShatterDamageMult - 1.0f)));
+        if (bonusDamage > 0) {
+            const int hpBefore = victim->colChkInfo.health;
+            victim->colChkInfo.damage = bonusDamage;
+            Actor_ApplyDamage(victim);
+            const int hpAfter = victim->colChkInfo.health;
+
+            if (hpAfter == hpBefore && hpBefore > 0 && victim->category != ACTORCAT_BOSS) {
+                const int adjustedHealth = std::max(0, hpBefore - bonusDamage);
+                victim->colChkInfo.health = static_cast<uint8_t>(adjustedHealth);
+            }
+        }
+        Fuse::Log("[FuseDBG] FreezeShatter: victim=%p base=%d bonus=%d mult=%.2f\n", (void*)victim, baseDamage,
+                  bonusDamage, kFreezeShatterDamageMult);
 
         if (play != nullptr) {
             Player* player = GET_PLAYER(play);
@@ -2519,20 +2576,17 @@ static void ApplyMeleeHitMaterialEffects(PlayState* play, Actor* victim, Materia
                     dir.z *= invLen;
                 }
 
-                constexpr float kShatterKnockbackSpeed = 14.0f;
-                constexpr float kShatterUpwardBoost = 1.5f;
+                victim->velocity.x = dir.x * kFreezeShatterKnockbackSpeed;
+                victim->velocity.z = dir.z * kFreezeShatterKnockbackSpeed;
 
-                victim->velocity.x = dir.x * kShatterKnockbackSpeed;
-                victim->velocity.z = dir.z * kShatterKnockbackSpeed;
+                victim->velocity.y = std::max(victim->velocity.y, kFreezeShatterKnockbackYBoost);
 
-                victim->velocity.y = std::max(victim->velocity.y, kShatterUpwardBoost);
-
-                victim->speedXZ = std::max(victim->speedXZ, kShatterKnockbackSpeed);
+                victim->speedXZ = std::max(victim->speedXZ, kFreezeShatterKnockbackSpeed);
                 victim->world.rot.y = Math_Atan2S(dir.x, dir.z);
                 victim->shape.rot.y = victim->world.rot.y;
 
-                Fuse::Log("[FuseDBG] FreezeShatterKnockback: victim=%p v=(%.2f,%.2f,%.2f)\n", (void*)victim,
-                          victim->velocity.x, victim->velocity.y, victim->velocity.z);
+                Fuse::Log("[FuseDBG] FreezeShatterKnockback: victim=%p kb=%.2f v=(%.2f,%.2f,%.2f)\n", (void*)victim,
+                          kFreezeShatterKnockbackSpeed, victim->velocity.x, victim->velocity.y, victim->velocity.z);
             }
         }
         if (frame >= 0) {
