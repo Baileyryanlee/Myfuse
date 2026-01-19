@@ -24,6 +24,7 @@
 
 extern "C" {
 #include "z64.h"
+#include "z64actor.h"
 #include "variables.h"
 #include "macros.h"
 #include "functions.h"
@@ -360,7 +361,7 @@ void ApplyIceArrowFreeze(PlayState* play, Actor* victim, uint8_t level) {
     // Apply the same immobilization and visual feedback that Ice Arrows use
     sFuseFrozenTimers[victim] = std::max<s16>(sFuseFrozenTimers[victim], duration);
     Actor_SetColorFilter(victim, kIceColorFlagBlue, kNeutralColorIntensity, 0, duration);
-    const bool isAirborne = (victim->bgCheckFlags & BGCHECKFLAG_GROUND) == 0;
+    const bool isAirborne = (victim->bgCheckFlags & BGCHECKFLAG_GROUND_TOUCH) == 0;
     sFuseFrozenPinned[victim] = !isAirborne;
     if (isAirborne) {
         victim->velocity.x = 0.0f;

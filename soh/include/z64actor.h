@@ -273,6 +273,15 @@ typedef enum {
     /* 1 */ FOOT_RIGHT
 } ActorFootIndex;
 
+#define BGCHECKFLAG_GROUND (1 << 0)
+#define BGCHECKFLAG_GROUND_TOUCH (1 << 1)
+#define BGCHECKFLAG_GROUND_LEAVE (1 << 2)
+#define BGCHECKFLAG_WALL (1 << 3)
+#define BGCHECKFLAG_CEILING (1 << 4)
+#define BGCHECKFLAG_WATER (1 << 5)
+#define BGCHECKFLAG_WATER_TOUCH (1 << 6)
+#define BGCHECKFLAG_GROUND_IGNORE_VELOCITY (1 << 7)
+
 /*
 BgCheckFlags WIP documentation:
 & 0x001 : Standing on the ground
