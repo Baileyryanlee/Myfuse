@@ -145,14 +145,14 @@ void ObjBombiwa_Update(Actor* thisx, PlayState* play) {
                     this->hammerizeHitCount++;
                 }
 
-                osSyncPrintf("[FuseDBG] BombiwaHammerizeHit: lvl=%d hits=%d/%d\n", hammerizeLevel,
-                             this->hammerizeHitCount, requiredHits);
-
                 if (this->hammerizeHitCount >= requiredHits) {
                     shouldBreak = true;
                 } else {
                     Audio_PlayActorSound2(&this->actor, NA_SE_IT_SWORD_STRIKE_HARD);
-                    func_8002F71C(play, &this->actor, 8.0f, this->actor.yawTowardsPlayer, 8.0f);
+                    osSyncPrintf("[FuseDBG] BombiwaHammerizeHit: lvl=%d hits=%d/%d (no-break)\n", hammerizeLevel,
+                                 this->hammerizeHitCount, requiredHits);
+                    this->collider.base.acFlags &= ~AC_HIT;
+                    return;
                 }
             }
         }
