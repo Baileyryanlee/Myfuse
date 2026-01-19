@@ -8,6 +8,9 @@
 
 **Repo base:** https://github.com/Baileyryanlee/Myfuse
 
+CMakeLists location:
+https://github.com/Baileyryanlee/Myfuse/blob/main/soh/CMakeLists.txt
+
 ## Fuse Mod Core (Enhancements/Fuse)
 - [soh/soh/Enhancements/Fuse/Fuse.cpp](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/soh/Enhancements/Fuse/Fuse.cpp)
 - [soh/soh/Enhancements/Fuse/Fuse.h](https://github.com/Baileyryanlee/Myfuse/blob/main/soh/soh/Enhancements/Fuse/Fuse.h)
