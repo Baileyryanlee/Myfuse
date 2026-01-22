@@ -52,6 +52,7 @@ extern void Fuse_ShieldGuardDrain(PlayState* play);
 extern void Fuse_ShieldEnqueuePendingStun(Actor* victim, uint8_t level, int materialId, int itemId);
 extern void Fuse_ShieldTriggerMegaStun(PlayState* play, Player* player, int materialId, int itemId);
 extern void Fuse_ShieldApplyFreeze(PlayState* play, Actor* victim, uint8_t level);
+extern bool Fuse_IsActorFuseFrozen(Actor* actor);
 
 // Some player animations are played at this reduced speed, for reasons yet unclear.
 // This is called "adjusted" for now.
@@ -5004,6 +5005,11 @@ s32 func_808382DC(Player* this, PlayState* play) {
             if (this->cylinder.base.acFlags & AC_HIT) {
                 Actor* ac = this->cylinder.base.ac;
                 s32 sp4C;
+
+                if (ac != NULL && Fuse_IsActorFuseFrozen(ac)) {
+                    osSyncPrintf("[FuseDBG] FreezeBlockPlayerDamage: attacker=%p id=0x%04X\n", (void*)ac, ac->id);
+                    return 0;
+                }
 
                 if (ac->flags & ACTOR_FLAG_SFX_FOR_PLAYER_BODY_HIT) {
                     Player_PlaySfx(this, NA_SE_PL_BODY_HIT);
