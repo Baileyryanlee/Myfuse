@@ -56,7 +56,7 @@ static std::unordered_map<MaterialId, MaterialDebugOverride> sMaterialDebugOverr
 static bool sUseDebugOverrides = false;
 static std::unordered_map<Actor*, s16> sFuseFrozenTimers;
 static std::unordered_map<Actor*, int> sFreezeAppliedFrame;
-static std::unordered_map<Actor*, int> sShatterFrame;
+static std::unordered_map<Actor*, int32_t> sFreezeShatterFrame;
 static std::unordered_map<Actor*, Vec3f> sFuseFrozenPos;
 static std::unordered_map<Actor*, bool> sFuseFrozenPinned;
 static constexpr int kDekuStunInitialDelayFrames = 4;
@@ -126,7 +126,7 @@ static void ClearFuseFreeze(Actor* actor) {
 
     sFuseFrozenTimers.erase(actor);
     sFreezeAppliedFrame.erase(actor);
-    sShatterFrame.erase(actor);
+    sFreezeShatterFrame.erase(actor);
     sFuseFrozenPos.erase(actor);
     sFuseFrozenPinned.erase(actor);
     actor->colorFilterTimer = 0;
@@ -144,8 +144,10 @@ bool Fuse::TryFreezeShatter(PlayState* play, Actor* victim, Actor* attacker, con
     }
 
     ClearFuseFreeze(victim);
-    const int baseDamage = std::max(0, static_cast<int>(victim->colChkInfo.damage));
-    const int bonusDamage = static_cast<int>(std::ceil(baseDamage * (kFreezeShatterDamageMult - 1.0f)));
+    const int totalHitDamage = std::max(0, static_cast<int>(victim->colChkInfo.damage));
+    float damageMult = kFreezeShatterDamageMult;
+    // TODO: if attacker has Flame/Burn modifier active, set damageMult = 2.0f.
+    const int bonusDamage = static_cast<int>(std::ceil(totalHitDamage * (damageMult - 1.0f)));
     if (bonusDamage > 0) {
         const int hpBefore = victim->colChkInfo.health;
         victim->colChkInfo.damage = bonusDamage;
@@ -158,8 +160,12 @@ bool Fuse::TryFreezeShatter(PlayState* play, Actor* victim, Actor* attacker, con
         }
     }
 
+    if (frame >= 0) {
+        sFreezeShatterFrame[victim] = frame;
+    }
+
     Fuse::Log("[FuseDBG] FreezeShatter: src=%s victim=%p base=%d bonus=%d mult=%.2f kb=%.2f\n",
-              srcLabel ? srcLabel : "unknown", (void*)victim, baseDamage, bonusDamage, kFreezeShatterDamageMult,
+              srcLabel ? srcLabel : "unknown", (void*)victim, totalHitDamage, bonusDamage, damageMult,
               kFreezeShatterKnockbackSpeed);
 
     Actor* sourceActor = attacker;
@@ -186,14 +192,10 @@ bool Fuse::TryFreezeShatter(PlayState* play, Actor* victim, Actor* attacker, con
 
         victim->velocity.x = dir.x * kFreezeShatterKnockbackSpeed;
         victim->velocity.z = dir.z * kFreezeShatterKnockbackSpeed;
-        victim->velocity.y = std::max(victim->velocity.y, kFreezeShatterKnockbackYBoost);
-        victim->speedXZ = std::max(victim->speedXZ, kFreezeShatterKnockbackSpeed);
+        victim->velocity.y = kFreezeShatterKnockbackYBoost;
+        victim->speedXZ = kFreezeShatterKnockbackSpeed;
         victim->world.rot.y = Math_Atan2S(dir.x, dir.z);
         victim->shape.rot.y = victim->world.rot.y;
-    }
-
-    if (frame >= 0) {
-        sShatterFrame[victim] = frame;
     }
 
     return true;
@@ -775,7 +777,7 @@ static void TickFuseFrozenTimers(PlayState* play) {
 
         if (!IsActorAliveInPlay(play, actor)) {
             sFreezeAppliedFrame.erase(actor);
-            sShatterFrame.erase(actor);
+            sFreezeShatterFrame.erase(actor);
             sFuseFrozenPos.erase(actor);
             sFuseFrozenPinned.erase(actor);
             it = sFuseFrozenTimers.erase(it);
@@ -790,8 +792,9 @@ static void TickFuseFrozenTimers(PlayState* play) {
             ++it;
             ClearFuseFreeze(actor);
         } else {
-            auto shatterIt = sShatterFrame.find(actor);
-            if (play != nullptr && shatterIt != sShatterFrame.end() && shatterIt->second == play->gameplayFrames) {
+            auto shatterIt = sFreezeShatterFrame.find(actor);
+            if (play != nullptr && shatterIt != sFreezeShatterFrame.end() &&
+                shatterIt->second == play->gameplayFrames) {
                 ++it;
                 continue;
             }
@@ -2416,7 +2419,7 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
     ResetDekuStunQueueInternal();
     sFuseFrozenTimers.clear();
     sFreezeAppliedFrame.clear();
-    sShatterFrame.clear();
+    sFreezeShatterFrame.clear();
     sFuseFrozenPos.clear();
     sFuseFrozenPinned.clear();
 
@@ -2646,7 +2649,8 @@ static void ApplyMeleeHitMaterialEffects(PlayState* play, Actor* victim, Materia
     uint8_t freezeLevel = 0;
     const bool isFrozen = IsActorFrozenInternal(victim);
     const bool shatteredThisHit =
-        (play && sShatterFrame.find(victim) != sShatterFrame.end() && sShatterFrame[victim] == play->gameplayFrames);
+        (play && sFreezeShatterFrame.find(victim) != sFreezeShatterFrame.end() &&
+         sFreezeShatterFrame[victim] == play->gameplayFrames);
     if (!shatteredThisHit && !isFrozen &&
         HasModifier(def->modifiers, def->modifierCount, ModifierId::Freeze, &freezeLevel) && freezeLevel > 0) {
         EnqueueSwordFreezeRequest(play, victim, freezeLevel);
