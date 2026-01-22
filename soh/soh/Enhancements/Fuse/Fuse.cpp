@@ -57,6 +57,7 @@ static bool sUseDebugOverrides = false;
 static std::unordered_map<Actor*, s16> sFuseFrozenTimers;
 static std::unordered_map<Actor*, int> sFreezeAppliedFrame;
 static std::unordered_map<Actor*, int32_t> sFreezeShatterFrame;
+static std::unordered_map<Actor*, int32_t> sFreezeLastShatterFrame;
 static std::unordered_map<Actor*, Vec3f> sFuseFrozenPos;
 static std::unordered_map<Actor*, bool> sFuseFrozenPinned;
 static constexpr int kDekuStunInitialDelayFrames = 4;
@@ -107,6 +108,40 @@ static bool WasFreezeAppliedThisFrameInternal(Actor* actor, int frame) {
     return applyIt != sFreezeAppliedFrame.end() && applyIt->second == frame;
 }
 
+static bool WasFreezeRecentlyShattered(PlayState* play, Actor* victim) {
+    if (!play || !victim) {
+        return false;
+    }
+
+    const auto it = sFreezeLastShatterFrame.find(victim);
+    if (it == sFreezeLastShatterFrame.end()) {
+        return false;
+    }
+
+    const int32_t dt = play->gameplayFrames - it->second;
+    return dt >= 0 && dt <= 1;
+}
+
+static void RemoveDeferredFreezeRequestsFor(Actor* victim) {
+    if (!victim) {
+        return;
+    }
+
+    for (size_t i = 0; i < kSwordFreezeQueueCount; i++) {
+        auto& queue = sSwordFreezeQueues[i];
+        if (!queue.empty()) {
+            const auto newEnd =
+                std::remove_if(queue.begin(), queue.end(),
+                               [victim](const SwordFreezeRequest& request) { return request.victim == victim; });
+            if (newEnd != queue.end()) {
+                queue.erase(newEnd, queue.end());
+            }
+        }
+
+        sSwordFreezeVictims[i].erase(victim);
+    }
+}
+
 static bool IsActorFrozenInternal(Actor* actor) {
     return IsFuseFrozenInternal(actor) || (actor && actor->freezeTimer > 0);
 }
@@ -127,6 +162,7 @@ static void ClearFuseFreeze(Actor* actor) {
     sFuseFrozenTimers.erase(actor);
     sFreezeAppliedFrame.erase(actor);
     sFreezeShatterFrame.erase(actor);
+    sFreezeLastShatterFrame.erase(actor);
     sFuseFrozenPos.erase(actor);
     sFuseFrozenPinned.erase(actor);
     actor->colorFilterTimer = 0;
@@ -143,6 +179,7 @@ bool Fuse::TryFreezeShatter(PlayState* play, Actor* victim, Actor* attacker, con
         return false;
     }
 
+    RemoveDeferredFreezeRequestsFor(victim);
     ClearFuseFreeze(victim);
     const int totalHitDamage = std::max(0, static_cast<int>(victim->colChkInfo.damage));
     float damageMult = kFreezeShatterDamageMult;
@@ -162,6 +199,7 @@ bool Fuse::TryFreezeShatter(PlayState* play, Actor* victim, Actor* attacker, con
 
     if (frame >= 0) {
         sFreezeShatterFrame[victim] = frame;
+        sFreezeLastShatterFrame[victim] = frame;
     }
 
     Fuse::Log("[FuseDBG] FreezeShatter: src=%s victim=%p base=%d bonus=%d mult=%.2f kb=%.2f\n",
@@ -438,6 +476,12 @@ std::vector<std::pair<MaterialId, uint16_t>> BuildCustomMaterialInventorySnapsho
 
 void ApplyIceArrowFreeze(PlayState* play, Actor* victim, uint8_t level) {
     if (!victim || level == 0) {
+        return;
+    }
+
+    if (WasFreezeRecentlyShattered(play, victim)) {
+        Fuse::Log("[FuseDBG] FreezeSkip: reason=RecentlyShattered frame=%d victim=%p\n",
+                  play ? play->gameplayFrames : -1, (void*)victim);
         return;
     }
 
@@ -778,6 +822,7 @@ static void TickFuseFrozenTimers(PlayState* play) {
         if (!IsActorAliveInPlay(play, actor)) {
             sFreezeAppliedFrame.erase(actor);
             sFreezeShatterFrame.erase(actor);
+            sFreezeLastShatterFrame.erase(actor);
             sFuseFrozenPos.erase(actor);
             sFuseFrozenPinned.erase(actor);
             it = sFuseFrozenTimers.erase(it);
@@ -2420,6 +2465,7 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
     sFuseFrozenTimers.clear();
     sFreezeAppliedFrame.clear();
     sFreezeShatterFrame.clear();
+    sFreezeLastShatterFrame.clear();
     sFuseFrozenPos.clear();
     sFuseFrozenPinned.clear();
 
@@ -2618,6 +2664,11 @@ void Fuse::ProcessDeferredSwordFreezes(PlayState* play) {
     }
 
     for (const auto& request : sSwordFreezeQueues[applyIndex]) {
+        if (WasFreezeRecentlyShattered(play, request.victim)) {
+            Fuse::Log("[FuseDBG] FreezeSkip: reason=RecentlyShattered frame=%d victim=%p\n", curFrame,
+                      (void*)request.victim);
+            continue;
+        }
         ApplyIceArrowFreeze(play, request.victim, request.level);
     }
 
