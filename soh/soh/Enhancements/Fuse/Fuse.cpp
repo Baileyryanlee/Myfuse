@@ -115,6 +115,20 @@ bool Fuse::IsFuseFrozen(Actor* actor) {
     return IsFuseFrozenInternal(actor);
 }
 
+static void ClearFuseFreeze(Actor* actor) {
+    if (!actor) {
+        return;
+    }
+
+    actor->freezeTimer = 0;
+    sFuseFrozenTimers.erase(actor);
+    sFreezeAppliedFrame.erase(actor);
+    sShatterFrame.erase(actor);
+    sFuseFrozenPos.erase(actor);
+    sFuseFrozenPinned.erase(actor);
+    actor->colorFilterTimer = 0;
+}
+
 bool Fuse::TryFreezeShatter(PlayState* play, Actor* victim, Actor* attacker, const char* srcLabel) {
     if (!victim) {
         return false;
@@ -182,19 +196,6 @@ bool Fuse::TryFreezeShatter(PlayState* play, Actor* victim, Actor* attacker, con
     return true;
 }
 
-static void ClearFuseFreeze(Actor* actor) {
-    if (!actor) {
-        return;
-    }
-
-    actor->freezeTimer = 0;
-    sFuseFrozenTimers.erase(actor);
-    sFreezeAppliedFrame.erase(actor);
-    sShatterFrame.erase(actor);
-    sFuseFrozenPos.erase(actor);
-    sFuseFrozenPinned.erase(actor);
-    actor->colorFilterTimer = 0;
-}
 
 static void ResetSavedSwordFuseFields() {
     FusePersistence::WriteSwordStateToContext(FusePersistence::ClearedSwordState());
@@ -875,8 +876,8 @@ void QueueSwordFreezeInternal(PlayState* play, Actor* victim, uint8_t level, con
 
 } // namespace
 
-void Fuse::QueueSwordFreeze(PlayState* play, Actor* victim, uint8_t level, const char* srcLabel,
-                            const char* slotLabel, MaterialId materialId) {
+void Fuse::QueueSwordFreeze(PlayState* play, Actor* victim, uint8_t level, const char* srcLabel, const char* slotLabel,
+                            MaterialId materialId) {
     QueueSwordFreezeInternal(play, victim, level, srcLabel, slotLabel, materialId);
 }
 
