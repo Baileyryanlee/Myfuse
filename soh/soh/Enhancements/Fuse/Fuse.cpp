@@ -115,12 +115,15 @@ bool Fuse::IsFuseFrozen(Actor* actor) {
     return IsFuseFrozenInternal(actor);
 }
 
+extern "C" bool Fuse_IsActorFuseFrozen(Actor* actor) {
+    return IsFuseFrozenInternal(actor);
+}
+
 static void ClearFuseFreeze(Actor* actor) {
     if (!actor) {
         return;
     }
 
-    actor->freezeTimer = 0;
     sFuseFrozenTimers.erase(actor);
     sFreezeAppliedFrame.erase(actor);
     sShatterFrame.erase(actor);
@@ -441,7 +444,6 @@ void ApplyIceArrowFreeze(PlayState* play, Actor* victim, uint8_t level) {
     }
 
     const s16 duration = static_cast<s16>(kFreezeDurationFramesBase * level);
-    victim->freezeTimer = std::max<uint16_t>(victim->freezeTimer, static_cast<uint16_t>(duration));
     constexpr s16 kIceColorFlagBlue = 0;        // Default flag yields the blue ice arrow tint (see z64actor.h)
     constexpr s16 kNeutralColorIntensity = 180; // Softer tint to look more snow/white than deep blue
 
@@ -788,7 +790,6 @@ static void TickFuseFrozenTimers(PlayState* play) {
             ++it;
             ClearFuseFreeze(actor);
         } else {
-            actor->freezeTimer = std::max<uint16_t>(actor->freezeTimer, static_cast<uint16_t>(timer));
             auto shatterIt = sShatterFrame.find(actor);
             if (play != nullptr && shatterIt != sShatterFrame.end() && shatterIt->second == play->gameplayFrames) {
                 ++it;
