@@ -380,66 +380,11 @@ extern "C" void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollid
         Fuse::SetHammerDrainedThisSwing(true);
     }
 
-    if (victimActor && victimActor->freezeTimer > 0 && victimPtr && gSwordATVictimCooldown.count(victimPtr) == 0 &&
-        !Fuse::IsFuseFrozen(victimActor)) {
-        int baseDamage = 0;
-
-        if (atInfo) {
-            baseDamage = static_cast<int>(atInfo->toucher.damage);
-        }
-
-        if (baseDamage == 0) {
-            switch (CUR_EQUIP_VALUE(EQUIP_TYPE_SWORD)) {
-                case EQUIP_VALUE_SWORD_BIGGORON:
-                    baseDamage = 4;
-                    break;
-                case EQUIP_VALUE_SWORD_MASTER:
-                    baseDamage = 2;
-                    break;
-                case EQUIP_VALUE_SWORD_KOKIRI:
-                default:
-                    baseDamage = 1;
-                    break;
-            }
-        }
-
-        const int bonusDamage = static_cast<int>(std::ceil(baseDamage * 0.5f));
-        const int freezeTimer = victimActor->freezeTimer;
-
-        if (bonusDamage > 0) {
-            const int hpBefore = victimActor->colChkInfo.health;
-            victimActor->colChkInfo.damage = bonusDamage;
-            Actor_ApplyDamage(victimActor);
-            const int hpAfter = victimActor->colChkInfo.health;
-
-            if (hpAfter == hpBefore && hpBefore > 0 && victimActor->category != ACTORCAT_BOSS) {
-                const int adjustedHealth = std::max(0, hpBefore - bonusDamage);
-                victimActor->colChkInfo.health = static_cast<uint8_t>(adjustedHealth);
-            }
-
-            Fuse::Log("[FuseDBG] FreezeShatter: victim=%p hp=%d->%d base=%d bonus=%d froze=%d\n", (void*)victimActor,
-                      hpBefore, victimActor->colChkInfo.health, baseDamage, bonusDamage, freezeTimer);
-        } else {
-            Fuse::Log("[FuseDBG] FreezeShatter: victim=%p hp=%d->%d base=%d bonus=%d froze=%d\n", (void*)victimActor,
-                      victimActor->colChkInfo.health, victimActor->colChkInfo.health, baseDamage, bonusDamage,
-                      freezeTimer);
-        }
-
-        victimActor->freezeTimer = 0;
-
-        if (player) {
-            const Vec3f playerPos = player->actor.world.pos;
-            const Vec3f victimPos = victimActor->world.pos;
-            const float dx = victimPos.x - playerPos.x;
-            const float dz = victimPos.z - playerPos.z;
-            const s16 yaw = Math_Atan2S(dz, dx);
-
-            victimActor->world.rot.y = yaw;
-            victimActor->shape.rot.y = yaw;
-        }
-
-        victimActor->speedXZ = 10.0f;
-        victimActor->velocity.y = 3.0f;
+    const char* shatterSrcLabel = isHammerAttack ? "hammer" : "sword";
+    if (victimActor && victimPtr && gSwordATVictimCooldown.count(victimPtr) == 0 &&
+        Fuse::TryFreezeShatter(play, victimActor, player ? &player->actor : nullptr, shatterSrcLabel)) {
+        gSwordATVictimCooldown.insert(victimPtr);
+        return;
     }
 
     if (victimPtr) {
