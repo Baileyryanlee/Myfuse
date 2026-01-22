@@ -162,7 +162,6 @@ static void ClearFuseFreeze(Actor* actor) {
     sFuseFrozenTimers.erase(actor);
     sFreezeAppliedFrame.erase(actor);
     sFreezeShatterFrame.erase(actor);
-    sFreezeLastShatterFrame.erase(actor);
     sFuseFrozenPos.erase(actor);
     sFuseFrozenPinned.erase(actor);
     actor->colorFilterTimer = 0;
@@ -181,6 +180,9 @@ bool Fuse::TryFreezeShatter(PlayState* play, Actor* victim, Actor* attacker, con
 
     RemoveDeferredFreezeRequestsFor(victim);
     ClearFuseFreeze(victim);
+    if (play) {
+        sFreezeLastShatterFrame[victim] = play->gameplayFrames;
+    }
     const int totalHitDamage = std::max(0, static_cast<int>(victim->colChkInfo.damage));
     float damageMult = kFreezeShatterDamageMult;
     // TODO: if attacker has Flame/Burn modifier active, set damageMult = 2.0f.
@@ -834,8 +836,10 @@ static void TickFuseFrozenTimers(PlayState* play) {
         }
 
         if (timer <= 0) {
-            ++it;
-            ClearFuseFreeze(actor);
+            Actor* a = actor;
+            it = sFuseFrozenTimers.erase(it);
+            ClearFuseFreeze(a);
+            continue;
         } else {
             auto shatterIt = sFreezeShatterFrame.find(actor);
             if (play != nullptr && shatterIt != sFreezeShatterFrame.end() &&
