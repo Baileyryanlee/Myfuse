@@ -4931,7 +4931,7 @@ s32 func_808382DC(Player* this, PlayState* play) {
                         int freezeDurabilityMax = 0;
                         if (Fuse_ShieldHasFreeze(play, &freezeMatId, &freezeDurabilityCur, &freezeDurabilityMax,
                                                  &freezeLevel) &&
-                            freezeLevel > 0) {
+                            freezeLevel > 0 && attacker->freezeTimer == 0) {
                             osSyncPrintf("[FuseDBG] FreezeApply: src=shield attacker=%p lvl=%u mat=%d\n",
                                          (void*)attacker, freezeLevel, freezeMatId);
                             Fuse_ShieldApplyFreeze(play, attacker, freezeLevel);

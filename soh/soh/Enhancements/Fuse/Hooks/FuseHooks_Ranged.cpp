@@ -63,13 +63,21 @@ extern "C" void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Ac
         return;
     }
 
+    Player* player = GET_PLAYER(play);
+    if (Fuse::TryFreezeShatter(play, victim, player ? &player->actor : nullptr, "ranged")) {
+        Fuse::MarkRangedHitResolved(static_cast<RangedFuseSlot>(slot), "FreezeShatter");
+        Fuse::ClearActiveRangedFuse(static_cast<RangedFuseSlot>(slot), "FreezeShatter");
+        return;
+    }
+
     uint8_t stunLevel = 0;
     if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Stun, &stunLevel) && stunLevel > 0) {
         Fuse_TriggerDekuNutAtPos(play, victim->world.pos, RangedSlotItemId(slot));
     }
 
     uint8_t freezeLevel = 0;
-    if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Freeze, &freezeLevel) && freezeLevel > 0) {
+    if (!Fuse::IsFuseFrozen(victim) && victim->freezeTimer == 0 &&
+        HasModifier(def->modifiers, def->modifierCount, ModifierId::Freeze, &freezeLevel) && freezeLevel > 0) {
         Fuse::QueueSwordFreeze(play, victim, freezeLevel, "ranged", RangedSlotLabel(slot), materialId);
     }
 

@@ -72,6 +72,12 @@ extern "C" void FuseHooks_OnBoomerangHitActor(PlayState* play, Actor* victim) {
                   static_cast<int>(materialId), static_cast<unsigned int>(knockbackLevel), (void*)victim,
                   Fuse::GetBoomerangFuseDurability(), Fuse::GetBoomerangFuseMaxDurability());
 
+        Player* player = GET_PLAYER(play);
+        if (Fuse::TryFreezeShatter(play, victim, player ? &player->actor : nullptr, "boomerang")) {
+            Fuse::DamageBoomerangFuseDurability(play, 1, "Boomerang hit");
+            return;
+        }
+
         if (def && knockbackLevel > 0) {
             ApplyBoomerangKnockback(play, victim, knockbackLevel, materialId, Fuse::GetBoomerangFuseDurability(),
                                     Fuse::GetBoomerangFuseMaxDurability());
@@ -81,7 +87,7 @@ extern "C" void FuseHooks_OnBoomerangHitActor(PlayState* play, Actor* victim) {
             Fuse_EnqueuePendingStun(victim, stunLevel, materialId, ITEM_BOOMERANG);
         }
 
-        if (def && freezeLevel > 0) {
+        if (def && freezeLevel > 0 && !Fuse::IsFuseFrozen(victim) && victim->freezeTimer == 0) {
             Fuse::QueueSwordFreeze(play, victim, freezeLevel, "boomerang", "Boomerang", materialId);
         }
     }
