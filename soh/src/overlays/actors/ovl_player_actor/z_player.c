@@ -44,11 +44,14 @@ extern bool Fuse_ShieldHasNegateKnockback(PlayState* play, int* outMaterialId, i
                                           int* outDurabilityMax, uint8_t* outLevel);
 extern bool Fuse_ShieldHasStun(PlayState* play, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax,
                                uint8_t* outLevel);
+extern bool Fuse_ShieldHasFreeze(PlayState* play, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax,
+                                 uint8_t* outLevel);
 extern bool Fuse_ShieldHasMegaStun(PlayState* play, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax,
                                    uint8_t* outLevel);
 extern void Fuse_ShieldGuardDrain(PlayState* play);
 extern void Fuse_ShieldEnqueuePendingStun(Actor* victim, uint8_t level, int materialId, int itemId);
 extern void Fuse_ShieldTriggerMegaStun(PlayState* play, Player* player, int materialId, int itemId);
+extern void Fuse_ShieldApplyFreeze(PlayState* play, Actor* victim, uint8_t level);
 
 // Some player animations are played at this reduced speed, for reasons yet unclear.
 // This is called "adjusted" for now.
@@ -4920,6 +4923,18 @@ s32 func_808382DC(Player* this, PlayState* play) {
                             osSyncPrintf("[FuseDBG] shield_stun_trigger shield=%d attacker=%p attackerId=0x%04X\n",
                                          equipValue, (void*)attacker, attacker->id);
                             Fuse_ShieldEnqueuePendingStun(attacker, stunLevel, shieldMatId, shieldItemId);
+                        }
+
+                        uint8_t freezeLevel = 0;
+                        int freezeMatId = 0;
+                        int freezeDurabilityCur = 0;
+                        int freezeDurabilityMax = 0;
+                        if (Fuse_ShieldHasFreeze(play, &freezeMatId, &freezeDurabilityCur, &freezeDurabilityMax,
+                                                 &freezeLevel) &&
+                            freezeLevel > 0) {
+                            osSyncPrintf("[FuseDBG] FreezeApply: src=shield attacker=%p lvl=%u mat=%d\n",
+                                         (void*)attacker, freezeLevel, freezeMatId);
+                            Fuse_ShieldApplyFreeze(play, attacker, freezeLevel);
                         }
                     }
                 }
