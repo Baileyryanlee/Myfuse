@@ -1,4 +1,5 @@
 #include "soh/Enhancements/Fuse/Hooks/FuseHooks_Ranged.h"
+#include "overlays/actors/ovl_En_Fz/z_en_fz.h"
 
 #include "soh/Enhancements/Fuse/Fuse.h"
 #include "soh/Enhancements/Fuse/ShieldBashRules.h"
