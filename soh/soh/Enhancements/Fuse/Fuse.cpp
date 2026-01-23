@@ -29,6 +29,10 @@ extern "C" {
 #include "macros.h"
 #include "functions.h"
 }
+
+#include "src/overlays/actors/ovl_En_Dekubaba/z_en_dekubaba.h"
+#include "src/overlays/actors/ovl_En_Tite/z_en_tite.h"
+#include "src/overlays/actors/ovl_En_Zf/z_en_zf.h"
 extern "C" PlayState* gPlayState;
 using Fuse::MaterialDebugOverride;
 
@@ -59,6 +63,7 @@ static std::unordered_map<Actor*, int> sFreezeAppliedFrame;
 static std::unordered_map<Actor*, int32_t> sFreezeShatterFrame;
 static std::unordered_map<Actor*, int32_t> sFreezeLastShatterFrame;
 static std::unordered_map<Actor*, int32_t> sFreezeNoReapplyUntilFrame;
+static std::unordered_set<Actor*> sHpOverrideApplied;
 static constexpr int32_t kFreezeNoReapplyFrames = 12;
 static std::unordered_map<Actor*, Vec3f> sFuseFrozenPos;
 static std::unordered_map<Actor*, bool> sFuseFrozenPinned;
@@ -933,6 +938,86 @@ static void TickFuseFrozenTimers(PlayState* play) {
                 actor->velocity.y = std::min(actor->velocity.y, 0.0f);
                 sFuseFrozenPos.erase(actor);
             }
+            ++it;
+        }
+    }
+}
+
+static const char* GetEnemyHpOverrideKey(const Actor* actor) {
+    if (!actor) {
+        return nullptr;
+    }
+
+    switch (actor->id) {
+        case ACTOR_EN_FIREFLY:
+            return "gFuse.DebugEnemyHpOverride.Keese";
+        case ACTOR_EN_DEKUBABA:
+            if (actor->params == DEKUBABA_BIG) {
+                return "gFuse.DebugEnemyHpOverride.BigDekuBaba";
+            }
+            return "gFuse.DebugEnemyHpOverride.DekuBaba";
+        case ACTOR_EN_TITE:
+            if (actor->params == TEKTITE_BLUE) {
+                return "gFuse.DebugEnemyHpOverride.BlueTektite";
+            }
+            if (actor->params == TEKTITE_RED) {
+                return "gFuse.DebugEnemyHpOverride.RedTektite";
+            }
+            return nullptr;
+        case ACTOR_EN_ZF:
+            if (actor->params == ENZF_TYPE_DINOLFOS) {
+                return "gFuse.DebugEnemyHpOverride.Dinolfos";
+            }
+            return "gFuse.DebugEnemyHpOverride.Lizalfos";
+        case ACTOR_EN_PEEHAT:
+            return "gFuse.DebugEnemyHpOverride.Peahat";
+        case ACTOR_EN_WF:
+            return "gFuse.DebugEnemyHpOverride.Wolfos";
+        case ACTOR_EN_TEST:
+            return "gFuse.DebugEnemyHpOverride.Stalfos";
+        default:
+            return nullptr;
+    }
+}
+
+static void TryApplyEnemyHpOverride(Actor* actor) {
+    if (!actor) {
+        return;
+    }
+    if (CVarGetInteger("gFuse.DebugEnemyHpOverride.Enable", 0) == 0) {
+        return;
+    }
+    if (actor->category != ACTORCAT_ENEMY) {
+        return;
+    }
+
+    const char* key = GetEnemyHpOverrideKey(actor);
+    if (!key) {
+        return;
+    }
+
+    if (sHpOverrideApplied.find(actor) != sHpOverrideApplied.end()) {
+        return;
+    }
+
+    int overrideHp = CVarGetInteger(key, 0);
+    sHpOverrideApplied.insert(actor);
+    if (overrideHp <= 0) {
+        return;
+    }
+
+    overrideHp = std::clamp(overrideHp, 1, 255);
+    const int before = static_cast<int>(actor->colChkInfo.health);
+    actor->colChkInfo.health = static_cast<uint8_t>(overrideHp);
+    Fuse::Log("[FuseDBG] EnemyHpOverride: id=%d actor=%p hp=%d->%d key=%s\n", static_cast<int>(actor->id),
+              static_cast<void*>(actor), before, overrideHp, key);
+}
+
+static void CleanupEnemyHpOverrides(PlayState* play) {
+    for (auto it = sHpOverrideApplied.begin(); it != sHpOverrideApplied.end();) {
+        if (!IsActorAliveInPlay(play, *it)) {
+            it = sHpOverrideApplied.erase(it);
+        } else {
             ++it;
         }
     }
@@ -2542,6 +2627,7 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
     sFreezeLastShatterFrame.clear();
     sFuseFrozenPos.clear();
     sFuseFrozenPinned.clear();
+    sHpOverrideApplied.clear();
 
     EnsureMaterialInventoryInitialized();
 
@@ -2618,6 +2704,17 @@ void Fuse::OnGameFrameUpdate(PlayState* play) {
     TickFuseFrozenTimers(play);
     ProcessPendingStuns(play);
     UpdateRangedFuseLifecycle(play);
+
+    if (play != nullptr) {
+        CleanupEnemyHpOverrides(play);
+        for (int i = 0; i < ACTORCAT_MAX; ++i) {
+            Actor* actor = play->actorCtx.actorLists[i].head;
+            while (actor != nullptr) {
+                TryApplyEnemyHpOverride(actor);
+                actor = actor->next;
+            }
+        }
+    }
 }
 
 void Fuse::ProcessPendingStuns(PlayState* play) {

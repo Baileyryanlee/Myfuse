@@ -1,9 +1,11 @@
 #include "FuseMenuWindow.h"
 
 #include "soh/Enhancements/Fuse/Fuse.h"
+#include "libultraship/bridge/consolevariablebridge.h"
 
 #include <imgui.h>
 #include <algorithm>
+#include <array>
 #include <cstdio>
 #include <string>
 #include <utility>
@@ -133,6 +135,10 @@ static int ClampStepperValue(int v) {
     return std::clamp(v, 0, 999);
 }
 
+static int ClampEnemyHpValue(int v) {
+    return std::clamp(v, 0, 255);
+}
+
 static void AdjustAttackDelta(MaterialId id, int delta) {
     const int cur = Fuse::GetMaterialAttackBonusDelta(id);
     const int next = ClampStepperValue(cur + delta);
@@ -181,6 +187,26 @@ static const char* ResultName(Fuse::FuseResult r) {
             return "Unknown";
     }
 }
+
+struct EnemyHpOverrideRow {
+    const char* label;
+    const char* cvar;
+};
+
+static constexpr const char* kEnemyHpOverrideEnableCVar = "gFuse.DebugEnemyHpOverride.Enable";
+
+static const std::array<EnemyHpOverrideRow, 10> kEnemyHpOverrideRows = { {
+    { "Keese", "gFuse.DebugEnemyHpOverride.Keese" },
+    { "Deku Baba", "gFuse.DebugEnemyHpOverride.DekuBaba" },
+    { "Big Deku Baba", "gFuse.DebugEnemyHpOverride.BigDekuBaba" },
+    { "Blue Tektite", "gFuse.DebugEnemyHpOverride.BlueTektite" },
+    { "Red Tektite", "gFuse.DebugEnemyHpOverride.RedTektite" },
+    { "Lizalfos", "gFuse.DebugEnemyHpOverride.Lizalfos" },
+    { "Peahat", "gFuse.DebugEnemyHpOverride.Peahat" },
+    { "Wolfos", "gFuse.DebugEnemyHpOverride.Wolfos" },
+    { "Stalfos", "gFuse.DebugEnemyHpOverride.Stalfos" },
+    { "Dinolfos", "gFuse.DebugEnemyHpOverride.Dinolfos" },
+} };
 
 // In v0, only swords are implemented in backend. Everything else is display-only for now.
 static bool ItemSupportedNow(FuseItem item) {
@@ -700,6 +726,46 @@ void FuseMenuWindow::DrawElement() {
                     ImGui::TableSetColumnIndex(5);
                     if (ImGui::SmallButton(("Reset##" + std::to_string(materialIndex)).c_str())) {
                         ResetMaterialOverrideUI(def.id);
+                    }
+                }
+
+                ImGui::EndTable();
+            }
+
+            ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("Enemy HP")) {
+            ImGui::SeparatorText("Overrides");
+
+            bool hpOverridesEnabled = CVarGetInteger(kEnemyHpOverrideEnableCVar, 0) != 0;
+            if (ImGui::Checkbox("Enable HP Overrides", &hpOverridesEnabled)) {
+                CVarSetInteger(kEnemyHpOverrideEnableCVar, hpOverridesEnabled ? 1 : 0);
+            }
+
+            ImGui::TextUnformatted("0 = default (vanilla), 1..255 = override at spawn");
+
+            if (ImGui::BeginTable("EnemyHpOverridesTable", 2, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg)) {
+                ImGui::TableSetupColumn("Enemy", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("Spawn HP", ImGuiTableColumnFlags_WidthFixed, 180.0f);
+                ImGui::TableHeadersRow();
+
+                for (size_t index = 0; index < kEnemyHpOverrideRows.size(); ++index) {
+                    const EnemyHpOverrideRow& row = kEnemyHpOverrideRows[index];
+                    int hpValue = ClampEnemyHpValue(CVarGetInteger(row.cvar, 0));
+                    int hpDisplay = hpValue;
+
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TextUnformatted(row.label);
+                    ImGui::TableSetColumnIndex(1);
+
+                    const std::string stepperId = std::string("EnemyHp##") + std::to_string(index);
+                    if (DrawIntStepper(stepperId.c_str(), &hpDisplay)) {
+                        const int clamped = ClampEnemyHpValue(hpDisplay);
+                        if (clamped != hpValue) {
+                            CVarSetInteger(row.cvar, clamped);
+                        }
                     }
                 }
 
