@@ -42,8 +42,8 @@ struct MaterialDebugOverride {
 // Call once on load / init and every frame.
 void OnLoadGame(int32_t fileNum);
 void OnGameFrameUpdate(PlayState* play);
-void OnSwordMeleeHit(PlayState* play, Actor* victim);
-void OnHammerMeleeHit(PlayState* play, Actor* victim);
+void OnSwordMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage);
+void OnHammerMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage);
 void ProcessPendingStuns(PlayState* play);
 void ProcessDeferredSwordFreezes(PlayState* play);
 void ResetSwordFreezeQueue();
@@ -51,6 +51,8 @@ void QueueSwordFreeze(PlayState* play, Actor* victim, uint8_t level, const char*
                       MaterialId materialId);
 bool IsFuseFrozen(Actor* actor);
 bool TryFreezeShatter(PlayState* play, Actor* victim, Actor* attacker, const char* srcLabel);
+bool TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* attacker, int baseWeaponDamage,
+                                MaterialId materialId, int itemId, const char* srcLabel);
 
 // Core state
 bool IsEnabled();

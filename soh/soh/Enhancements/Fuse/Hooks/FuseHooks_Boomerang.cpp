@@ -87,7 +87,13 @@ extern "C" void FuseHooks_OnBoomerangHitActor(PlayState* play, Actor* victim) {
             Fuse_EnqueuePendingStun(victim, stunLevel, materialId, ITEM_BOOMERANG);
         }
 
-        if (def && freezeLevel > 0 && !Fuse::IsFuseFrozen(victim) && victim->freezeTimer == 0) {
+        if (Fuse::IsFuseFrozen(victim) || victim->freezeTimer > 0) {
+            Fuse::TryFreezeShatter(play, victim, player ? &player->actor : nullptr, "boomerang");
+            Fuse::DamageBoomerangFuseDurability(play, 1, "Boomerang hit");
+            return;
+        }
+
+        if (def && freezeLevel > 0) {
             Fuse::QueueSwordFreeze(play, victim, freezeLevel, "boomerang", "Boomerang", materialId);
         }
     }

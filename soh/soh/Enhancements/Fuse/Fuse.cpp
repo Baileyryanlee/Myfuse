@@ -187,7 +187,8 @@ static void ClearFuseFreeze(Actor* actor) {
     actor->colorFilterTimer = 0;
 }
 
-bool Fuse::TryFreezeShatter(PlayState* play, Actor* victim, Actor* attacker, const char* srcLabel) {
+bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* attacker, int baseWeaponDamage,
+                                      MaterialId materialId, int itemId, const char* srcLabel) {
     if (!victim) {
         return false;
     }
@@ -204,18 +205,25 @@ bool Fuse::TryFreezeShatter(PlayState* play, Actor* victim, Actor* attacker, con
         sFreezeLastShatterFrame[victim] = play->gameplayFrames;
         sFreezeNoReapplyUntilFrame[victim] = play->gameplayFrames + kFreezeNoReapplyFrames;
     }
-    const int totalHitDamage = std::max(0, static_cast<int>(victim->colChkInfo.damage));
+
+    int materialAtk = 0;
+    const MaterialDef* def = Fuse::GetMaterialDef(materialId);
+    if (def) {
+        materialAtk = Fuse::GetMaterialAttackBonus(materialId);
+    }
+
     float damageMult = kFreezeShatterDamageMult;
     // TODO: if attacker has Flame/Burn modifier active, set damageMult = 2.0f.
-    const int bonusDamage = static_cast<int>(std::ceil(totalHitDamage * (damageMult - 1.0f)));
-    if (bonusDamage > 0) {
+    const int rawDamage = std::max(0, baseWeaponDamage) + std::max(0, materialAtk);
+    const int finalDamage = static_cast<int>(lroundf(rawDamage * damageMult));
+    if (finalDamage > 0) {
         const int hpBefore = victim->colChkInfo.health;
-        victim->colChkInfo.damage = bonusDamage;
+        victim->colChkInfo.damage = finalDamage;
         Actor_ApplyDamage(victim);
         const int hpAfter = victim->colChkInfo.health;
 
         if (hpAfter == hpBefore && hpBefore > 0 && victim->category != ACTORCAT_BOSS) {
-            const int adjustedHealth = std::max(0, hpBefore - bonusDamage);
+            const int adjustedHealth = std::max(0, hpBefore - finalDamage);
             victim->colChkInfo.health = static_cast<uint8_t>(adjustedHealth);
         }
     }
@@ -225,9 +233,9 @@ bool Fuse::TryFreezeShatter(PlayState* play, Actor* victim, Actor* attacker, con
         sFreezeLastShatterFrame[victim] = frame;
     }
 
-    Fuse::Log("[FuseDBG] FreezeShatter: src=%s victim=%p base=%d bonus=%d mult=%.2f kb=%.2f\n",
-              srcLabel ? srcLabel : "unknown", (void*)victim, totalHitDamage, bonusDamage, damageMult,
-              kFreezeShatterKnockbackSpeed);
+    Fuse::Log("[FuseMVP] FreezeShatter: src=%s victim=%p item=%d mat=%d base=%d matAtk=%d mult=%.2f final=%d\n",
+              srcLabel ? srcLabel : "unknown", (void*)victim, itemId, static_cast<int>(materialId), baseWeaponDamage,
+              materialAtk, damageMult, finalDamage);
 
     Actor* sourceActor = attacker;
     if (!sourceActor && play != nullptr) {
@@ -260,6 +268,11 @@ bool Fuse::TryFreezeShatter(PlayState* play, Actor* victim, Actor* attacker, con
     }
 
     return true;
+}
+
+bool Fuse::TryFreezeShatter(PlayState* play, Actor* victim, Actor* attacker, const char* srcLabel) {
+    const int baseWeaponDamage = victim ? std::max(0, static_cast<int>(victim->colChkInfo.damage)) : 0;
+    return Fuse::TryFreezeShatterWithDamage(play, victim, attacker, baseWeaponDamage, MaterialId::None, 0, srcLabel);
 }
 
 
@@ -502,6 +515,11 @@ void ApplyIceArrowFreeze(PlayState* play, Actor* victim, uint8_t level) {
         return;
     }
 
+    if (IsActorFrozenInternal(victim)) {
+        Fuse::TryFreezeShatter(play, victim, nullptr, "ice_arrow");
+        return;
+    }
+
     if (IsFreezeReapplyBlocked(play, victim)) {
         Fuse::Log("[FuseDBG] FreezeSkip: reason=NoReapplyWindow frame=%d victim=%p\n",
                   play ? play->gameplayFrames : -1, (void*)victim);
@@ -511,10 +529,6 @@ void ApplyIceArrowFreeze(PlayState* play, Actor* victim, uint8_t level) {
     if (WasFreezeRecentlyShattered(play, victim)) {
         Fuse::Log("[FuseDBG] FreezeSkip: reason=RecentlyShattered frame=%d victim=%p\n",
                   play ? play->gameplayFrames : -1, (void*)victim);
-        return;
-    }
-
-    if (IsActorFrozenInternal(victim)) {
         return;
     }
 
@@ -1268,6 +1282,11 @@ extern "C" bool Fuse_ShieldHasMegaStun(PlayState* play, int* outMaterialId, int*
 }
 
 extern "C" void Fuse_ShieldApplyFreeze(PlayState* play, Actor* victim, uint8_t level) {
+    if (victim && IsActorFrozenInternal(victim)) {
+        Fuse::TryFreezeShatter(play, victim, nullptr, "shield");
+        return;
+    }
+
     ApplyIceArrowFreeze(play, victim, level);
 }
 
@@ -2725,9 +2744,14 @@ void Fuse::ResetSwordFreezeQueue() {
     ResetSwordFreezeQueueInternal();
 }
 
-static void ApplyMeleeHitMaterialEffects(PlayState* play, Actor* victim, MaterialId materialId, int itemId,
-                                         bool allowStun) {
+static void ApplyMeleeHitMaterialEffects(PlayState* play, Actor* victim, Actor* attacker, MaterialId materialId,
+                                         int itemId, int baseWeaponDamage, const char* srcLabel, bool allowStun) {
     if (!victim) {
+        return;
+    }
+
+    if (IsActorFrozenInternal(victim)) {
+        Fuse::TryFreezeShatterWithDamage(play, victim, attacker, baseWeaponDamage, materialId, itemId, srcLabel);
         return;
     }
 
@@ -2742,17 +2766,16 @@ static void ApplyMeleeHitMaterialEffects(PlayState* play, Actor* victim, Materia
     }
 
     uint8_t freezeLevel = 0;
-    const bool isFrozen = IsActorFrozenInternal(victim);
     const bool shatteredThisHit =
         (play && sFreezeShatterFrame.find(victim) != sFreezeShatterFrame.end() &&
          sFreezeShatterFrame[victim] == play->gameplayFrames);
-    if (!shatteredThisHit && !isFrozen &&
+    if (!shatteredThisHit &&
         HasModifier(def->modifiers, def->modifierCount, ModifierId::Freeze, &freezeLevel) && freezeLevel > 0) {
         EnqueueSwordFreezeRequest(play, victim, freezeLevel);
     }
 }
 
-void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim) {
+void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage) {
     if (!Fuse::IsSwordFused()) {
         return;
     }
@@ -2761,13 +2784,15 @@ void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim) {
         sDekuLastSwordHitFrame[victim] = play->gameplayFrames;
     }
 
+    const MaterialId materialId = Fuse::GetSwordMaterial();
+    const MaterialDef* def = Fuse::GetMaterialDef(materialId);
     Player* player = play ? GET_PLAYER(play) : nullptr;
-    if (Fuse::TryFreezeShatter(play, victim, player ? &player->actor : nullptr, "sword")) {
+    const int itemId = gSaveContext.equips.buttonItems[0];
+    if (Fuse::TryFreezeShatterWithDamage(play, victim, player ? &player->actor : nullptr, baseWeaponDamage, materialId,
+                                         itemId, "sword")) {
         return;
     }
 
-    const MaterialId materialId = Fuse::GetSwordMaterial();
-    const MaterialDef* def = Fuse::GetMaterialDef(materialId);
     if (def) {
         uint8_t knockbackLevel = 0;
         if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Knockback, &knockbackLevel) &&
@@ -2778,19 +2803,22 @@ void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim) {
         }
     }
 
-    const int itemId = gSaveContext.equips.buttonItems[0];
-    ApplyMeleeHitMaterialEffects(play, victim, Fuse::GetSwordMaterial(), itemId, true);
+    ApplyMeleeHitMaterialEffects(play, victim, player ? &player->actor : nullptr, materialId, itemId, baseWeaponDamage,
+                                 "sword", true);
 }
 
-void Fuse::OnHammerMeleeHit(PlayState* play, Actor* victim) {
+void Fuse::OnHammerMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage) {
     if (!Fuse::IsHammerFused()) {
         return;
     }
 
     Player* player = play ? GET_PLAYER(play) : nullptr;
-    if (Fuse::TryFreezeShatter(play, victim, player ? &player->actor : nullptr, "hammer")) {
+    const MaterialId materialId = Fuse::GetHammerMaterial();
+    if (Fuse::TryFreezeShatterWithDamage(play, victim, player ? &player->actor : nullptr, baseWeaponDamage, materialId,
+                                         ITEM_HAMMER, "hammer")) {
         return;
     }
 
-    ApplyMeleeHitMaterialEffects(play, victim, Fuse::GetHammerMaterial(), ITEM_HAMMER, false);
+    ApplyMeleeHitMaterialEffects(play, victim, player ? &player->actor : nullptr, materialId, ITEM_HAMMER,
+                                 baseWeaponDamage, "hammer", false);
 }
