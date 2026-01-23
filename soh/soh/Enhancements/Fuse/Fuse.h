@@ -51,8 +51,8 @@ void QueueSwordFreeze(PlayState* play, Actor* victim, uint8_t level, const char*
                       MaterialId materialId);
 bool IsFuseFrozen(Actor* actor);
 bool TryFreezeShatter(PlayState* play, Actor* victim, Actor* attacker, const char* srcLabel);
-bool TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* attacker, int baseWeaponDamage,
-                                MaterialId materialId, int itemId, const char* srcLabel);
+bool TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* attacker, int itemId, MaterialId materialId,
+                                int baseWeaponDamage, const char* srcLabel);
 
 // Core state
 bool IsEnabled();
