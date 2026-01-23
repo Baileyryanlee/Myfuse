@@ -101,13 +101,18 @@ static bool IsFuseFrozenInternal(Actor* actor) {
     return it != sFuseFrozenTimers.end() && it->second > 0;
 }
 
-static bool WasFreezeAppliedThisFrameInternal(Actor* actor, int frame) {
+static bool WasFreezeAppliedRecentlyInternal(Actor* actor, int frame, int windowFrames) {
     if (!actor || frame < 0) {
         return false;
     }
 
-    const auto applyIt = sFreezeAppliedFrame.find(actor);
-    return applyIt != sFreezeAppliedFrame.end() && applyIt->second == frame;
+    const auto it = sFreezeAppliedFrame.find(actor);
+    if (it == sFreezeAppliedFrame.end()) {
+        return false;
+    }
+
+    const int dt = frame - it->second;
+    return dt >= 0 && dt <= windowFrames;
 }
 
 static bool WasFreezeRecentlyShattered(PlayState* play, Actor* victim) {
@@ -194,8 +199,17 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
     }
 
     const int frame = play ? play->gameplayFrames : -1;
-    const bool freezeAppliedThisFrame = WasFreezeAppliedThisFrameInternal(victim, frame);
-    if (!IsActorFrozenInternal(victim) || freezeAppliedThisFrame) {
+    const bool freezeAppliedRecently = WasFreezeAppliedRecentlyInternal(victim, frame, 3);
+    if (!IsActorFrozenInternal(victim) || freezeAppliedRecently) {
+        if (freezeAppliedRecently) {
+            int dt = -1;
+            const auto it = sFreezeAppliedFrame.find(victim);
+            if (it != sFreezeAppliedFrame.end()) {
+                dt = frame - it->second;
+            }
+            Fuse::Log("[FuseDBG] FreezeShatterSkip: reason=RecentlyApplied frame=%d victim=%p dt=%d\n", frame,
+                      (void*)victim, dt);
+        }
         return false;
     }
 
