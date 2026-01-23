@@ -36,6 +36,40 @@ static std::unordered_set<void*> gAwardedFrozenShards;
 static uint32_t gSwordBaseDmgFlags[4];
 static bool gSwordBaseValid = false;
 
+static int ResolveMeleeHitBaseDamage(Actor* victim, ColliderInfo* atInfo, ColliderInfo* acInfo, const char* srcLabel,
+                                     int itemId, MaterialId materialId) {
+    if (!victim || !atInfo) {
+        return 0;
+    }
+
+    int baseDamage = 0;
+    DamageTable* damageTable = victim->colChkInfo.damageTable;
+    if (damageTable != nullptr) {
+        u32 flags = atInfo->toucher.dmgFlags;
+        int idx = 0;
+        for (; idx < 0x20; idx++, flags >>= 1) {
+            if (flags == 1) {
+                break;
+            }
+        }
+
+        if (idx < 0x20) {
+            baseDamage = damageTable->table[idx] & 0xF;
+        }
+    } else {
+        const int defense = acInfo ? acInfo->bumper.defense : 0;
+        baseDamage = static_cast<int>(atInfo->toucher.damage) - defense;
+        baseDamage = std::max(0, baseDamage);
+    }
+
+    // TODO: Confirm base weapon damage source for freeze shatter (d0/d1/d2) in runtime logs.
+    Fuse::Log("[FuseDBG] FreezeDamageProbe: src=%s victim=%p item=%d mat=%d d0=%d d1=0x%08X d2=%d\n",
+              srcLabel ? srcLabel : "unknown", (void*)victim, itemId, static_cast<int>(materialId),
+              static_cast<int>(atInfo->toucher.damage), atInfo->toucher.dmgFlags,
+              static_cast<int>(victim->colChkInfo.damage));
+    return baseDamage;
+}
+
 // -----------------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------------
@@ -380,22 +414,21 @@ extern "C" void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollid
         Fuse::SetHammerDrainedThisSwing(true);
     }
 
-    const char* shatterSrcLabel = isHammerAttack ? "hammer" : "sword";
-    if (victimActor && victimPtr && gSwordATVictimCooldown.count(victimPtr) == 0 &&
-        Fuse::TryFreezeShatter(play, victimActor, player ? &player->actor : nullptr, shatterSrcLabel)) {
-        gSwordATVictimCooldown.insert(victimPtr);
-        return;
-    }
-
     if (victimPtr) {
         gSwordATVictimCooldown.insert(victimPtr);
     }
 
     if (victimActor) {
+        const char* shatterSrcLabel = isHammerAttack ? "hammer" : "sword";
+        const MaterialId materialId = isHammerAttack ? Fuse::GetHammerMaterial() : Fuse::GetSwordMaterial();
+        const int itemId = isHammerAttack ? ITEM_HAMMER : gSaveContext.equips.buttonItems[0];
+        const int baseWeaponDamage =
+            ResolveMeleeHitBaseDamage(victimActor, atInfo, acInfo, shatterSrcLabel, itemId, materialId);
+
         if (isHammerAttack) {
-            Fuse::OnHammerMeleeHit(play, victimActor);
+            Fuse::OnHammerMeleeHit(play, victimActor, baseWeaponDamage);
         } else {
-            Fuse::OnSwordMeleeHit(play, victimActor);
+            Fuse::OnSwordMeleeHit(play, victimActor, baseWeaponDamage);
         }
     }
 }
