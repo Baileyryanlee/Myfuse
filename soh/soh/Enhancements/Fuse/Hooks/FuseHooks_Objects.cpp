@@ -36,10 +36,35 @@ static std::unordered_set<void*> gAwardedFrozenShards;
 static uint32_t gSwordBaseDmgFlags[4];
 static bool gSwordBaseValid = false;
 
+static int GetSwordBaseWeaponDamage(int itemId) {
+    switch (itemId) {
+        case ITEM_SWORD_KOKIRI:
+            return 1;
+        case ITEM_SWORD_MASTER:
+            return 2;
+        case ITEM_SWORD_BGS:
+        case ITEM_SWORD_KNIFE:
+            return 4;
+        case ITEM_SWORD_BROKEN:
+            return 1;
+        default:
+            return 0;
+    }
+}
+
 static int ResolveMeleeHitBaseDamage(Actor* victim, ColliderInfo* atInfo, ColliderInfo* acInfo, const char* srcLabel,
                                      int itemId, MaterialId materialId) {
     if (!victim || !atInfo) {
         return 0;
+    }
+
+    const int swordBaseDamage = GetSwordBaseWeaponDamage(itemId);
+    if (swordBaseDamage > 0) {
+        Fuse::Log("[FuseDBG] FreezeDamageProbe: src=%s victim=%p item=%d mat=%d base=%d d0=%d d1=0x%08X d2=%d\n",
+                  srcLabel ? srcLabel : "unknown", (void*)victim, itemId, static_cast<int>(materialId),
+                  swordBaseDamage, static_cast<int>(atInfo->toucher.damage), atInfo->toucher.dmgFlags,
+                  static_cast<int>(victim->colChkInfo.damage));
+        return swordBaseDamage;
     }
 
     int baseDamage = 0;
@@ -63,8 +88,8 @@ static int ResolveMeleeHitBaseDamage(Actor* victim, ColliderInfo* atInfo, Collid
     }
 
     // TODO: Confirm base weapon damage source for freeze shatter (d0/d1/d2) in runtime logs.
-    Fuse::Log("[FuseDBG] FreezeDamageProbe: src=%s victim=%p item=%d mat=%d d0=%d d1=0x%08X d2=%d\n",
-              srcLabel ? srcLabel : "unknown", (void*)victim, itemId, static_cast<int>(materialId),
+    Fuse::Log("[FuseDBG] FreezeDamageProbe: src=%s victim=%p item=%d mat=%d base=%d d0=%d d1=0x%08X d2=%d\n",
+              srcLabel ? srcLabel : "unknown", (void*)victim, itemId, static_cast<int>(materialId), baseDamage,
               static_cast<int>(atInfo->toucher.damage), atInfo->toucher.dmgFlags,
               static_cast<int>(victim->colChkInfo.damage));
     return baseDamage;
