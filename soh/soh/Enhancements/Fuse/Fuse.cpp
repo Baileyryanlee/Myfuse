@@ -63,6 +63,7 @@ static std::unordered_map<Actor*, int> sFreezeAppliedFrame;
 static std::unordered_map<Actor*, int32_t> sFreezeShatterFrame;
 static std::unordered_map<Actor*, int32_t> sFreezeLastShatterFrame;
 static std::unordered_map<Actor*, int32_t> sFreezeNoReapplyUntilFrame;
+static std::unordered_map<Actor*, float> sFuseFrozenOrigGravity;
 static std::unordered_set<Actor*> sHpOverrideApplied;
 static constexpr int32_t kFreezeNoReapplyFrames = 12;
 static std::unordered_map<Actor*, Vec3f> sFuseFrozenPos;
@@ -189,6 +190,12 @@ static void ClearFuseFreeze(Actor* actor) {
         return;
     }
 
+    auto gravIt = sFuseFrozenOrigGravity.find(actor);
+    if (gravIt != sFuseFrozenOrigGravity.end()) {
+        actor->gravity = gravIt->second;
+        sFuseFrozenOrigGravity.erase(gravIt);
+    }
+
     sFuseFrozenTimers.erase(actor);
     sFreezeAppliedFrame.erase(actor);
     sFreezeShatterFrame.erase(actor);
@@ -220,6 +227,7 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
 
     RemoveDeferredFreezeRequestsFor(victim);
     ClearFuseFreeze(victim);
+    Fuse::Log("[FuseDBG] ShatterUnfreeze: victim=%p restored_grav=%.2f\n", (void*)victim, victim->gravity);
     if (play) {
         sFreezeLastShatterFrame[victim] = play->gameplayFrames;
         sFreezeNoReapplyUntilFrame[victim] = play->gameplayFrames + kFreezeNoReapplyFrames;
@@ -572,6 +580,10 @@ void ApplyIceArrowFreeze(PlayState* play, Actor* victim, uint8_t level) {
     constexpr s16 kIceColorFlagBlue = 0;        // Default flag yields the blue ice arrow tint (see z64actor.h)
     constexpr s16 kNeutralColorIntensity = 180; // Softer tint to look more snow/white than deep blue
 
+    if (sFuseFrozenOrigGravity.find(victim) == sFuseFrozenOrigGravity.end()) {
+        sFuseFrozenOrigGravity[victim] = victim->gravity;
+    }
+
     // Apply the same immobilization and visual feedback that Ice Arrows use
     sFuseFrozenTimers[victim] = std::max<s16>(sFuseFrozenTimers[victim], duration);
     Actor_SetColorFilter(victim, kIceColorFlagBlue, kNeutralColorIntensity, 0, duration);
@@ -903,6 +915,7 @@ static void TickFuseFrozenTimers(PlayState* play) {
             sFreezeShatterFrame.erase(actor);
             sFreezeLastShatterFrame.erase(actor);
             sFreezeNoReapplyUntilFrame.erase(actor);
+            sFuseFrozenOrigGravity.erase(actor);
             sFuseFrozenPos.erase(actor);
             sFuseFrozenPinned.erase(actor);
             it = sFuseFrozenTimers.erase(it);
@@ -2640,6 +2653,7 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
     sFreezeAppliedFrame.clear();
     sFreezeShatterFrame.clear();
     sFreezeLastShatterFrame.clear();
+    sFuseFrozenOrigGravity.clear();
     sFuseFrozenPos.clear();
     sFuseFrozenPinned.clear();
     sHpOverrideApplied.clear();
