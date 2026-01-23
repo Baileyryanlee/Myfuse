@@ -56,6 +56,9 @@ static constexpr s16 kFreezeDurationFramesBase = 120;
 static constexpr float kFreezeShatterDamageMult = 1.5f;
 static constexpr float kFreezeShatterKnockbackSpeed = 18.0f;
 static constexpr float kFreezeShatterKnockbackYBoost = 3.0f;
+static constexpr int kShatterImpulseFrames = 5;
+static constexpr float kShatterImpulseStep = 3.5f;
+static constexpr float kShatterImpulseY = 0.0f;
 static std::unordered_map<MaterialId, MaterialDebugOverride> sMaterialDebugOverrides;
 static bool sUseDebugOverrides = false;
 static std::unordered_map<Actor*, s16> sFuseFrozenTimers;
@@ -63,6 +66,8 @@ static std::unordered_map<Actor*, int> sFreezeAppliedFrame;
 static std::unordered_map<Actor*, int32_t> sFreezeShatterFrame;
 static std::unordered_map<Actor*, int32_t> sFreezeLastShatterFrame;
 static std::unordered_map<Actor*, int32_t> sFreezeNoReapplyUntilFrame;
+static std::unordered_map<Actor*, int> sShatterImpulseUntilFrame;
+static std::unordered_map<Actor*, Vec3f> sShatterImpulseDir;
 static std::unordered_map<Actor*, float> sFuseFrozenOrigGravity;
 static std::unordered_set<Actor*> sHpOverrideApplied;
 static constexpr int32_t kFreezeNoReapplyFrames = 12;
@@ -294,6 +299,14 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
         }
 
         knockbackYaw = Math_Atan2S(dir.x, dir.z);
+    }
+
+    if (play != nullptr) {
+        Vec3f dir = { Math_SinS(knockbackYaw), 0.0f, Math_CosS(knockbackYaw) };
+        sShatterImpulseDir[victim] = dir;
+        sShatterImpulseUntilFrame[victim] = play->gameplayFrames + kShatterImpulseFrames;
+        Fuse::Log("[FuseDBG] ShatterImpulse start: victim=%p until=%d step=%.2f\n", (void*)victim,
+                  sShatterImpulseUntilFrame[victim], kShatterImpulseStep);
     }
 
     victim->velocity.x = Math_SinS(knockbackYaw) * kFreezeShatterKnockbackSpeed;
@@ -968,6 +981,36 @@ static void TickFuseFrozenTimers(PlayState* play) {
             }
             ++it;
         }
+    }
+}
+
+static void TickShatterImpulse(PlayState* play) {
+    if (!play) {
+        return;
+    }
+
+    for (auto it = sShatterImpulseUntilFrame.begin(); it != sShatterImpulseUntilFrame.end();) {
+        Actor* actor = it->first;
+        const int untilFrame = it->second;
+
+        if (!IsActorAliveInPlay(play, actor) || play->gameplayFrames >= untilFrame) {
+            sShatterImpulseDir.erase(actor);
+            it = sShatterImpulseUntilFrame.erase(it);
+            continue;
+        }
+
+        const auto dirIt = sShatterImpulseDir.find(actor);
+        if (dirIt != sShatterImpulseDir.end()) {
+            const Vec3f& dir = dirIt->second;
+            actor->world.pos.x += dir.x * kShatterImpulseStep;
+            actor->world.pos.z += dir.z * kShatterImpulseStep;
+            if (kShatterImpulseY != 0.0f) {
+                actor->world.pos.y += kShatterImpulseY;
+            }
+            actor->speedXZ = std::max(actor->speedXZ, kFreezeShatterKnockbackSpeed);
+        }
+
+        ++it;
     }
 }
 
@@ -2656,6 +2699,8 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
     sFuseFrozenOrigGravity.clear();
     sFuseFrozenPos.clear();
     sFuseFrozenPinned.clear();
+    sShatterImpulseUntilFrame.clear();
+    sShatterImpulseDir.clear();
     sHpOverrideApplied.clear();
 
     EnsureMaterialInventoryInitialized();
@@ -2731,6 +2776,7 @@ static void UpdateRangedFuseLifecycle(PlayState* play) {
 
 void Fuse::OnGameFrameUpdate(PlayState* play) {
     TickFuseFrozenTimers(play);
+    TickShatterImpulse(play);
     ProcessPendingStuns(play);
     UpdateRangedFuseLifecycle(play);
 
