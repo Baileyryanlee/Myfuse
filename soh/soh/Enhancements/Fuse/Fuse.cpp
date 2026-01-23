@@ -225,6 +225,9 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
         sFreezeNoReapplyUntilFrame[victim] = play->gameplayFrames + kFreezeNoReapplyFrames;
     }
 
+    Fuse::Log("[FuseDBG] ShatterKB pre: victim=%p vel=(%.2f,%.2f,%.2f) spd=%.2f grav=%.2f\n", (void*)victim,
+              victim->velocity.x, victim->velocity.y, victim->velocity.z, victim->speedXZ, victim->gravity);
+
     int materialAtk = 0;
     const MaterialDef* def = Fuse::GetMaterialDef(materialId);
     if (def) {
@@ -247,6 +250,9 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
         }
     }
 
+    Fuse::Log("[FuseDBG] ShatterKB postDamage: victim=%p vel=(%.2f,%.2f,%.2f) spd=%.2f grav=%.2f\n", (void*)victim,
+              victim->velocity.x, victim->velocity.y, victim->velocity.z, victim->speedXZ, victim->gravity);
+
     if (frame >= 0) {
         sFreezeShatterFrame[victim] = frame;
         sFreezeLastShatterFrame[victim] = frame;
@@ -264,6 +270,7 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
         }
     }
 
+    s16 knockbackYaw = victim->yawTowardsPlayer + 0x8000;
     if (sourceActor != nullptr) {
         Vec3f dir = { victim->world.pos.x - sourceActor->world.pos.x, 0.0f,
                       victim->world.pos.z - sourceActor->world.pos.z };
@@ -278,13 +285,21 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
             dir.z *= invLen;
         }
 
-        victim->velocity.x = dir.x * kFreezeShatterKnockbackSpeed;
-        victim->velocity.z = dir.z * kFreezeShatterKnockbackSpeed;
-        victim->velocity.y = kFreezeShatterKnockbackYBoost;
-        victim->speedXZ = kFreezeShatterKnockbackSpeed;
-        victim->world.rot.y = Math_Atan2S(dir.x, dir.z);
-        victim->shape.rot.y = victim->world.rot.y;
+        knockbackYaw = Math_Atan2S(dir.x, dir.z);
     }
+
+    victim->velocity.x = Math_SinS(knockbackYaw) * kFreezeShatterKnockbackSpeed;
+    victim->velocity.z = Math_CosS(knockbackYaw) * kFreezeShatterKnockbackSpeed;
+    victim->velocity.y = std::max(victim->velocity.y, kFreezeShatterKnockbackYBoost);
+    victim->speedXZ = kFreezeShatterKnockbackSpeed;
+    victim->world.rot.y = knockbackYaw;
+    victim->shape.rot.y = victim->world.rot.y;
+
+    Fuse::Log("[FuseDBG] ShatterKB applied: victim=%p vel=(%.2f,%.2f,%.2f) spd=%.2f yaw=%d\n", (void*)victim,
+              victim->velocity.x, victim->velocity.y, victim->velocity.z, victim->speedXZ, knockbackYaw);
+    Fuse::Log("[FuseMVP] FreezeShatterKB: src=%s victim=%p vel=(%.2f,%.2f,%.2f) spd=%.2f\n",
+              srcLabel ? srcLabel : "unknown", (void*)victim, victim->velocity.x, victim->velocity.y,
+              victim->velocity.z, victim->speedXZ);
 
     return true;
 }
