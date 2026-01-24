@@ -31,6 +31,7 @@ extern "C" {
 }
 
 #include "src/overlays/actors/ovl_En_Dekubaba/z_en_dekubaba.h"
+#include "src/overlays/actors/ovl_En_Bom/z_en_bom.h"
 #include "src/overlays/actors/ovl_En_Tite/z_en_tite.h"
 #include "src/overlays/actors/ovl_En_Zf/z_en_zf.h"
 extern "C" PlayState* gPlayState;
@@ -434,6 +435,10 @@ int GetDekuStickAmmoCount() {
     return AMMO(ITEM_STICK);
 }
 
+int GetBombAmmoCount() {
+    return AMMO(ITEM_BOMB);
+}
+
 bool ConsumeDekuNutAmmo(int amount) {
     if (amount <= 0) {
         return true;
@@ -480,6 +485,29 @@ bool ConsumeDekuStickAmmo(int amount) {
     return true;
 }
 
+bool ConsumeBombAmmo(int amount) {
+    if (amount <= 0) {
+        return true;
+    }
+
+    const int cur = GetBombAmmoCount();
+    if (cur < amount) {
+        Fuse::Log("[FuseDBG] Consume Bomb FAILED: cur=%d need=%d\n", cur, amount);
+        return false;
+    }
+
+    Fuse::Log("[FuseMVP] Consume Bomb: cur=%d amount=%d\n", cur, amount);
+
+    const int newCount = std::max(0, cur - amount);
+    const int delta = newCount - cur;
+
+    if (delta != 0) {
+        Inventory_ChangeAmmo(ITEM_BOMB, delta);
+    }
+
+    return true;
+}
+
 void AddDekuNutAmmo(int amount) {
     if (amount <= 0) {
         return;
@@ -508,6 +536,20 @@ void AddDekuStickAmmo(int amount) {
     }
 }
 
+void AddBombAmmo(int amount) {
+    if (amount <= 0) {
+        return;
+    }
+
+    const int cur = GetBombAmmoCount();
+    const int newCount = std::max(0, cur + amount);
+    const int delta = newCount - cur;
+
+    if (delta != 0) {
+        Inventory_ChangeAmmo(ITEM_BOMB, delta);
+    }
+}
+
 void Fuse_AddMaterialOrAmmo(MaterialId mat, int amount) {
     if (amount <= 0 || mat == MaterialId::None) {
         return;
@@ -520,6 +562,11 @@ void Fuse_AddMaterialOrAmmo(MaterialId mat, int amount) {
 
     if (mat == MaterialId::Stick) {
         AddDekuStickAmmo(amount);
+        return;
+    }
+
+    if (mat == MaterialId::Bomb) {
+        AddBombAmmo(amount);
         return;
     }
 
@@ -615,7 +662,7 @@ const char* GetStunSourceLabel(int itemId) {
 }
 
 bool IsVanillaMaterial(MaterialId id) {
-    return id == MaterialId::DekuNut || id == MaterialId::Stick;
+    return id == MaterialId::DekuNut || id == MaterialId::Stick || id == MaterialId::Bomb;
 }
 
 bool IsCustomMaterial(MaterialId id) {
@@ -811,7 +858,7 @@ static inline int RangedSlotToIndex(RangedFuseSlot slot) {
 
 static bool IsMaterialIdInRange(MaterialId id) {
     const int value = static_cast<int>(id);
-    return value >= static_cast<int>(MaterialId::None) && value <= static_cast<int>(MaterialId::Stick);
+    return value >= static_cast<int>(MaterialId::None) && value <= static_cast<int>(MaterialId::Bomb);
 }
 
 #ifndef NDEBUG
@@ -1288,6 +1335,37 @@ void QueueSwordFreezeInternal(PlayState* play, Actor* victim, uint8_t level, con
 
 } // namespace
 
+FuseExplosionParams Fuse_GetExplosionParams(MaterialId mat, int level) {
+    (void)mat;
+    (void)level;
+    return { 80.0f, 8 };
+}
+
+void Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfMode selfMode, FuseExplosionParams params,
+                           const char* srcLabel) {
+    if (!play) {
+        return;
+    }
+
+    Fuse::Log("[FuseDBG] Explosion: pos=(%.2f %.2f %.2f) radius=%.2f dmg=%d self=%d src=%s\n", pos.x, pos.y, pos.z,
+              static_cast<double>(params.radius), params.damage,
+              (selfMode == FuseExplosionSelfMode::DamagePlayer) ? 1 : 0, srcLabel ? srcLabel : "unknown");
+
+    Actor* explosionActor =
+        Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BOM, pos.x, pos.y, pos.z, 0, 0, 0, BOMB_BODY);
+    if (!explosionActor) {
+        return;
+    }
+
+    EnBom* bomb = reinterpret_cast<EnBom*>(explosionActor);
+    bomb->timer = 0;
+    bomb->explosionCollider.base.atFlags =
+        (selfMode == FuseExplosionSelfMode::DamagePlayer) ? (AT_ON | AT_TYPE_ALL) : (AT_ON | AT_TYPE_ENEMY);
+    bomb->explosionCollider.elements[0].info.toucher.damage = params.damage;
+    bomb->explosionCollider.elements[0].dim.modelSphere.radius = params.radius;
+    bomb->explosionCollider.elements[0].dim.worldSphere.radius = params.radius;
+}
+
 void Fuse::QueueSwordFreeze(PlayState* play, Actor* victim, uint8_t level, const char* srcLabel, const char* slotLabel,
                             MaterialId materialId) {
     QueueSwordFreezeInternal(play, victim, level, srcLabel, slotLabel, materialId);
@@ -1591,6 +1669,62 @@ extern "C" bool Fuse_ShieldHasMegaStun(PlayState* play, int* outMaterialId, int*
                                   outLevel);
 }
 
+extern "C" bool Fuse_ShieldHasExplosion(PlayState* play, int* outMaterialId, int* outDurabilityCur,
+                                        int* outDurabilityMax, uint8_t* outLevel) {
+    if (outMaterialId) {
+        *outMaterialId = static_cast<int>(MaterialId::None);
+    }
+    if (outDurabilityCur) {
+        *outDurabilityCur = 0;
+    }
+    if (outDurabilityMax) {
+        *outDurabilityMax = 0;
+    }
+    if (outLevel) {
+        *outLevel = 0;
+    }
+
+    if (!play) {
+        return false;
+    }
+
+    const FuseSlot& slot = gFuseSave.GetActiveShieldSlot(play);
+    if (slot.materialId == MaterialId::None || slot.durabilityCur <= 0) {
+        return false;
+    }
+
+    if (outMaterialId) {
+        *outMaterialId = static_cast<int>(slot.materialId);
+    }
+    if (outDurabilityCur) {
+        *outDurabilityCur = slot.durabilityCur;
+    }
+    if (outDurabilityMax) {
+        *outDurabilityMax = slot.durabilityMax;
+    }
+
+    const uint8_t level = Fuse::GetMaterialModifierLevel(slot.materialId, FuseItemType::Shield, ModifierId::Explosion);
+    if (level == 0) {
+        return false;
+    }
+
+    if (outLevel) {
+        *outLevel = level;
+    }
+
+    return true;
+}
+
+extern "C" void Fuse_ShieldTriggerExplosion(PlayState* play, int shieldMaterialId, uint8_t level, const Vec3f* pos) {
+    if (!play || !pos) {
+        return;
+    }
+
+    const MaterialId materialId = static_cast<MaterialId>(shieldMaterialId);
+    const FuseExplosionParams params = Fuse_GetExplosionParams(materialId, level);
+    Fuse_TriggerExplosion(play, *pos, FuseExplosionSelfMode::None, params, "Shield");
+}
+
 extern "C" void Fuse_ShieldApplyFreeze(PlayState* play, Actor* victim, uint8_t level) {
     if (victim && IsActorFrozenInternal(victim)) {
         Fuse::TryFreezeShatter(play, victim, nullptr, "shield");
@@ -1821,6 +1955,11 @@ static bool Fuse_ModifierAppliesForItem(ModifierId id, FuseItemType itemType) {
             return itemType == FuseItemType::Sword;
         case ModifierId::WideRange:
             return itemType == FuseItemType::Boomerang;
+        case ModifierId::Explosion:
+            return itemType == FuseItemType::Sword || itemType == FuseItemType::Shield ||
+                   itemType == FuseItemType::Boomerang || itemType == FuseItemType::Hammer ||
+                   itemType == FuseItemType::Arrows || itemType == FuseItemType::Slingshot ||
+                   itemType == FuseItemType::Hookshot;
         default:
             return true;
     }
@@ -1873,6 +2012,9 @@ int Fuse::GetMaterialCount(MaterialId id) {
         }
         if (id == MaterialId::Stick) {
             return GetDekuStickAmmoCount();
+        }
+        if (id == MaterialId::Bomb) {
+            return GetBombAmmoCount();
         }
         return 0;
     }
@@ -1927,6 +2069,9 @@ bool Fuse::ConsumeMaterial(MaterialId id, int amount) {
         }
         if (id == MaterialId::Stick) {
             return ConsumeDekuStickAmmo(amount);
+        }
+        if (id == MaterialId::Bomb) {
+            return ConsumeBombAmmo(amount);
         }
         return false;
     }
@@ -3191,6 +3336,13 @@ void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage)
     const MaterialDef* def = Fuse::GetMaterialDef(materialId);
     Player* player = play ? GET_PLAYER(play) : nullptr;
     const int itemId = gSaveContext.equips.buttonItems[0];
+    const uint8_t explosionLevel =
+        Fuse::GetMaterialModifierLevel(materialId, FuseItemType::Sword, ModifierId::Explosion);
+    if (explosionLevel > 0 && play && victim) {
+        Fuse_TriggerExplosion(play, victim->world.pos, FuseExplosionSelfMode::DamagePlayer,
+                              Fuse_GetExplosionParams(materialId, explosionLevel), "Sword");
+    }
+
     if (Fuse::TryFreezeShatterWithDamage(play, victim, player ? &player->actor : nullptr, itemId, materialId,
                                          baseWeaponDamage, "sword")) {
         return;
@@ -3217,6 +3369,12 @@ void Fuse::OnHammerMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage
 
     Player* player = play ? GET_PLAYER(play) : nullptr;
     const MaterialId materialId = Fuse::GetHammerMaterial();
+    const uint8_t explosionLevel =
+        Fuse::GetMaterialModifierLevel(materialId, FuseItemType::Hammer, ModifierId::Explosion);
+    if (explosionLevel > 0 && play && victim) {
+        Fuse_TriggerExplosion(play, victim->world.pos, FuseExplosionSelfMode::DamagePlayer,
+                              Fuse_GetExplosionParams(materialId, explosionLevel), "Hammer");
+    }
     if (Fuse::TryFreezeShatterWithDamage(play, victim, player ? &player->actor : nullptr, ITEM_HAMMER, materialId,
                                          baseWeaponDamage, "hammer")) {
         return;

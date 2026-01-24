@@ -30,6 +30,20 @@ enum class FuseItemType : uint8_t {
     Unknown,
 };
 
+enum class FuseExplosionSelfMode {
+    None,
+    DamagePlayer,
+};
+
+struct FuseExplosionParams {
+    float radius = 0.0f;
+    int damage = 0;
+};
+
+FuseExplosionParams Fuse_GetExplosionParams(MaterialId mat, int level);
+void Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfMode selfMode, FuseExplosionParams params,
+                           const char* srcLabel);
+
 void Fuse_ApplySavedSwordFuse(const PlayState* play, s16 savedMaterialId, s16 savedMaxDurability,
                               bool hasSavedCurDurability, u16 savedCurDurability, s16 legacyCurDurability);
 void Fuse_WriteSwordFuseToSave(const PlayState* play);

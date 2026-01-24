@@ -36,6 +36,19 @@ static int RangedSlotItemId(RangedFuseSlotId slot) {
     }
 }
 
+static FuseItemType RangedSlotItemType(RangedFuseSlotId slot) {
+    switch (slot) {
+        case RANGED_FUSE_SLOT_ARROWS:
+            return FuseItemType::Arrows;
+        case RANGED_FUSE_SLOT_SLINGSHOT:
+            return FuseItemType::Slingshot;
+        case RANGED_FUSE_SLOT_HOOKSHOT:
+            return FuseItemType::Hookshot;
+        default:
+            return FuseItemType::Unknown;
+    }
+}
+
 extern "C" void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Actor* victim) {
     if (!play || !victim) {
         return;
@@ -62,6 +75,13 @@ extern "C" void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Ac
     const MaterialDef* def = Fuse::GetMaterialDef(materialId);
     if (!def) {
         return;
+    }
+
+    const uint8_t explosionLevel =
+        Fuse::GetMaterialModifierLevel(materialId, RangedSlotItemType(slot), ModifierId::Explosion);
+    if (explosionLevel > 0) {
+        Fuse_TriggerExplosion(play, victim->world.pos, FuseExplosionSelfMode::DamagePlayer,
+                              Fuse_GetExplosionParams(materialId, explosionLevel), RangedSlotLabel(slot));
     }
 
     Player* player = GET_PLAYER(play);
