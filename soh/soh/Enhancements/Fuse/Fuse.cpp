@@ -275,18 +275,25 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
               srcLabel ? srcLabel : "unknown", (void*)victim, itemId, static_cast<int>(materialId), baseWeaponDamage,
               materialAtk, damageMult, finalDamage);
 
-    Actor* sourceActor = attacker;
+    Actor* sourceActor = nullptr;
     Player* player = (play != nullptr) ? GET_PLAYER(play) : nullptr;
     Actor* playerActor = (player != nullptr) ? &player->actor : nullptr;
+    const bool usePlayerAsSource = (srcLabel != nullptr && (!strcmp(srcLabel, "sword") || !strcmp(srcLabel, "shield") ||
+                                                           !strcmp(srcLabel, "shield_bash")));
 
-    // For sword shatters, attacker pointer is unreliable; force player as source.
-    if (srcLabel != nullptr && strcmp(srcLabel, "sword") == 0) {
+    // Default: use player for melee/shield sources (most consistent with design intent).
+    if (usePlayerAsSource && playerActor != nullptr) {
         sourceActor = playerActor;
-    } else if (!sourceActor) {
+    } else if (attacker != nullptr) {
+        sourceActor = attacker;
+    } else if (playerActor != nullptr) {
         sourceActor = playerActor;
     }
 
     Vec3f away = { 0.0f, 0.0f, 1.0f };
+    Fuse::Log("[FuseDBG] ShatterSrc: src=%s victim=%p attacker=%p source=%p usePlayer=%d\n",
+              srcLabel ? srcLabel : "unknown", (void*)victim, (void*)attacker, (void*)sourceActor,
+              usePlayerAsSource ? 1 : 0);
     if (sourceActor != nullptr) {
         away.x = victim->world.pos.x - sourceActor->world.pos.x;
         away.z = victim->world.pos.z - sourceActor->world.pos.z;
@@ -304,33 +311,7 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
 
     Vec3f kbDir = away;
     Actor* distRef = sourceActor;
-    if (srcLabel != nullptr && strcmp(srcLabel, "sword") == 0 && playerActor != nullptr) {
-        distRef = playerActor;
-    }
     if (distRef != nullptr && play != nullptr) {
-        const float sx = distRef->world.pos.x;
-        const float sz = distRef->world.pos.z;
-        const float vx = victim->world.pos.x;
-        const float vz = victim->world.pos.z;
-        const float dist0 = (vx - sx) * (vx - sx) + (vz - sz) * (vz - sz);
-
-        const float pxAway = vx + away.x * kShatterImpulseStep;
-        const float pzAway = vz + away.z * kShatterImpulseStep;
-        const float distAway = (pxAway - sx) * (pxAway - sx) + (pzAway - sz) * (pzAway - sz);
-
-        const float pxTow = vx - away.x * kShatterImpulseStep;
-        const float pzTow = vz - away.z * kShatterImpulseStep;
-        const float distTow = (pxTow - sx) * (pxTow - sx) + (pzTow - sz) * (pzTow - sz);
-
-        if (distTow > distAway) {
-            kbDir.x = -away.x;
-            kbDir.z = -away.z;
-            Fuse::Log("[FuseDBG] ShatterDirFlip: victim=%p dist0=%.2f distAway=%.2f distTow=%.2f\n", (void*)victim,
-                      dist0, distAway, distTow);
-        }
-    }
-
-    if (distRef != nullptr) {
         float dx0 = victim->world.pos.x - distRef->world.pos.x;
         float dz0 = victim->world.pos.z - distRef->world.pos.z;
         float dist0 = dx0 * dx0 + dz0 * dz0;
@@ -361,9 +342,10 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
     victim->world.rot.y = knockbackYaw;
     victim->shape.rot.y = victim->world.rot.y;
 
-    Fuse::Log("[FuseDBG] ShatterKB applied: victim=%p dir=(%.2f,%.2f) vel=(%.2f,%.2f,%.2f) spd=%.2f yaw=%d\n",
-              (void*)victim, kbDir.x, kbDir.z, victim->velocity.x, victim->velocity.y, victim->velocity.z,
-              victim->speedXZ, knockbackYaw);
+    Fuse::Log(
+        "[FuseDBG] ShatterKB applied: victim=%p source=%p dir=(%.2f,%.2f) vel=(%.2f,%.2f,%.2f) spd=%.2f yaw=%d\n",
+        (void*)victim, (void*)sourceActor, kbDir.x, kbDir.z, victim->velocity.x, victim->velocity.y,
+        victim->velocity.z, victim->speedXZ, knockbackYaw);
     Fuse::Log("[FuseMVP] FreezeShatterKB: src=%s victim=%p vel=(%.2f,%.2f,%.2f) spd=%.2f\n",
               srcLabel ? srcLabel : "unknown", (void*)victim, victim->velocity.x, victim->velocity.y,
               victim->velocity.z, victim->speedXZ);
