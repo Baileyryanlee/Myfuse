@@ -167,9 +167,9 @@ static void RemoveDeferredFreezeRequestsFor(Actor* victim) {
     for (size_t i = 0; i < kSwordFreezeQueueCount; i++) {
         auto& queue = sSwordFreezeQueues[i];
         if (!queue.empty()) {
-            const auto newEnd =
-                std::remove_if(queue.begin(), queue.end(),
-                               [victim](const SwordFreezeRequest& request) { return request.victim == victim; });
+            const auto newEnd = std::remove_if(queue.begin(), queue.end(), [victim](const SwordFreezeRequest& request) {
+                return request.victim == victim;
+            });
             if (newEnd != queue.end()) {
                 queue.erase(newEnd, queue.end());
             }
@@ -280,7 +280,7 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
     Player* player = (play != nullptr) ? GET_PLAYER(play) : nullptr;
     Actor* playerActor = (player != nullptr) ? &player->actor : nullptr;
     const bool usePlayerAsSource = (srcLabel != nullptr && (!strcmp(srcLabel, "sword") || !strcmp(srcLabel, "shield") ||
-                                                           !strcmp(srcLabel, "shield_bash")));
+                                                            !strcmp(srcLabel, "shield_bash")));
 
     // Default: use player for melee/shield sources (most consistent with design intent).
     if (usePlayerAsSource && playerActor != nullptr) {
@@ -341,14 +341,11 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
     victim->velocity.x = kbDir.x * kFreezeShatterKnockbackSpeed;
     victim->velocity.z = kbDir.z * kFreezeShatterKnockbackSpeed;
     victim->velocity.y = std::max(victim->velocity.y, kFreezeShatterKnockbackYBoost);
-    victim->speedXZ = kFreezeShatterKnockbackSpeed;
-    victim->world.rot.y = knockbackYaw;
-    victim->shape.rot.y = victim->world.rot.y;
 
-    Fuse::Log(
-        "[FuseDBG] ShatterKB applied: victim=%p source=%p flip=1 dir=(%.2f,%.2f) vel=(%.2f,%.2f,%.2f) spd=%.2f yaw=%d\n",
-        (void*)victim, (void*)sourceActor, kbDir.x, kbDir.z, victim->velocity.x, victim->velocity.y,
-        victim->velocity.z, victim->speedXZ, knockbackYaw);
+    Fuse::Log("[FuseDBG] ShatterKB applied: victim=%p source=%p flip=1 dir=(%.2f,%.2f) vel=(%.2f,%.2f,%.2f) spd=%.2f "
+              "yaw=%d\n",
+              (void*)victim, (void*)sourceActor, kbDir.x, kbDir.z, victim->velocity.x, victim->velocity.y,
+              victim->velocity.z, victim->speedXZ, knockbackYaw);
     Fuse::Log("[FuseMVP] FreezeShatterKB: src=%s victim=%p vel=(%.2f,%.2f,%.2f) spd=%.2f\n",
               srcLabel ? srcLabel : "unknown", (void*)victim, victim->velocity.x, victim->velocity.y,
               victim->velocity.z, victim->speedXZ);
@@ -360,7 +357,6 @@ bool Fuse::TryFreezeShatter(PlayState* play, Actor* victim, Actor* attacker, con
     const int baseWeaponDamage = victim ? std::max(0, static_cast<int>(victim->colChkInfo.damage)) : 0;
     return Fuse::TryFreezeShatterWithDamage(play, victim, attacker, 0, MaterialId::None, baseWeaponDamage, srcLabel);
 }
-
 
 static void ResetSavedSwordFuseFields() {
     FusePersistence::WriteSwordStateToContext(FusePersistence::ClearedSwordState());
@@ -609,8 +605,8 @@ void ApplyIceArrowFreeze(PlayState* play, Actor* victim, uint8_t level) {
     }
 
     if (IsFreezeReapplyBlocked(play, victim)) {
-        Fuse::Log("[FuseDBG] FreezeSkip: reason=NoReapplyWindow frame=%d victim=%p\n",
-                  play ? play->gameplayFrames : -1, (void*)victim);
+        Fuse::Log("[FuseDBG] FreezeSkip: reason=NoReapplyWindow frame=%d victim=%p\n", play ? play->gameplayFrames : -1,
+                  (void*)victim);
         return;
     }
 
@@ -976,8 +972,7 @@ static void TickFuseFrozenTimers(PlayState* play) {
             ClearFuseFreeze(a);
             if (play) {
                 auto noReapplyIt = sFreezeNoReapplyUntilFrame.find(a);
-                if (noReapplyIt != sFreezeNoReapplyUntilFrame.end() &&
-                    play->gameplayFrames >= noReapplyIt->second) {
+                if (noReapplyIt != sFreezeNoReapplyUntilFrame.end() && play->gameplayFrames >= noReapplyIt->second) {
                     sFreezeNoReapplyUntilFrame.erase(noReapplyIt);
                 }
             }
@@ -1061,7 +1056,6 @@ static void TickShatterImpulse(PlayState* play) {
             if (kShatterImpulseY != 0.0f) {
                 actor->world.pos.y += kShatterImpulseY;
             }
-            actor->speedXZ = std::max(actor->speedXZ, kFreezeShatterKnockbackSpeed);
         }
 
         ++it;
@@ -3015,11 +3009,10 @@ static void ApplyMeleeHitMaterialEffects(PlayState* play, Actor* victim, Actor* 
     }
 
     uint8_t freezeLevel = 0;
-    const bool shatteredThisHit =
-        (play && sFreezeShatterFrame.find(victim) != sFreezeShatterFrame.end() &&
-         sFreezeShatterFrame[victim] == play->gameplayFrames);
-    if (!shatteredThisHit &&
-        HasModifier(def->modifiers, def->modifierCount, ModifierId::Freeze, &freezeLevel) && freezeLevel > 0) {
+    const bool shatteredThisHit = (play && sFreezeShatterFrame.find(victim) != sFreezeShatterFrame.end() &&
+                                   sFreezeShatterFrame[victim] == play->gameplayFrames);
+    if (!shatteredThisHit && HasModifier(def->modifiers, def->modifierCount, ModifierId::Freeze, &freezeLevel) &&
+        freezeLevel > 0) {
         const char* slotLabel = (itemId == ITEM_HAMMER) ? "Hammer" : "Sword";
         Fuse::QueueSwordFreeze(play, victim, freezeLevel, srcLabel, slotLabel, materialId);
     }
