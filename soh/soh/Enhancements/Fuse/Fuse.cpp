@@ -399,6 +399,10 @@ int GetDekuNutAmmoCount() {
     return AMMO(ITEM_NUT);
 }
 
+int GetDekuStickAmmoCount() {
+    return AMMO(ITEM_STICK);
+}
+
 bool ConsumeDekuNutAmmo(int amount) {
     if (amount <= 0) {
         return true;
@@ -422,6 +426,29 @@ bool ConsumeDekuNutAmmo(int amount) {
     return true;
 }
 
+bool ConsumeDekuStickAmmo(int amount) {
+    if (amount <= 0) {
+        return true;
+    }
+
+    const int cur = GetDekuStickAmmoCount();
+    if (cur < amount) {
+        Fuse::Log("[FuseDBG] Consume Stick FAILED: cur=%d need=%d\n", cur, amount);
+        return false;
+    }
+
+    Fuse::Log("[FuseMVP] Consume Stick: cur=%d amount=%d\n", cur, amount);
+
+    const int newCount = std::max(0, cur - amount);
+    const int delta = newCount - cur;
+
+    if (delta != 0) {
+        Inventory_ChangeAmmo(ITEM_STICK, delta);
+    }
+
+    return true;
+}
+
 void AddDekuNutAmmo(int amount) {
     if (amount <= 0) {
         return;
@@ -436,6 +463,20 @@ void AddDekuNutAmmo(int amount) {
     }
 }
 
+void AddDekuStickAmmo(int amount) {
+    if (amount <= 0) {
+        return;
+    }
+
+    const int cur = GetDekuStickAmmoCount();
+    const int newCount = std::max(0, cur + amount);
+    const int delta = newCount - cur;
+
+    if (delta != 0) {
+        Inventory_ChangeAmmo(ITEM_STICK, delta);
+    }
+}
+
 void Fuse_AddMaterialOrAmmo(MaterialId mat, int amount) {
     if (amount <= 0 || mat == MaterialId::None) {
         return;
@@ -443,6 +484,11 @@ void Fuse_AddMaterialOrAmmo(MaterialId mat, int amount) {
 
     if (mat == MaterialId::DekuNut) {
         AddDekuNutAmmo(amount);
+        return;
+    }
+
+    if (mat == MaterialId::Stick) {
+        AddDekuStickAmmo(amount);
         return;
     }
 
@@ -538,7 +584,7 @@ const char* GetStunSourceLabel(int itemId) {
 }
 
 bool IsVanillaMaterial(MaterialId id) {
-    return id == MaterialId::DekuNut;
+    return id == MaterialId::DekuNut || id == MaterialId::Stick;
 }
 
 bool IsCustomMaterial(MaterialId id) {
@@ -734,7 +780,7 @@ static inline int RangedSlotToIndex(RangedFuseSlot slot) {
 
 static bool IsMaterialIdInRange(MaterialId id) {
     const int value = static_cast<int>(id);
-    return value >= static_cast<int>(MaterialId::None) && value <= static_cast<int>(MaterialId::FrozenShard);
+    return value >= static_cast<int>(MaterialId::None) && value <= static_cast<int>(MaterialId::Stick);
 }
 
 #ifndef NDEBUG
@@ -1577,16 +1623,8 @@ void Fuse_GetRangedFuseStatus(RangedFuseSlot slot, int* outMaterialId, int* outD
 }
 
 static int GetMaterialBaseAttackBonus(MaterialId id) {
-    // Attack bonus defaults are currently implicit (zero) until defined in MaterialDef.
-    switch (id) {
-        case MaterialId::Rock:
-            return 1;
-        case MaterialId::None:
-        case MaterialId::DekuNut:
-        case MaterialId::FrozenShard:
-        default:
-            return 0;
-    }
+    const MaterialDef* def = Fuse::GetMaterialDef(id);
+    return def ? def->attackBonus : 0;
 }
 
 int Fuse::GetMaterialAttackBonus(MaterialId id) {
@@ -1746,9 +1784,40 @@ bool Fuse::SwordHasModifier(ModifierId id) {
     return Fuse::GetSwordModifierLevel(id) > 0;
 }
 
+static bool Fuse_ModifierAppliesForItem(ModifierId id, FuseItemType itemType) {
+    switch (id) {
+        case ModifierId::RangeUp:
+            return itemType == FuseItemType::Sword;
+        case ModifierId::WideRange:
+            return itemType == FuseItemType::Boomerang;
+        default:
+            return true;
+    }
+}
+
+uint8_t Fuse::GetMaterialModifierLevel(MaterialId materialId, FuseItemType itemType, ModifierId id) {
+    const MaterialDef* def = Fuse::GetMaterialDef(materialId);
+    if (!def) {
+        return 0;
+    }
+
+    if (!Fuse_ModifierAppliesForItem(id, itemType)) {
+        return 0;
+    }
+
+    uint8_t level = 0;
+    return HasModifier(def->modifiers, def->modifierCount, id, &level) ? level : 0;
+}
+
 int Fuse::GetMaterialCount(MaterialId id) {
     if (IsVanillaMaterial(id)) {
-        return GetDekuNutAmmoCount();
+        if (id == MaterialId::DekuNut) {
+            return GetDekuNutAmmoCount();
+        }
+        if (id == MaterialId::Stick) {
+            return GetDekuStickAmmoCount();
+        }
+        return 0;
     }
 
     if (!IsCustomMaterial(id)) {
@@ -1796,7 +1865,13 @@ bool Fuse::ConsumeMaterial(MaterialId id, int amount) {
     }
 
     if (IsVanillaMaterial(id)) {
-        return ConsumeDekuNutAmmo(amount);
+        if (id == MaterialId::DekuNut) {
+            return ConsumeDekuNutAmmo(amount);
+        }
+        if (id == MaterialId::Stick) {
+            return ConsumeDekuStickAmmo(amount);
+        }
+        return false;
     }
 
     const int newCount = std::max(0, GetStoredMaterialCount(id) - amount);
@@ -2270,6 +2345,14 @@ Fuse::FuseResult Fuse::TryFuseSword(MaterialId id) {
 
     Fuse::FuseSwordWithMaterial(id, Fuse::GetMaterialEffectiveBaseDurability(id));
 
+    const uint8_t rangeUpLevel = Fuse::GetMaterialModifierLevel(id, FuseItemType::Sword, ModifierId::RangeUp);
+    if (rangeUpLevel > 0) {
+        const char* matName = def ? def->name : "Unknown";
+        // TODO: [FuseDBG] RangeUp needs sword hitbox range hook; log on fuse commit until available.
+        Fuse::Log("[FuseDBG] ApplyMods: item=Sword mat=%s rangeUp=%u\n", matName,
+                  static_cast<unsigned int>(rangeUpLevel));
+    }
+
     if (id == MaterialId::DekuNut) {
         const int postConsumeCount = Fuse::GetMaterialCount(id);
         Fuse::Log("[FuseMVP] TryFuseSword(DekuNut): before=%d after=%d\n", preConsumeCount, postConsumeCount);
@@ -2301,6 +2384,14 @@ Fuse::FuseResult Fuse::TryFuseBoomerang(MaterialId id) {
     }
 
     Fuse::FuseBoomerangWithMaterial(id, Fuse::GetMaterialEffectiveBaseDurability(id));
+
+    const uint8_t wideRangeLevel = Fuse::GetMaterialModifierLevel(id, FuseItemType::Boomerang, ModifierId::WideRange);
+    if (wideRangeLevel > 0) {
+        const char* matName = def ? def->name : "Unknown";
+        // TODO: [FuseDBG] WideRange needs boomerang collider scaling hook; log on fuse commit until available.
+        Fuse::Log("[FuseDBG] ApplyMods: item=Boomerang mat=%s wideRange=%u\n", matName,
+                  static_cast<unsigned int>(wideRangeLevel));
+    }
 
     return FuseResult::Ok;
 }

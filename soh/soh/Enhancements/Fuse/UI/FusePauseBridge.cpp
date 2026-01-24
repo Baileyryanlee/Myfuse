@@ -350,6 +350,10 @@ static const char* ModifierName(ModifierId id) {
             return "Stun";
         case ModifierId::MegaStun:
             return "Mega Stun";
+        case ModifierId::RangeUp:
+            return "Range Up";
+        case ModifierId::WideRange:
+            return "Wide Range";
         default:
             return "Unknown";
     }
@@ -701,6 +705,9 @@ void FusePause_UpdateModal(PlayState* play) {
             sModal.promptTimer = 0;
             SetUiState(sModal.isLocked ? FuseUiState::Locked : FuseUiState::Browse);
 
+            const std::vector<MaterialEntry> materials = BuildMaterialList();
+            Fuse::Log("[FuseDBG] MaterialsList: item=%s count=%zu\n",
+                      PauseItemName(sModal.activeItem, context.hoveredSword), materials.size());
             Fuse::Log("[FuseDBG] UI:ResolvedSlot item=%s mat=%d dur=%d/%d\n",
                       PauseItemName(sModal.activeItem, context.hoveredSword),
                       static_cast<int>(resolvedSlot.materialId), resolvedSlot.durabilityCur, resolvedSlot.durabilityMax);

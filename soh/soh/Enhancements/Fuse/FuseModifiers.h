@@ -11,6 +11,8 @@ enum class ModifierId : uint16_t {
     Knockback = 5,
     PoundUp = 6,
     NegateKnockback = 7,
+    RangeUp = 8,
+    WideRange = 9,
     // future: Range, Freeze, Explode, Stun, Seek, etc.
 };
 
