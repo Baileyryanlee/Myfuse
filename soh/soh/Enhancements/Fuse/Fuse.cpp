@@ -299,43 +299,54 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
         }
     }
 
+    Vec3f toward = { -away.x, 0.0f, -away.z };
+    Vec3f kbDir = away;
+    if (sourceActor != nullptr) {
+        float dx0 = victim->world.pos.x - sourceActor->world.pos.x;
+        float dz0 = victim->world.pos.z - sourceActor->world.pos.z;
+        float dist0 = (dx0 * dx0) + (dz0 * dz0);
+
+        float pxAway = victim->world.pos.x + away.x * kShatterImpulseStep;
+        float pzAway = victim->world.pos.z + away.z * kShatterImpulseStep;
+        float dxAway = pxAway - sourceActor->world.pos.x;
+        float dzAway = pzAway - sourceActor->world.pos.z;
+        float distAway = (dxAway * dxAway) + (dzAway * dzAway);
+
+        float pxTow = victim->world.pos.x + toward.x * kShatterImpulseStep;
+        float pzTow = victim->world.pos.z + toward.z * kShatterImpulseStep;
+        float dxTow = pxTow - sourceActor->world.pos.x;
+        float dzTow = pzTow - sourceActor->world.pos.z;
+        float distTow = (dxTow * dxTow) + (dzTow * dzTow);
+
+        kbDir = (distAway >= distTow) ? away : toward;
+        if (distAway < distTow) {
+            Fuse::Log("[FuseDBG] ShatterDirFlip: victim=%p dist0=%.2f distAway=%.2f distTow=%.2f\n", (void*)victim,
+                      dist0, distAway, distTow);
+        }
+    }
+
     s16 knockbackYaw = victim->yawTowardsPlayer + 0x8000;
     if (sourceActor != nullptr) {
-        knockbackYaw = Math_Atan2S(away.x, away.z);
+        knockbackYaw = Math_Atan2S(kbDir.x, kbDir.z);
     }
 
     if (play != nullptr) {
-        sShatterImpulseDir[victim] = { away.x, 0.0f, away.z };
+        sShatterImpulseDir[victim] = { kbDir.x, 0.0f, kbDir.z };
         sShatterImpulseUntilFrame[victim] = play->gameplayFrames + kShatterImpulseFrames;
         Fuse::Log("[FuseDBG] ShatterImpulse start: victim=%p until=%d step=%.2f\n", (void*)victim,
                   sShatterImpulseUntilFrame[victim], kShatterImpulseStep);
     }
 
-    victim->velocity.x = Math_SinS(knockbackYaw) * kFreezeShatterKnockbackSpeed;
-    victim->velocity.z = Math_CosS(knockbackYaw) * kFreezeShatterKnockbackSpeed;
-    float vx = victim->velocity.x;
-    float vz = victim->velocity.z;
-    float vLenSq = (vx * vx) + (vz * vz);
-    if (vLenSq > 0.0001f) {
-        float invV = 1.0f / sqrtf(vLenSq);
-        float vnx = vx * invV;
-        float vnz = vz * invV;
-        float dot = (vnx * away.x) + (vnz * away.z);
-
-        if (dot < 0.0f) {
-            victim->velocity.x = -victim->velocity.x;
-            victim->velocity.z = -victim->velocity.z;
-            knockbackYaw ^= 0x8000;
-            Fuse::Log("[FuseDBG] ShatterKB flip: victim=%p dot=%.3f\n", (void*)victim, dot);
-        }
-    }
+    victim->velocity.x = kbDir.x * kFreezeShatterKnockbackSpeed;
+    victim->velocity.z = kbDir.z * kFreezeShatterKnockbackSpeed;
     victim->velocity.y = std::max(victim->velocity.y, kFreezeShatterKnockbackYBoost);
     victim->speedXZ = kFreezeShatterKnockbackSpeed;
     victim->world.rot.y = knockbackYaw;
     victim->shape.rot.y = victim->world.rot.y;
 
-    Fuse::Log("[FuseDBG] ShatterKB applied: victim=%p vel=(%.2f,%.2f,%.2f) spd=%.2f yaw=%d\n", (void*)victim,
-              victim->velocity.x, victim->velocity.y, victim->velocity.z, victim->speedXZ, knockbackYaw);
+    Fuse::Log("[FuseDBG] ShatterKB applied: victim=%p dir=(%.2f,%.2f) vel=(%.2f,%.2f,%.2f) spd=%.2f yaw=%d\n",
+              (void*)victim, kbDir.x, kbDir.z, victim->velocity.x, victim->velocity.y, victim->velocity.z,
+              victim->speedXZ, knockbackYaw);
     Fuse::Log("[FuseMVP] FreezeShatterKB: src=%s victim=%p vel=(%.2f,%.2f,%.2f) spd=%.2f\n",
               srcLabel ? srcLabel : "unknown", (void*)victim, victim->velocity.x, victim->velocity.y,
               victim->velocity.z, victim->speedXZ);
