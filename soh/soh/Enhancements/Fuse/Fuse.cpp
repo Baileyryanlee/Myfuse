@@ -327,6 +327,8 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
                   srcLabel ? srcLabel : "unknown", (void*)victim, (void*)distRef, dist0, dist1, kbDir.x, kbDir.z);
     }
 
+    kbDir.x = -kbDir.x;
+    kbDir.z = -kbDir.z;
     s16 knockbackYaw = Math_Atan2S(kbDir.x, kbDir.z);
 
     if (play != nullptr) {
@@ -344,7 +346,7 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
     victim->shape.rot.y = victim->world.rot.y;
 
     Fuse::Log(
-        "[FuseDBG] ShatterKB applied: victim=%p source=%p dir=(%.2f,%.2f) vel=(%.2f,%.2f,%.2f) spd=%.2f yaw=%d\n",
+        "[FuseDBG] ShatterKB applied: victim=%p source=%p flip=1 dir=(%.2f,%.2f) vel=(%.2f,%.2f,%.2f) spd=%.2f yaw=%d\n",
         (void*)victim, (void*)sourceActor, kbDir.x, kbDir.z, victim->velocity.x, victim->velocity.y,
         victim->velocity.z, victim->speedXZ, knockbackYaw);
     Fuse::Log("[FuseMVP] FreezeShatterKB: src=%s victim=%p vel=(%.2f,%.2f,%.2f) spd=%.2f\n",
@@ -1018,8 +1020,6 @@ static void TickShatterImpulse(PlayState* play) {
         return;
     }
 
-    Player* player = GET_PLAYER(play);
-    Actor* playerActor = player ? &player->actor : nullptr;
     for (auto it = sShatterImpulseUntilFrame.begin(); it != sShatterImpulseUntilFrame.end();) {
         Actor* actor = it->first;
         const int untilFrame = it->second;
@@ -1034,6 +1034,7 @@ static void TickShatterImpulse(PlayState* play) {
         const auto dirIt = sShatterImpulseDir.find(actor);
         if (dirIt != sShatterImpulseDir.end()) {
             Vec3f dir = dirIt->second;
+            /*
             if (playerActor) {
                 const float dx0 = actor->world.pos.x - playerActor->world.pos.x;
                 const float dz0 = actor->world.pos.z - playerActor->world.pos.z;
@@ -1054,6 +1055,7 @@ static void TickShatterImpulse(PlayState* play) {
                     }
                 }
             }
+            */
             actor->world.pos.x += dir.x * kShatterImpulseStep;
             actor->world.pos.z += dir.z * kShatterImpulseStep;
             if (kShatterImpulseY != 0.0f) {
