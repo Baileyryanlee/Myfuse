@@ -88,6 +88,8 @@ void SaveDebugOverrides();
 uint8_t GetSwordModifierLevel(ModifierId id);
 bool SwordHasModifier(ModifierId id);
 uint8_t GetMaterialModifierLevel(MaterialId materialId, FuseItemType itemType, ModifierId id);
+float GetRangeUpScale(uint8_t level);
+float GetWideRangeScale(uint8_t level);
 
 // Materials inventory API (v0: ROCK + Deku Nut adapter)
 int GetMaterialCount(MaterialId id);

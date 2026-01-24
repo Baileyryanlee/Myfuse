@@ -13,6 +13,9 @@
 
 #include <stdlib.h>
 
+extern float Fuse_GetSwordRangeUpScale(int32_t* outLevel);
+extern void Fuse_LogSwordRangeUp(int level, float scale);
+
 typedef struct {
     /* 0x00 */ u8 flag;
     /* 0x02 */ u16 textId;
@@ -1557,11 +1560,36 @@ Vec3f D_801260A4[3] = {
 };
 
 void func_800906D4(PlayState* play, Player* this, Vec3f* newTipPos) {
+    static s32 sSwordRangeUpWasActive = 0;
     Vec3f newBasePos[3];
+    int32_t rangeUpLevel = 0;
+    float rangeUpScale = 1.0f;
 
     Matrix_MultVec3f(&D_801260A4[0], &newBasePos[0]);
     Matrix_MultVec3f(&D_801260A4[1], &newBasePos[1]);
     Matrix_MultVec3f(&D_801260A4[2], &newBasePos[2]);
+
+    if (this->itemAction != PLAYER_IA_DEKU_STICK) {
+        rangeUpScale = Fuse_GetSwordRangeUpScale(&rangeUpLevel);
+        if (rangeUpScale > 1.0f) {
+            Vec3f dir;
+
+            Math_Vec3f_Diff(&newTipPos[1], &newBasePos[1], &dir);
+            newTipPos[1].x = newBasePos[1].x + (dir.x * rangeUpScale);
+            newTipPos[1].y = newBasePos[1].y + (dir.y * rangeUpScale);
+            newTipPos[1].z = newBasePos[1].z + (dir.z * rangeUpScale);
+
+            Math_Vec3f_Diff(&newTipPos[2], &newBasePos[2], &dir);
+            newTipPos[2].x = newBasePos[2].x + (dir.x * rangeUpScale);
+            newTipPos[2].y = newBasePos[2].y + (dir.y * rangeUpScale);
+            newTipPos[2].z = newBasePos[2].z + (dir.z * rangeUpScale);
+        }
+    }
+
+    if ((rangeUpLevel > 0) && (this->meleeWeaponState != 0) && !sSwordRangeUpWasActive) {
+        Fuse_LogSwordRangeUp(rangeUpLevel, rangeUpScale);
+    }
+    sSwordRangeUpWasActive = (this->meleeWeaponState != 0);
 
     if (func_80090480(play, NULL, &this->meleeWeaponInfo[0], &newTipPos[0], &newBasePos[0]) &&
         !(this->stateFlags1 & PLAYER_STATE1_SHIELDING)) {
