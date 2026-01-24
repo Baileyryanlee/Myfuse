@@ -299,36 +299,31 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
         }
     }
 
-    Vec3f toward = { -away.x, 0.0f, -away.z };
     Vec3f kbDir = away;
-    if (sourceActor != nullptr) {
-        float dx0 = victim->world.pos.x - sourceActor->world.pos.x;
-        float dz0 = victim->world.pos.z - sourceActor->world.pos.z;
-        float dist0 = (dx0 * dx0) + (dz0 * dz0);
+    if (sourceActor != nullptr && play != nullptr) {
+        const float sx = sourceActor->world.pos.x;
+        const float sz = sourceActor->world.pos.z;
+        const float vx = victim->world.pos.x;
+        const float vz = victim->world.pos.z;
+        const float dist0 = (vx - sx) * (vx - sx) + (vz - sz) * (vz - sz);
 
-        float pxAway = victim->world.pos.x + away.x * kShatterImpulseStep;
-        float pzAway = victim->world.pos.z + away.z * kShatterImpulseStep;
-        float dxAway = pxAway - sourceActor->world.pos.x;
-        float dzAway = pzAway - sourceActor->world.pos.z;
-        float distAway = (dxAway * dxAway) + (dzAway * dzAway);
+        const float pxAway = vx + away.x * kShatterImpulseStep;
+        const float pzAway = vz + away.z * kShatterImpulseStep;
+        const float distAway = (pxAway - sx) * (pxAway - sx) + (pzAway - sz) * (pzAway - sz);
 
-        float pxTow = victim->world.pos.x + toward.x * kShatterImpulseStep;
-        float pzTow = victim->world.pos.z + toward.z * kShatterImpulseStep;
-        float dxTow = pxTow - sourceActor->world.pos.x;
-        float dzTow = pzTow - sourceActor->world.pos.z;
-        float distTow = (dxTow * dxTow) + (dzTow * dzTow);
+        const float pxTow = vx - away.x * kShatterImpulseStep;
+        const float pzTow = vz - away.z * kShatterImpulseStep;
+        const float distTow = (pxTow - sx) * (pxTow - sx) + (pzTow - sz) * (pzTow - sz);
 
-        kbDir = (distAway >= distTow) ? away : toward;
-        if (distAway < distTow) {
+        if (distTow > distAway) {
+            kbDir.x = -away.x;
+            kbDir.z = -away.z;
             Fuse::Log("[FuseDBG] ShatterDirFlip: victim=%p dist0=%.2f distAway=%.2f distTow=%.2f\n", (void*)victim,
                       dist0, distAway, distTow);
         }
     }
 
-    s16 knockbackYaw = victim->yawTowardsPlayer + 0x8000;
-    if (sourceActor != nullptr) {
-        knockbackYaw = Math_Atan2S(kbDir.x, kbDir.z);
-    }
+    s16 knockbackYaw = Math_Atan2S(kbDir.x, kbDir.z);
 
     if (play != nullptr) {
         sShatterImpulseDir[victim] = { kbDir.x, 0.0f, kbDir.z };
