@@ -1669,8 +1669,8 @@ extern "C" bool Fuse_ShieldHasMegaStun(PlayState* play, int* outMaterialId, int*
                                   outLevel);
 }
 
-extern "C" bool Fuse_ShieldHasExplosion(PlayState* play, int* outMaterialId, int* outDurabilityCur,
-                                        int* outDurabilityMax, uint8_t* outLevel) {
+extern "C" bool Fuse_ShieldHasExplosion(PlayState* play, s32* outMaterialId, s32* outDurabilityCur, s32* outDurabilityMax,
+                                        u8* outLevel) {
     if (outMaterialId) {
         *outMaterialId = static_cast<int>(MaterialId::None);
     }
@@ -1715,7 +1715,7 @@ extern "C" bool Fuse_ShieldHasExplosion(PlayState* play, int* outMaterialId, int
     return true;
 }
 
-extern "C" void Fuse_ShieldTriggerExplosion(PlayState* play, int shieldMaterialId, uint8_t level, const Vec3f* pos) {
+extern "C" void Fuse_ShieldTriggerExplosion(PlayState* play, s32 shieldMaterialId, u8 level, const Vec3f* pos) {
     if (!play || !pos) {
         return;
     }
