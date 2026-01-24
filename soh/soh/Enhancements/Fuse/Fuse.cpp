@@ -1856,11 +1856,11 @@ float Fuse::GetRangeUpScale(uint8_t level) {
 float Fuse::GetWideRangeScale(uint8_t level) {
     switch (level) {
         case 1:
-            return 1.15f;
+            return 2.0f;
         case 2:
-            return 1.30f;
+            return 3.0f;
         case 3:
-            return 1.45f;
+            return 4.0f;
         default:
             return 1.0f;
     }
