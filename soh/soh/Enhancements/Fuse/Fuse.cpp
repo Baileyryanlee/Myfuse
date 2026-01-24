@@ -276,11 +276,14 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
               materialAtk, damageMult, finalDamage);
 
     Actor* sourceActor = attacker;
-    if (!sourceActor && play != nullptr) {
-        Player* player = GET_PLAYER(play);
-        if (player != nullptr) {
-            sourceActor = &player->actor;
-        }
+    Player* player = (play != nullptr) ? GET_PLAYER(play) : nullptr;
+    Actor* playerActor = (player != nullptr) ? &player->actor : nullptr;
+
+    // For sword shatters, attacker pointer is unreliable; force player as source.
+    if (srcLabel != nullptr && strcmp(srcLabel, "sword") == 0) {
+        sourceActor = playerActor;
+    } else if (!sourceActor) {
+        sourceActor = playerActor;
     }
 
     Vec3f away = { 0.0f, 0.0f, 1.0f };
@@ -300,9 +303,13 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
     }
 
     Vec3f kbDir = away;
-    if (sourceActor != nullptr && play != nullptr) {
-        const float sx = sourceActor->world.pos.x;
-        const float sz = sourceActor->world.pos.z;
+    Actor* distRef = sourceActor;
+    if (srcLabel != nullptr && strcmp(srcLabel, "sword") == 0 && playerActor != nullptr) {
+        distRef = playerActor;
+    }
+    if (distRef != nullptr && play != nullptr) {
+        const float sx = distRef->world.pos.x;
+        const float sz = distRef->world.pos.z;
         const float vx = victim->world.pos.x;
         const float vz = victim->world.pos.z;
         const float dist0 = (vx - sx) * (vx - sx) + (vz - sz) * (vz - sz);
@@ -321,6 +328,21 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
             Fuse::Log("[FuseDBG] ShatterDirFlip: victim=%p dist0=%.2f distAway=%.2f distTow=%.2f\n", (void*)victim,
                       dist0, distAway, distTow);
         }
+    }
+
+    if (distRef != nullptr) {
+        float dx0 = victim->world.pos.x - distRef->world.pos.x;
+        float dz0 = victim->world.pos.z - distRef->world.pos.z;
+        float dist0 = dx0 * dx0 + dz0 * dz0;
+
+        float px1 = victim->world.pos.x + kbDir.x * kShatterImpulseStep;
+        float pz1 = victim->world.pos.z + kbDir.z * kShatterImpulseStep;
+        float dx1 = px1 - distRef->world.pos.x;
+        float dz1 = pz1 - distRef->world.pos.z;
+        float dist1 = dx1 * dx1 + dz1 * dz1;
+
+        Fuse::Log("[FuseDBG] ShatterDirCheck: src=%s victim=%p ref=%p dist0=%.2f dist1=%.2f dir=(%.2f,%.2f)\n",
+                  srcLabel ? srcLabel : "unknown", (void*)victim, (void*)distRef, dist0, dist1, kbDir.x, kbDir.z);
     }
 
     s16 knockbackYaw = Math_Atan2S(kbDir.x, kbDir.z);
