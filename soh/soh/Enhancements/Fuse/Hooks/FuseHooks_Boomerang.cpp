@@ -62,10 +62,13 @@ extern "C" void FuseHooks_OnBoomerangHitActor(PlayState* play, Actor* victim) {
         uint8_t knockbackLevel = 0;
         uint8_t stunLevel = 0;
         uint8_t freezeLevel = 0;
+        uint8_t explosionLevel = 0;
         if (def) {
             HasModifier(def->modifiers, def->modifierCount, ModifierId::Knockback, &knockbackLevel);
             HasModifier(def->modifiers, def->modifierCount, ModifierId::Stun, &stunLevel);
             HasModifier(def->modifiers, def->modifierCount, ModifierId::Freeze, &freezeLevel);
+            explosionLevel =
+                Fuse::GetMaterialModifierLevel(materialId, FuseItemType::Boomerang, ModifierId::Explosion);
         }
 
         Fuse::Log("[FuseDBG] BoomerangHit: item=boomerang mat=%d lvl=%u victim=%p dura=%d/%d event=hit\n",
@@ -73,6 +76,10 @@ extern "C" void FuseHooks_OnBoomerangHitActor(PlayState* play, Actor* victim) {
                   Fuse::GetBoomerangFuseDurability(), Fuse::GetBoomerangFuseMaxDurability());
 
         Player* player = GET_PLAYER(play);
+        if (def && explosionLevel > 0) {
+            Fuse_TriggerExplosion(play, victim->world.pos, FuseExplosionSelfMode::DamagePlayer,
+                                  Fuse_GetExplosionParams(materialId, explosionLevel), "Boomerang");
+        }
         if (Fuse::TryFreezeShatter(play, victim, player ? &player->actor : nullptr, "boomerang")) {
             Fuse::DamageBoomerangFuseDurability(play, 1, "Boomerang hit");
             return;
@@ -96,6 +103,7 @@ extern "C" void FuseHooks_OnBoomerangHitActor(PlayState* play, Actor* victim) {
         if (def && freezeLevel > 0) {
             Fuse::QueueSwordFreeze(play, victim, freezeLevel, "boomerang", "Boomerang", materialId);
         }
+
     }
 
     Fuse::DamageBoomerangFuseDurability(play, 1, "Boomerang hit");

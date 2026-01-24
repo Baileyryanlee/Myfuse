@@ -13,7 +13,7 @@ enum class ModifierId : uint16_t {
     NegateKnockback = 7,
     RangeUp = 8,
     WideRange = 9,
-    // future: Range, Freeze, Explode, Stun, Seek, etc.
+    Explosion = 10,
 };
 
 struct ModifierSpec {
