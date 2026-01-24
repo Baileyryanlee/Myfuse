@@ -1,4 +1,7 @@
 #pragma once
+#ifndef __cplusplus
+#error "This header is C++-only. Use FuseCBridge.h from C files."
+#endif
 
 #include <libultraship/libultra/gbi.h>
 #include "z64save.h"

@@ -30,6 +30,7 @@
 #include "soh/Enhancements/enhancementTypes.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
 #include "soh/Enhancements/Fuse/ShieldBashRules.h"
+#include "soh/Enhancements/Fuse/FuseCBridge.h"
 #include "soh/Enhancements/randomizer/randomizer_grotto.h"
 #include "soh/frame_interpolation.h"
 #include "soh/OTRGlobals.h"
@@ -48,13 +49,10 @@ extern bool Fuse_ShieldHasFreeze(PlayState* play, int* outMaterialId, int* outDu
                                  uint8_t* outLevel);
 extern bool Fuse_ShieldHasMegaStun(PlayState* play, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax,
                                    uint8_t* outLevel);
-extern bool Fuse_ShieldHasExplosion(PlayState* play, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax,
-                                    uint8_t* outLevel);
 extern void Fuse_ShieldGuardDrain(PlayState* play);
 extern void Fuse_ShieldEnqueuePendingStun(Actor* victim, uint8_t level, int materialId, int itemId);
 extern void Fuse_ShieldTriggerMegaStun(PlayState* play, Player* player, int materialId, int itemId);
 extern void Fuse_ShieldApplyFreeze(PlayState* play, Actor* victim, uint8_t level);
-extern void Fuse_ShieldTriggerExplosion(PlayState* play, int materialId, uint8_t level, const Vec3f* pos);
 extern bool Fuse_IsActorFuseFrozen(Actor* actor);
 
 // Some player animations are played at this reduced speed, for reasons yet unclear.
@@ -4887,8 +4885,8 @@ s32 func_808382DC(Player* this, PlayState* play) {
                 Player_RequestRumble(this, 180, 20, 100, 0);
 
                 if (sp64) {
-                    int explosionMatId = 0;
-                    uint8_t explosionLevel = 0;
+                    s32 explosionMatId = 0;
+                    u8 explosionLevel = 0;
                     Actor* attacker = this->shieldQuad.base.ac;
                     Vec3f explosionPos = this->actor.world.pos;
                     if (attacker != NULL) {
