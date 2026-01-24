@@ -19,11 +19,17 @@ static const ModifierSpec kFrozenShardMods[] = {
     { ModifierId::Freeze, 1 },
 };
 
+static const ModifierSpec kStickMods[] = {
+    { ModifierId::RangeUp, 3 },
+    { ModifierId::WideRange, 3 },
+};
+
 constexpr MaterialDef kMaterialDefs[] = {
-    { MaterialId::None, "None", 0, nullptr, 0 },
-    { MaterialId::Rock, "ROCK", 10, kRockMods, 4 },
-    { MaterialId::DekuNut, "Deku Nut", 5, kDekuNutMods, 2 },
-    { MaterialId::FrozenShard, "Frozen Shard", 8, kFrozenShardMods, 1 },
+    { MaterialId::None, "None", 0, 0, nullptr, 0 },
+    { MaterialId::Rock, "ROCK", 1, 10, kRockMods, 4 },
+    { MaterialId::DekuNut, "Deku Nut", 0, 5, kDekuNutMods, 2 },
+    { MaterialId::Stick, "Stick", 2, 3, kStickMods, 2 },
+    { MaterialId::FrozenShard, "Frozen Shard", 0, 8, kFrozenShardMods, 1 },
 };
 
 } // namespace
