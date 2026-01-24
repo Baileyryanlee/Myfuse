@@ -10,6 +10,9 @@
 
 #define FLAGS (ACTOR_FLAG_UPDATE_CULLING_DISABLED | ACTOR_FLAG_DRAW_CULLING_DISABLED)
 
+extern float Fuse_GetBoomerangWideRangeScale(int32_t* outLevel);
+extern void Fuse_LogBoomerangWideRange(int level, float scale);
+
 void EnBoom_Init(Actor* thisx, PlayState* play);
 void EnBoom_Destroy(Actor* thisx, PlayState* play);
 void EnBoom_Update(Actor* thisx, PlayState* play);
@@ -62,6 +65,7 @@ void EnBoom_SetupAction(EnBoom* this, EnBoomActionFunc actionFunc) {
 void EnBoom_Init(Actor* thisx, PlayState* play) {
     EnBoom* this = (EnBoom*)thisx;
     EffectBlureInit1 blure;
+    int32_t wideRangeLevel = 0;
 
     this->actor.room = -1;
 
@@ -96,6 +100,11 @@ void EnBoom_Init(Actor* thisx, PlayState* play) {
 
     Collider_InitQuad(play, &this->collider);
     Collider_SetQuad(play, &this->collider, &this->actor, &sQuadInit);
+
+    this->wideRangeScale = Fuse_GetBoomerangWideRangeScale(&wideRangeLevel);
+    if (wideRangeLevel > 0) {
+        Fuse_LogBoomerangWideRange(wideRangeLevel, this->wideRangeScale);
+    }
 
     EnBoom_SetupAction(this, EnBoom_Fly);
 }
@@ -260,6 +269,8 @@ void EnBoom_Draw(Actor* thisx, PlayState* play) {
     EnBoom* this = (EnBoom*)thisx;
     Vec3f vec1;
     Vec3f vec2;
+    Vec3f mid;
+    Vec3f diff;
 
     OPEN_DISPS(play->state.gfxCtx);
 
@@ -268,6 +279,22 @@ void EnBoom_Draw(Actor* thisx, PlayState* play) {
     Matrix_RotateX(this->actor.world.rot.x * (M_PI / 0x8000), MTXMODE_APPLY);
     Matrix_MultVec3f(&sMultVec1, &vec1);
     Matrix_MultVec3f(&sMultVec2, &vec2);
+
+    if (this->wideRangeScale > 1.0f) {
+        mid.x = (vec1.x + vec2.x) * 0.5f;
+        mid.y = (vec1.y + vec2.y) * 0.5f;
+        mid.z = (vec1.z + vec2.z) * 0.5f;
+
+        Math_Vec3f_Diff(&vec1, &mid, &diff);
+        vec1.x = mid.x + (diff.x * this->wideRangeScale);
+        vec1.y = mid.y + (diff.y * this->wideRangeScale);
+        vec1.z = mid.z + (diff.z * this->wideRangeScale);
+
+        Math_Vec3f_Diff(&vec2, &mid, &diff);
+        vec2.x = mid.x + (diff.x * this->wideRangeScale);
+        vec2.y = mid.y + (diff.y * this->wideRangeScale);
+        vec2.z = mid.z + (diff.z * this->wideRangeScale);
+    }
 
     if (func_80090480(play, &this->collider, &this->boomerangInfo, &vec1, &vec2) != 0) {
         EffectBlure_AddVertex(Effect_GetByIndex(this->effectIndex), &vec1, &vec2);

@@ -390,6 +390,37 @@ extern "C" int32_t Fuse_GetPlayerMeleeHammerizeLevel(PlayState* play) {
     return std::min<int32_t>(level, 2);
 }
 
+extern "C" float Fuse_GetSwordRangeUpScale(int32_t* outLevel) {
+    int32_t level = 0;
+    if (Fuse::IsEnabled()) {
+        level = Fuse::GetSwordModifierLevel(ModifierId::RangeUp);
+    }
+    if (outLevel != nullptr) {
+        *outLevel = level;
+    }
+    return Fuse::GetRangeUpScale(static_cast<uint8_t>(level));
+}
+
+extern "C" float Fuse_GetBoomerangWideRangeScale(int32_t* outLevel) {
+    int32_t level = 0;
+    if (Fuse::IsEnabled() && Fuse::IsBoomerangFused()) {
+        level = Fuse::GetMaterialModifierLevel(Fuse::GetBoomerangMaterial(), FuseItemType::Boomerang,
+                                               ModifierId::WideRange);
+    }
+    if (outLevel != nullptr) {
+        *outLevel = level;
+    }
+    return Fuse::GetWideRangeScale(static_cast<uint8_t>(level));
+}
+
+extern "C" void Fuse_LogSwordRangeUp(int level, float scale) {
+    Fuse::Log("[FuseDBG] SwordRangeUp: level=%d scale=%.2f\n", level, static_cast<double>(scale));
+}
+
+extern "C" void Fuse_LogBoomerangWideRange(int level, float scale) {
+    Fuse::Log("[FuseDBG] BoomerangWideRange: level=%d scale=%.2f\n", level, static_cast<double>(scale));
+}
+
 // -----------------------------------------------------------------------------
 // Modifier helpers (module-local)
 // -----------------------------------------------------------------------------
@@ -1809,6 +1840,32 @@ uint8_t Fuse::GetMaterialModifierLevel(MaterialId materialId, FuseItemType itemT
     return HasModifier(def->modifiers, def->modifierCount, id, &level) ? level : 0;
 }
 
+float Fuse::GetRangeUpScale(uint8_t level) {
+    switch (level) {
+        case 1:
+            return 1.10f;
+        case 2:
+            return 1.20f;
+        case 3:
+            return 1.30f;
+        default:
+            return 1.0f;
+    }
+}
+
+float Fuse::GetWideRangeScale(uint8_t level) {
+    switch (level) {
+        case 1:
+            return 1.15f;
+        case 2:
+            return 1.30f;
+        case 3:
+            return 1.45f;
+        default:
+            return 1.0f;
+    }
+}
+
 int Fuse::GetMaterialCount(MaterialId id) {
     if (IsVanillaMaterial(id)) {
         if (id == MaterialId::DekuNut) {
@@ -2348,7 +2405,6 @@ Fuse::FuseResult Fuse::TryFuseSword(MaterialId id) {
     const uint8_t rangeUpLevel = Fuse::GetMaterialModifierLevel(id, FuseItemType::Sword, ModifierId::RangeUp);
     if (rangeUpLevel > 0) {
         const char* matName = def ? def->name : "Unknown";
-        // TODO: [FuseDBG] RangeUp needs sword hitbox range hook; log on fuse commit until available.
         Fuse::Log("[FuseDBG] ApplyMods: item=Sword mat=%s rangeUp=%u\n", matName,
                   static_cast<unsigned int>(rangeUpLevel));
     }
@@ -2388,7 +2444,6 @@ Fuse::FuseResult Fuse::TryFuseBoomerang(MaterialId id) {
     const uint8_t wideRangeLevel = Fuse::GetMaterialModifierLevel(id, FuseItemType::Boomerang, ModifierId::WideRange);
     if (wideRangeLevel > 0) {
         const char* matName = def ? def->name : "Unknown";
-        // TODO: [FuseDBG] WideRange needs boomerang collider scaling hook; log on fuse commit until available.
         Fuse::Log("[FuseDBG] ApplyMods: item=Boomerang mat=%s wideRange=%u\n", matName,
                   static_cast<unsigned int>(wideRangeLevel));
     }
