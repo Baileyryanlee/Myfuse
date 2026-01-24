@@ -68,6 +68,7 @@ static std::unordered_map<Actor*, int32_t> sFreezeLastShatterFrame;
 static std::unordered_map<Actor*, int32_t> sFreezeNoReapplyUntilFrame;
 static std::unordered_map<Actor*, int> sShatterImpulseUntilFrame;
 static std::unordered_map<Actor*, Vec3f> sShatterImpulseDir;
+static std::unordered_set<Actor*> sShatterImpulseFlipped;
 static std::unordered_map<Actor*, float> sFuseFrozenOrigGravity;
 static std::unordered_set<Actor*> sHpOverrideApplied;
 static constexpr int32_t kFreezeNoReapplyFrames = 12;
@@ -1017,19 +1018,42 @@ static void TickShatterImpulse(PlayState* play) {
         return;
     }
 
+    Player* player = GET_PLAYER(play);
+    Actor* playerActor = player ? &player->actor : nullptr;
     for (auto it = sShatterImpulseUntilFrame.begin(); it != sShatterImpulseUntilFrame.end();) {
         Actor* actor = it->first;
         const int untilFrame = it->second;
 
         if (!IsActorAliveInPlay(play, actor) || play->gameplayFrames >= untilFrame) {
             sShatterImpulseDir.erase(actor);
+            sShatterImpulseFlipped.erase(actor);
             it = sShatterImpulseUntilFrame.erase(it);
             continue;
         }
 
         const auto dirIt = sShatterImpulseDir.find(actor);
         if (dirIt != sShatterImpulseDir.end()) {
-            const Vec3f& dir = dirIt->second;
+            Vec3f dir = dirIt->second;
+            if (playerActor) {
+                const float dx0 = actor->world.pos.x - playerActor->world.pos.x;
+                const float dz0 = actor->world.pos.z - playerActor->world.pos.z;
+                const float dist0 = dx0 * dx0 + dz0 * dz0;
+                const float px1 = actor->world.pos.x + dir.x * kShatterImpulseStep;
+                const float pz1 = actor->world.pos.z + dir.z * kShatterImpulseStep;
+                const float dx1 = px1 - playerActor->world.pos.x;
+                const float dz1 = pz1 - playerActor->world.pos.z;
+                const float dist1 = dx1 * dx1 + dz1 * dz1;
+                if (dist1 < dist0) {
+                    dir.x = -dir.x;
+                    dir.z = -dir.z;
+                    sShatterImpulseDir[actor] = dir;
+                    if (sShatterImpulseFlipped.find(actor) == sShatterImpulseFlipped.end()) {
+                        sShatterImpulseFlipped.insert(actor);
+                        Fuse::Log("[FuseDBG] ShatterImpulseFlip: victim=%p dist0=%.2f dist1=%.2f\n",
+                                  static_cast<void*>(actor), dist0, dist1);
+                    }
+                }
+            }
             actor->world.pos.x += dir.x * kShatterImpulseStep;
             actor->world.pos.z += dir.z * kShatterImpulseStep;
             if (kShatterImpulseY != 0.0f) {
@@ -2729,6 +2753,7 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
     sFuseFrozenPinned.clear();
     sShatterImpulseUntilFrame.clear();
     sShatterImpulseDir.clear();
+    sShatterImpulseFlipped.clear();
     sHpOverrideApplied.clear();
 
     EnsureMaterialInventoryInitialized();
