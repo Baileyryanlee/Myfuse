@@ -68,6 +68,7 @@ static std::unordered_map<Actor*, int32_t> sFreezeLastShatterFrame;
 static std::unordered_map<Actor*, int32_t> sFreezeNoReapplyUntilFrame;
 static std::unordered_map<Actor*, int> sShatterImpulseUntilFrame;
 static std::unordered_map<Actor*, Vec3f> sShatterImpulseDir;
+static std::unordered_map<Actor*, s16> sShatterImpulseYaw;
 static std::unordered_set<Actor*> sShatterImpulseFlipped;
 static std::unordered_map<Actor*, float> sFuseFrozenOrigGravity;
 static std::unordered_set<Actor*> sHpOverrideApplied;
@@ -334,6 +335,7 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
     if (play != nullptr) {
         sShatterImpulseDir[victim] = { kbDir.x, 0.0f, kbDir.z };
         sShatterImpulseUntilFrame[victim] = play->gameplayFrames + kShatterImpulseFrames;
+        sShatterImpulseYaw[victim] = knockbackYaw;
         Fuse::Log("[FuseDBG] ShatterImpulse start: victim=%p until=%d step=%.2f\n", (void*)victim,
                   sShatterImpulseUntilFrame[victim], kShatterImpulseStep);
     }
@@ -341,6 +343,9 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
     victim->velocity.x = kbDir.x * kFreezeShatterKnockbackSpeed;
     victim->velocity.z = kbDir.z * kFreezeShatterKnockbackSpeed;
     victim->velocity.y = std::max(victim->velocity.y, kFreezeShatterKnockbackYBoost);
+    victim->speedXZ = kFreezeShatterKnockbackSpeed;
+    victim->world.rot.y = knockbackYaw;
+    victim->shape.rot.y = victim->world.rot.y;
 
     Fuse::Log("[FuseDBG] ShatterKB applied: victim=%p source=%p flip=1 dir=(%.2f,%.2f) vel=(%.2f,%.2f,%.2f) spd=%.2f "
               "yaw=%d\n",
@@ -1022,9 +1027,17 @@ static void TickShatterImpulse(PlayState* play) {
         if (!IsActorAliveInPlay(play, actor) || play->gameplayFrames >= untilFrame) {
             sShatterImpulseDir.erase(actor);
             sShatterImpulseFlipped.erase(actor);
+            sShatterImpulseYaw.erase(actor);
             it = sShatterImpulseUntilFrame.erase(it);
             continue;
         }
+
+        const auto yawIt = sShatterImpulseYaw.find(actor);
+        if (yawIt != sShatterImpulseYaw.end()) {
+            actor->world.rot.y = yawIt->second;
+            actor->shape.rot.y = actor->world.rot.y;
+        }
+        actor->speedXZ = std::max(actor->speedXZ, kFreezeShatterKnockbackSpeed);
 
         const auto dirIt = sShatterImpulseDir.find(actor);
         if (dirIt != sShatterImpulseDir.end()) {
@@ -2749,6 +2762,7 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
     sFuseFrozenPinned.clear();
     sShatterImpulseUntilFrame.clear();
     sShatterImpulseDir.clear();
+    sShatterImpulseYaw.clear();
     sShatterImpulseFlipped.clear();
     sHpOverrideApplied.clear();
 
