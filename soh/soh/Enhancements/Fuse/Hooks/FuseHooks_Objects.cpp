@@ -429,20 +429,6 @@ extern "C" void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollid
         return;
     }
 
-    const bool broke = isHammerAttack ? Fuse::DamageHammerFuseDurability(play, 1, "Hammer hit actor")
-                                      : Fuse::DamageSwordFuseDurability(play, 1, "AT collision");
-    const int after = isHammerAttack ? Fuse::GetHammerFuseDurability() : Fuse::GetSwordFuseDurability();
-    Fuse::Log("[FuseMVP] %s AT collision DRAIN frame=%d fused=%d victim=%p durability=%d->%d%s\n",
-              isHammerAttack ? "Hammer" : "Sword", curFrame, 1, victimPtr, before, after, broke ? " (broke)" : "");
-    if (isHammerAttack) {
-        Fuse::SetHammerHitActorThisSwing(true);
-        Fuse::SetHammerDrainedThisSwing(true);
-    }
-
-    if (victimPtr) {
-        gSwordATVictimCooldown.insert(victimPtr);
-    }
-
     if (victimActor) {
         const char* shatterSrcLabel = isHammerAttack ? "hammer" : "sword";
         const MaterialId materialId = isHammerAttack ? Fuse::GetHammerMaterial() : Fuse::GetSwordMaterial();
@@ -455,6 +441,20 @@ extern "C" void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollid
         } else {
             Fuse::OnSwordMeleeHit(play, victimActor, baseWeaponDamage);
         }
+    }
+
+    const bool broke = isHammerAttack ? Fuse::DamageHammerFuseDurability(play, 1, "Hammer hit actor")
+                                      : Fuse::DamageSwordFuseDurability(play, 1, "AT collision");
+    const int after = isHammerAttack ? Fuse::GetHammerFuseDurability() : Fuse::GetSwordFuseDurability();
+    Fuse::Log("[FuseMVP] %s AT collision DRAIN frame=%d fused=%d victim=%p durability=%d->%d%s\n",
+              isHammerAttack ? "Hammer" : "Sword", curFrame, 1, victimPtr, before, after, broke ? " (broke)" : "");
+    if (isHammerAttack) {
+        Fuse::SetHammerHitActorThisSwing(true);
+        Fuse::SetHammerDrainedThisSwing(true);
+    }
+
+    if (victimPtr) {
+        gSwordATVictimCooldown.insert(victimPtr);
     }
 }
 
