@@ -206,6 +206,21 @@ void EnBom_Explode(EnBom* this, PlayState* play) {
         this->explosionCollider.elements[0].dim.worldSphere.radius += this->actor.shape.rot.z + 8;
     }
 
+    Collider_UpdateSpheres(0, &this->explosionCollider);
+
+    if (this->explosionCollider.elements[0].dim.modelSphere.radius == 0) {
+        osSyncPrintf("EnBom_Explode: actorPos=(%.2f %.2f %.2f) sphereCenter=(%.2f %.2f %.2f) radius=%.2f "
+                     "dmgFlags=0x%08X dmg=%d atFlags=0x%08X params=%d\n",
+                     this->actor.world.pos.x, this->actor.world.pos.y, this->actor.world.pos.z,
+                     this->explosionCollider.elements[0].dim.worldSphere.center.x,
+                     this->explosionCollider.elements[0].dim.worldSphere.center.y,
+                     this->explosionCollider.elements[0].dim.worldSphere.center.z,
+                     this->explosionCollider.elements[0].dim.worldSphere.radius,
+                     this->explosionCollider.elements[0].info.toucher.dmgFlags,
+                     this->explosionCollider.elements[0].info.toucher.damage, this->explosionCollider.base.atFlags,
+                     this->actor.params);
+    }
+
     if (this->actor.params == BOMB_EXPLOSION) {
         CollisionCheck_SetAT(play, &play->colChkCtx, &this->explosionCollider.base);
     }
