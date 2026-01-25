@@ -80,8 +80,10 @@ extern "C" void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Ac
     const uint8_t explosionLevel =
         Fuse::GetMaterialModifierLevel(materialId, RangedSlotItemType(slot), ModifierId::Explosion);
     if (explosionLevel > 0) {
+        FuseExplosionParams params = Fuse_GetExplosionParams(materialId, explosionLevel);
+        params.hitFrames = 1;
         Fuse_TriggerExplosion(play, victim->world.pos, FuseExplosionSelfMode::DamagePlayer,
-                              Fuse_GetExplosionParams(materialId, explosionLevel), RangedSlotLabel(slot));
+                              params, RangedSlotLabel(slot));
     }
 
     Player* player = GET_PLAYER(play);
