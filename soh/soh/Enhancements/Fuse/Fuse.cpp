@@ -1357,11 +1357,10 @@ void QueueSwordFreezeInternal(PlayState* play, Actor* victim, uint8_t level, con
 } // namespace
 
 FuseExplosionParams Fuse_GetExplosionParams(MaterialId mat, int level) {
+    (void)mat;
     (void)level;
+    // Always treat fuse bomb explosions as explosive damage.
     FuseExplosionParams params{ 80.0f, 8, DMG_EXPLOSIVE };
-    if (mat == MaterialId::Bomb) {
-        params.dmgFlags = DMG_ARROW_NORMAL;
-    }
     return params;
 }
 
@@ -1385,10 +1384,22 @@ void Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfM
     bomb->timer = 1;
     bomb->actor.shape.rot.z = 0;
 
-    bomb->explosionCollider.base.atFlags =
-        (selfMode == FuseExplosionSelfMode::DamagePlayer) ? (AT_ON | AT_TYPE_ALL) : (AT_ON | AT_TYPE_PLAYER);
-    bomb->explosionCollider.elements[0].info.toucher.damage = params.damage;
     bomb->explosionCollider.elements[0].info.toucher.dmgFlags = params.dmgFlags;
+    bomb->explosionCollider.elements[0].info.toucher.damage = params.damage;
+
+    // For now: always allow enemy damage. If you later reintroduce "no self-damage",
+    // use AT_TYPE_ENEMY here.
+    const uint32_t atFlags = (selfMode == FuseExplosionSelfMode::DamagePlayer) ? (AT_ON | AT_TYPE_ALL)
+                                                                              : (AT_ON | AT_TYPE_ENEMY);
+    bomb->explosionCollider.base.atFlags = atFlags;
+
+    const s16 rad = (s16)params.radius;
+    // IMPORTANT: EnBom_Explode uses worldSphere for collision. Seed it so the first
+    // explosion frames have the correct effective radius (especially for shield offset spawns).
+    bomb->explosionCollider.elements[0].dim.modelSphere.radius = rad;
+    bomb->explosionCollider.elements[0].dim.worldSphere.radius = rad;
+    // Ensure center/radius are synced to actor position immediately.
+    Collider_UpdateSpheres(0, &bomb->explosionCollider);
 }
 
 void Fuse::QueueSwordFreeze(PlayState* play, Actor* victim, uint8_t level, const char* srcLabel, const char* slotLabel,
