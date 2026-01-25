@@ -4896,7 +4896,6 @@ s32 func_808382DC(Player* this, PlayState* play) {
                         Fuse_ShieldHasExplosion(play, &explosionMatId, NULL, NULL, &explosionLevel) &&
                         (explosionLevel > 0);
 
-                    Fuse_ShieldGuardDrain(play);
                     if (shouldExplode) {
                         Fuse_ShieldTriggerExplosion(play, explosionMatId, explosionLevel, &explosionPos);
                     }
@@ -4952,6 +4951,8 @@ s32 func_808382DC(Player* this, PlayState* play) {
                             Fuse_ShieldApplyFreeze(play, attacker, freezeLevel);
                         }
                     }
+
+                    Fuse_ShieldGuardDrain(play);
                 }
 
                 if (!Player_IsChildWithHylianShield(this)) {

@@ -3323,8 +3323,19 @@ static void ApplyMeleeHitMaterialEffects(PlayState* play, Actor* victim, Actor* 
     }
 }
 
+static void LogDurabilityGate(const char* itemLabel, MaterialId materialId, int durabilityCur, int durabilityMax) {
+    if (materialId == MaterialId::None || durabilityCur > 0) {
+        return;
+    }
+    Fuse::Log("[FuseDBG] ModGate: item=%s mat=%d dura=%d/%d SKIP_REASON=durability_gate\n", itemLabel,
+              static_cast<int>(materialId), durabilityCur, durabilityMax);
+}
+
 void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage) {
+
     if (!Fuse::IsSwordFused()) {
+        LogDurabilityGate("sword", Fuse::GetSwordMaterial(), Fuse::GetSwordFuseDurability(),
+                          Fuse::GetSwordFuseMaxDurability());
         return;
     }
 
@@ -3364,6 +3375,8 @@ void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage)
 
 void Fuse::OnHammerMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage) {
     if (!Fuse::IsHammerFused()) {
+        LogDurabilityGate("hammer", Fuse::GetHammerMaterial(), Fuse::GetHammerFuseDurability(),
+                          Fuse::GetHammerFuseMaxDurability());
         return;
     }
 
