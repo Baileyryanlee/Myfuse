@@ -1300,6 +1300,33 @@ static void CleanupEnemyHpOverrides(PlayState* play) {
     }
 }
 
+static void SpawnFuseExplosionEffects(PlayState* play, Actor* actor) {
+    if (!play || !actor) {
+        return;
+    }
+
+    Vec3f effVelocity = { 0.0f, 0.0f, 0.0f };
+    Vec3f bomb2Accel = { 0.0f, 0.1f, 0.0f };
+    Vec3f effAccel = { 0.0f, 0.0f, 0.0f };
+    Vec3f effPos = actor->world.pos;
+
+    effPos.y += 10.0f;
+    EffectSsBomb2_SpawnLayered(play, &effPos, &effVelocity, &bomb2Accel, 100, (actor->shape.rot.z * 6) + 19);
+
+    effPos.y = actor->floorHeight;
+    if (actor->floorHeight > BGCHECK_Y_MIN) {
+        EffectSsBlast_SpawnWhiteShockwave(play, &effPos, &effVelocity, &effAccel);
+    }
+
+    Audio_PlayActorSound2(actor, NA_SE_IT_BOMB_EXPLOSION);
+
+    play->envCtx.adjLight1Color[0] = play->envCtx.adjLight1Color[1] = play->envCtx.adjLight1Color[2] = 250;
+    play->envCtx.adjAmbientColor[0] = play->envCtx.adjAmbientColor[1] = play->envCtx.adjAmbientColor[2] = 250;
+
+    Camera_AddQuake(&play->mainCamera, 2, 0xB, 8);
+    actor->flags |= ACTOR_FLAG_DRAW_CULLING_DISABLED;
+}
+
 void ResetSwordFreezeQueueInternal() {
     for (size_t i = 0; i < kSwordFreezeQueueCount; i++) {
         sSwordFreezeQueues[i].clear();
@@ -1360,7 +1387,7 @@ FuseExplosionParams Fuse_GetExplosionParams(MaterialId mat, int level) {
     (void)mat;
     (void)level;
     // Always treat fuse bomb explosions as explosive damage.
-    FuseExplosionParams params{ 80.0f, 8, DMG_EXPLOSIVE };
+    FuseExplosionParams params{ 80.0f, 8, DMG_EXPLOSIVE, 10 };
     return params;
 }
 
@@ -1370,9 +1397,10 @@ void Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfM
         return;
     }
 
-    Fuse::Log("[FuseDBG] Explosion: pos=(%.2f %.2f %.2f) radius=%.2f dmg=%d flags=0x%08X self=%d src=%s\n", pos.x,
-              pos.y, pos.z, static_cast<double>(params.radius), params.damage, params.dmgFlags,
-              (selfMode == FuseExplosionSelfMode::DamagePlayer) ? 1 : 0, srcLabel ? srcLabel : "unknown");
+    Fuse::Log("[FuseDBG] Explosion: pos=(%.2f %.2f %.2f) radius=%.2f dmg=%d flags=0x%08X self=%d frames=%d src=%s\n",
+              pos.x, pos.y, pos.z, static_cast<double>(params.radius), params.damage, params.dmgFlags,
+              (selfMode == FuseExplosionSelfMode::DamagePlayer) ? 1 : 0, params.hitFrames,
+              srcLabel ? srcLabel : "unknown");
 
     Actor* explosionActor =
         Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BOM, pos.x, pos.y, pos.z, 0, 0, 0, 0, BOMB_BODY);
@@ -1381,7 +1409,8 @@ void Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfM
     }
 
     EnBom* bomb = reinterpret_cast<EnBom*>(explosionActor);
-    bomb->timer = 1;
+    bomb->timer = std::max(1, params.hitFrames);
+    bomb->actor.params = BOMB_EXPLOSION;
     bomb->actor.shape.rot.z = 0;
 
     bomb->explosionCollider.elements[0].info.toucher.dmgFlags = params.dmgFlags;
@@ -1400,6 +1429,9 @@ void Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfM
     bomb->explosionCollider.elements[0].dim.worldSphere.radius = rad;
     // Ensure center/radius are synced to actor position immediately.
     Collider_UpdateSpheres(0, &bomb->explosionCollider);
+
+    SpawnFuseExplosionEffects(play, &bomb->actor);
+    EnBom_SetupAction(bomb, EnBom_Explode);
 }
 
 void Fuse::QueueSwordFreeze(PlayState* play, Actor* victim, uint8_t level, const char* srcLabel, const char* slotLabel,
