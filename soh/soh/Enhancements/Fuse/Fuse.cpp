@@ -1413,6 +1413,11 @@ void Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfM
     bomb->actor.params = BOMB_EXPLOSION;
     bomb->actor.shape.rot.z = 0;
 
+    // Mark this EnBom as a Fuse-spawned explosion so we can enforce single-hit AT in EnBom_Explode.
+    // home.rot.z is unused by EnBom logic in Ship, so it's a safe marker channel.
+    bomb->actor.home.rot.z = 1;   // Fuse marker
+    bomb->actor.home.rot.x = 0;   // "has applied AT" flag (0 = not yet, 1 = already applied)
+
     bomb->explosionCollider.elements[0].info.toucher.dmgFlags = params.dmgFlags;
     bomb->explosionCollider.elements[0].info.toucher.damage = params.damage;
 
