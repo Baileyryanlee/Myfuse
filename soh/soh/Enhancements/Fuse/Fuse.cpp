@@ -1338,9 +1338,12 @@ void QueueSwordFreezeInternal(PlayState* play, Actor* victim, uint8_t level, con
 } // namespace
 
 FuseExplosionParams Fuse_GetExplosionParams(MaterialId mat, int level) {
-    (void)mat;
     (void)level;
-    return { 80.0f, 8 };
+    FuseExplosionParams params{ 80.0f, 8, DMG_EXPLOSIVE };
+    if (mat == MaterialId::Bomb) {
+        params.dmgFlags = DMG_ARROW_NORMAL;
+    }
+    return params;
 }
 
 void Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfMode selfMode,
@@ -1349,8 +1352,8 @@ void Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfM
         return;
     }
 
-    Fuse::Log("[FuseDBG] Explosion: pos=(%.2f %.2f %.2f) radius=%.2f dmg=%d self=%d src=%s\n", pos.x, pos.y, pos.z,
-              static_cast<double>(params.radius), params.damage,
+    Fuse::Log("[FuseDBG] Explosion: pos=(%.2f %.2f %.2f) radius=%.2f dmg=%d flags=0x%08X self=%d src=%s\n", pos.x,
+              pos.y, pos.z, static_cast<double>(params.radius), params.damage, params.dmgFlags,
               (selfMode == FuseExplosionSelfMode::DamagePlayer) ? 1 : 0, srcLabel ? srcLabel : "unknown");
 
     Actor* explosionActor =
@@ -1364,8 +1367,9 @@ void Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfM
     bomb->actor.shape.rot.z = 0;
 
     bomb->explosionCollider.base.atFlags =
-        (selfMode == FuseExplosionSelfMode::DamagePlayer) ? (AT_ON | AT_TYPE_ALL) : (AT_ON | AT_TYPE_ENEMY);
+        (selfMode == FuseExplosionSelfMode::DamagePlayer) ? (AT_ON | AT_TYPE_ALL) : (AT_ON | AT_TYPE_PLAYER);
     bomb->explosionCollider.elements[0].info.toucher.damage = params.damage;
+    bomb->explosionCollider.elements[0].info.toucher.dmgFlags = params.dmgFlags;
 }
 
 void Fuse::QueueSwordFreeze(PlayState* play, Actor* victim, uint8_t level, const char* srcLabel, const char* slotLabel,

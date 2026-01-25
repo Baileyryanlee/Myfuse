@@ -42,6 +42,7 @@ enum class FuseExplosionSelfMode {
 struct FuseExplosionParams {
     float radius = 0.0f;
     int damage = 0;
+    uint32_t dmgFlags = 0;
 };
 
 FuseExplosionParams Fuse_GetExplosionParams(MaterialId mat, int level);
