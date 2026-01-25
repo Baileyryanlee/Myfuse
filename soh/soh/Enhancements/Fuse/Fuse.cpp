@@ -1354,24 +1354,18 @@ void Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfM
               (selfMode == FuseExplosionSelfMode::DamagePlayer) ? 1 : 0, srcLabel ? srcLabel : "unknown");
 
     Actor* explosionActor =
-        Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BOM, pos.x, pos.y, pos.z, 0, 0, 0, 0, BOMB_EXPLOSION);
+        Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BOM, pos.x, pos.y, pos.z, 0, 0, 0, 0, BOMB_BODY);
     if (!explosionActor) {
         return;
     }
 
     EnBom* bomb = reinterpret_cast<EnBom*>(explosionActor);
-    bomb->actor.params = BOMB_EXPLOSION;
-    bomb->actor.flags |= ACTOR_FLAG_DRAW_CULLING_DISABLED;
-    bomb->timer = 10;
-    EnBom_SetupAction(bomb, EnBom_Explode);
+    bomb->timer = 1;
+    bomb->actor.shape.rot.z = 0;
 
-    const s16 rad = static_cast<s16>(params.radius);
     bomb->explosionCollider.base.atFlags =
         (selfMode == FuseExplosionSelfMode::DamagePlayer) ? (AT_ON | AT_TYPE_ALL) : (AT_ON | AT_TYPE_ENEMY);
     bomb->explosionCollider.elements[0].info.toucher.damage = params.damage;
-    bomb->explosionCollider.elements[0].dim.modelSphere.radius = rad;
-    bomb->explosionCollider.elements[0].dim.worldSphere.radius = rad;
-    CollisionCheck_SetAT(play, &play->colChkCtx, &bomb->explosionCollider.base);
 }
 
 void Fuse::QueueSwordFreeze(PlayState* play, Actor* victim, uint8_t level, const char* srcLabel, const char* slotLabel,
