@@ -283,6 +283,10 @@ void ArmsHook_Shoot(ArmsHook* this, PlayState* play) {
             sp5C = COLPOLY_GET_NORMAL(poly->normal.x);
             sp58 = COLPOLY_GET_NORMAL(poly->normal.z);
             Math_Vec3f_Copy(&this->actor.world.pos, &sp78);
+            if (!this->fuseHitApplied) {
+                this->fuseHitApplied = 1;
+                FuseHooks_OnHookshotSurfaceHit(play, &sp78);
+            }
             this->actor.world.pos.x += 10.0f * sp5C;
             this->actor.world.pos.z += 10.0f * sp58;
             this->timer = 0;
