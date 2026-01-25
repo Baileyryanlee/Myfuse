@@ -108,6 +108,25 @@ static std::array<std::vector<SwordFreezeRequest>, kSwordFreezeQueueCount> sSwor
 static std::array<std::unordered_set<Actor*>, kSwordFreezeQueueCount> sSwordFreezeVictims;
 static std::array<int, kSwordFreezeQueueCount> sSwordFreezeQueueFrames = { -1, -1 };
 
+static Vec3f Fuse_GetPosInFrontOfPlayer(PlayState* play, float forward, float up) {
+    Vec3f pos{ 0.0f, 0.0f, 0.0f };
+    if (!play) {
+        return pos;
+    }
+
+    Player* player = GET_PLAYER(play);
+    if (!player) {
+        return pos;
+    }
+
+    pos = player->actor.world.pos;
+    const s16 yaw = player->actor.shape.rot.y;
+    pos.x += Math_SinS(yaw) * forward;
+    pos.z += Math_CosS(yaw) * forward;
+    pos.y += up;
+    return pos;
+}
+
 static bool IsFuseFrozenInternal(Actor* actor) {
     if (actor == nullptr) {
         return false;
@@ -1728,7 +1747,17 @@ extern "C" void Fuse_ShieldTriggerExplosion(PlayState* play, s32 shieldMaterialI
 
     const MaterialId materialId = static_cast<MaterialId>(shieldMaterialId);
     const FuseExplosionParams params = Fuse_GetExplosionParams(materialId, level);
-    Fuse_TriggerExplosion(play, *pos, FuseExplosionSelfMode::None, params, "Shield");
+    const Vec3f offsetPos = Fuse_GetPosInFrontOfPlayer(play, 22.0f, 14.0f);
+    const s16 yaw = GET_PLAYER(play) ? GET_PLAYER(play)->actor.shape.rot.y : 0;
+    const uint32_t atFlags = AT_ON | AT_TYPE_ALL;
+    const char* srcLabel = "Shield";
+
+    Fuse::Log("[FuseDBG] ShieldExplosionOffset: src=%s orig=(%.2f %.2f %.2f) offset=(%.2f %.2f %.2f) yaw=%d "
+              "atFlags=0x%08X dmg=%d radius=%.2f\n",
+              srcLabel, pos->x, pos->y, pos->z, offsetPos.x, offsetPos.y, offsetPos.z, yaw, atFlags, params.damage,
+              static_cast<double>(params.radius));
+
+    Fuse_TriggerExplosion(play, offsetPos, FuseExplosionSelfMode::DamagePlayer, params, srcLabel);
 }
 
 extern "C" void Fuse_ShieldApplyFreeze(PlayState* play, Actor* victim, uint8_t level) {
