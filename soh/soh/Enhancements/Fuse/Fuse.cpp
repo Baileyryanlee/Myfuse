@@ -1758,7 +1758,7 @@ extern "C" void Fuse_ShieldTriggerExplosion(PlayState* play, s32 shieldMaterialI
 
     const MaterialId materialId = static_cast<MaterialId>(shieldMaterialId);
     const FuseExplosionParams params = Fuse_GetExplosionParams(materialId, level);
-    const Vec3f offsetPos = Fuse_GetPosInFrontOfPlayer(play, 22.0f, 14.0f);
+    const Vec3f offsetPos = Fuse_GetPosInFrontOfPlayer(play, 32.0f, 18.0f);
     const s16 yaw = GET_PLAYER(play) ? GET_PLAYER(play)->actor.shape.rot.y : 0;
     const uint32_t atFlags = AT_ON | AT_TYPE_ALL;
     const char* srcLabel = "Shield";
