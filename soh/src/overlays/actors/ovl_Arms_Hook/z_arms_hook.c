@@ -174,13 +174,18 @@ void ArmsHook_Shoot(ArmsHook* this, PlayState* play) {
     func_8002F8F0(&player->actor, NA_SE_IT_HOOKSHOT_CHAIN - SFX_FLAG);
     ArmsHook_CheckForCancel(this);
 
-    if ((this->timer != 0) && (this->collider.base.atFlags & AT_HIT) &&
-        (this->collider.info.atHitInfo->elemType != ELEMTYPE_UNK4)) {
+    // Fuse: hookshot "impact" should not depend on elemType/category; let Fuse_OnRangedHitActor filter.
+    if ((this->timer != 0) && (this->collider.base.atFlags & AT_HIT) && !this->fuseHitApplied) {
         touchedActor = this->collider.base.at;
-        if ((touchedActor != NULL) && (touchedActor->category == ACTORCAT_ENEMY) && !this->fuseHitApplied) {
+        if (touchedActor != NULL) {
             this->fuseHitApplied = 1;
             FuseHooks_OnHookshotEnemyHit(play, touchedActor);
         }
+    }
+
+    if ((this->timer != 0) && (this->collider.base.atFlags & AT_HIT) &&
+        (this->collider.info.atHitInfo->elemType != ELEMTYPE_UNK4)) {
+        touchedActor = this->collider.base.at;
         if ((touchedActor->update != NULL) &&
             (touchedActor->flags & (ACTOR_FLAG_HOOKSHOT_PULLS_ACTOR | ACTOR_FLAG_HOOKSHOT_PULLS_PLAYER))) {
             if (this->collider.info.atHitInfo->bumperFlags & BUMP_HOOKABLE) {
