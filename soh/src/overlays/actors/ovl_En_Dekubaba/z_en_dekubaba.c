@@ -1038,9 +1038,6 @@ void EnDekubaba_UpdateDamage(EnDekubaba* this, PlayState* play) {
     Vec3f* firePos;
     f32 fireScale;
     s32 phi_s0; // Used for both health and iterator
-    s32 i;
-    s32 prevHealth;
-    u32 dmgFlags = 0;
 
     if (this->collider.base.acFlags & AC_HIT) {
         this->collider.base.acFlags &= ~AC_HIT;
@@ -1048,14 +1045,6 @@ void EnDekubaba_UpdateDamage(EnDekubaba* this, PlayState* play) {
 
         if ((this->collider.base.colType != COLTYPE_HARD) &&
             ((this->actor.colChkInfo.damageEffect != DEKUBABA_DMGEFF_NONE) || (this->actor.colChkInfo.damage != 0))) {
-            prevHealth = this->actor.colChkInfo.health;
-            dmgFlags = 0;
-            for (i = 0; i < this->collider.count; i++) {
-                if (this->collider.elements[i].info.acHitInfo != NULL) {
-                    dmgFlags = this->collider.elements[i].info.acHitInfo->toucher.dmgFlags;
-                    break;
-                }
-            }
 
             phi_s0 = this->actor.colChkInfo.health - this->actor.colChkInfo.damage;
 
@@ -1090,9 +1079,6 @@ void EnDekubaba_UpdateDamage(EnDekubaba* this, PlayState* play) {
             }
 
             this->actor.colChkInfo.health = CLAMP_MIN(phi_s0, 0);
-            osSyncPrintf("[FuseDBG] DekuBabaDamage: dmgFlags=0x%08X dmg=%d effect=%d health=%d->%d dead=%d\n",
-                         dmgFlags, this->actor.colChkInfo.damage, this->actor.colChkInfo.damageEffect, prevHealth,
-                         this->actor.colChkInfo.health, (this->actor.colChkInfo.health <= 0));
 
             if (this->actor.colChkInfo.damageEffect == DEKUBABA_DMGEFF_FIRE) {
                 firePos = &this->actor.world.pos;
