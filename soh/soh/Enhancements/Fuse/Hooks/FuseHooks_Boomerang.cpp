@@ -77,6 +77,9 @@ extern "C" void FuseHooks_OnBoomerangHitActor(PlayState* play, Actor* victim) {
 
         Player* player = GET_PLAYER(play);
         if (def && explosionLevel > 0) {
+            Fuse::Log("[FuseDBG] ExplosionProc: item=Boomerang mat=%d lvl=%u victim=%p dura=%d/%d\n",
+                      static_cast<int>(materialId), static_cast<unsigned int>(explosionLevel), (void*)victim,
+                      Fuse::GetBoomerangFuseDurability(), Fuse::GetBoomerangFuseMaxDurability());
             Fuse_TriggerExplosion(play, victim->world.pos, FuseExplosionSelfMode::DamagePlayer,
                                   Fuse_GetExplosionParams(materialId, explosionLevel), "Boomerang");
         }
