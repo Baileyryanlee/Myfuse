@@ -207,7 +207,9 @@ void EnBom_Explode(EnBom* this, PlayState* play) {
     }
 
     Collider_UpdateSpheres(0, &this->explosionCollider);
-    this->explosionCollider.elements[0].dim.worldSphere.center = this->actor.world.pos;
+    this->explosionCollider.elements[0].dim.worldSphere.center.x = (s16)this->actor.world.pos.x;
+    this->explosionCollider.elements[0].dim.worldSphere.center.y = (s16)this->actor.world.pos.y;
+    this->explosionCollider.elements[0].dim.worldSphere.center.z = (s16)this->actor.world.pos.z;
 
     if (this->explosionCollider.elements[0].dim.modelSphere.radius == 0) {
         osSyncPrintf("EnBom_Explode: actorPos=(%.2f %.2f %.2f) sphereCenter=(%.2f %.2f %.2f) radius=%.2f "
