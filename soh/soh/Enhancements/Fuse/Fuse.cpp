@@ -1341,8 +1341,8 @@ FuseExplosionParams Fuse_GetExplosionParams(MaterialId mat, int level) {
     return { 80.0f, 8 };
 }
 
-void Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfMode selfMode, FuseExplosionParams params,
-                           const char* srcLabel) {
+void Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfMode selfMode,
+                           FuseExplosionParams params, const char* srcLabel) {
     if (!play) {
         return;
     }
@@ -1351,8 +1351,7 @@ void Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfM
               static_cast<double>(params.radius), params.damage,
               (selfMode == FuseExplosionSelfMode::DamagePlayer) ? 1 : 0, srcLabel ? srcLabel : "unknown");
 
-    Actor* explosionActor =
-        Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BOM, pos.x, pos.y, pos.z, 0, 0, 0, BOMB_BODY);
+    Actor* explosionActor = Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BOM, pos.x, pos.y, pos.z, 0, 0, 0, 0, BOMB_BODY);
     if (!explosionActor) {
         return;
     }
@@ -1669,8 +1668,8 @@ extern "C" bool Fuse_ShieldHasMegaStun(PlayState* play, int* outMaterialId, int*
                                   outLevel);
 }
 
-extern "C" bool Fuse_ShieldHasExplosion(PlayState* play, s32* outMaterialId, s32* outDurabilityCur, s32* outDurabilityMax,
-                                        u8* outLevel) {
+extern "C" bool Fuse_ShieldHasExplosion(PlayState* play, s32* outMaterialId, s32* outDurabilityCur,
+                                        s32* outDurabilityMax, u8* outLevel) {
     if (outMaterialId) {
         *outMaterialId = static_cast<int>(MaterialId::None);
     }
