@@ -223,7 +223,18 @@ void EnBom_Explode(EnBom* this, PlayState* play) {
     }
 
     if (this->actor.params == BOMB_EXPLOSION) {
-        CollisionCheck_SetAT(play, &play->colChkCtx, &this->explosionCollider.base);
+        // Fuse-spawned explosions should only deal damage once (not once per frame of the explosion timer),
+        // otherwise damage stacks and becomes wildly higher than intended.
+        if (this->actor.home.rot.z == 1) {
+            // home.rot.x is our "AT already applied" flag for fuse explosions
+            if (this->actor.home.rot.x == 0) {
+                CollisionCheck_SetAT(play, &play->colChkCtx, &this->explosionCollider.base);
+                this->actor.home.rot.x = 1;
+            }
+        } else {
+            // Vanilla bombs keep their normal multi-frame AT behavior.
+            CollisionCheck_SetAT(play, &play->colChkCtx, &this->explosionCollider.base);
+        }
     }
 
     if (play->envCtx.adjLight1Color[0] != 0) {
