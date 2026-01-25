@@ -49,6 +49,26 @@ static FuseItemType RangedSlotItemType(RangedFuseSlotId slot) {
     }
 }
 
+static bool Fuse_ShouldTriggerExplosionOnActor(const Actor* actor) {
+    if (!actor) {
+        return false;
+    }
+
+    if (actor->category == ACTORCAT_PLAYER) {
+        return false;
+    }
+
+    if (FuseBash_IsEnemyActor((Actor*)actor)) {
+        return true;
+    }
+
+    if (actor->category == ACTORCAT_PROP || actor->category == ACTORCAT_BG) {
+        return true;
+    }
+
+    return false;
+}
+
 static void HandleRangedSurfaceHit(PlayState* play, RangedFuseSlot slot, const Vec3f* impactPos, const char* reason) {
     if (!play || !impactPos) {
         return;
@@ -89,7 +109,7 @@ extern "C" void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Ac
         return;
     }
 
-    if (!FuseBash_IsEnemyActor(victim)) {
+    if (!Fuse_ShouldTriggerExplosionOnActor(victim)) {
         return;
     }
 
@@ -99,8 +119,8 @@ extern "C" void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Ac
     Fuse_GetRangedFuseStatus(static_cast<RangedFuseSlot>(slot), &materialIdRaw, &curDurability, &maxDurability);
     (void)maxDurability;
 
-    Fuse::Log("[FuseDBG] RangedHit slot=%s mat=%d victim=%p id=0x%04X\n", RangedSlotLabel(slot), materialIdRaw,
-              (void*)victim, victim->id);
+    Fuse::Log("[FuseDBG] RangedHit slot=%s mat=%d victim=%p id=0x%04X cat=%d\n", RangedSlotLabel(slot), materialIdRaw,
+              (void*)victim, victim->id, victim->category);
 
     if (materialIdRaw == static_cast<int>(MaterialId::None) || curDurability <= 0) {
         return;
