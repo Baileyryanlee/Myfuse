@@ -344,6 +344,10 @@ void EnArrow_Fly(EnArrow* this, PlayState* play) {
                     FuseHooks_OnRangedProjectileHit(play, hitActor, true);
                 }
             }
+            if (this->touchedPoly && !this->fuseHitApplied) {
+                this->fuseHitApplied = 1;
+                FuseHooks_OnRangedProjectileHitSurface(play, &this->actor.world.pos, true);
+            }
 
             if (this->actor.params == ARROW_NUT) {
                 EnArrow_TriggerDekuNutEffect(play, &this->actor.world.pos);
@@ -387,6 +391,10 @@ void EnArrow_Fly(EnArrow* this, PlayState* play) {
                     Audio_PlayActorSound2(&this->actor, NA_SE_IT_ARROW_STICK_CRE);
                 }
             } else if (this->touchedPoly) {
+                if (!this->fuseHitApplied) {
+                    this->fuseHitApplied = 1;
+                    FuseHooks_OnRangedProjectileHitSurface(play, &this->actor.world.pos, false);
+                }
                 EnArrow_SetupAction(this, func_809B45E0);
                 Animation_PlayOnce(&this->skelAnime, &gArrow2Anim);
 

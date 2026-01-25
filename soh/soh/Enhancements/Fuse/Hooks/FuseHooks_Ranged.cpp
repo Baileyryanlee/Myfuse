@@ -49,6 +49,41 @@ static FuseItemType RangedSlotItemType(RangedFuseSlotId slot) {
     }
 }
 
+static void HandleRangedSurfaceHit(PlayState* play, RangedFuseSlot slot, const Vec3f* impactPos, const char* reason) {
+    if (!play || !impactPos) {
+        return;
+    }
+
+    int materialIdRaw = static_cast<int>(MaterialId::None);
+    int curDurability = 0;
+    int maxDurability = 0;
+    Fuse_GetRangedFuseStatus(slot, &materialIdRaw, &curDurability, &maxDurability);
+
+    Fuse::Log("[FuseDBG] RangedSurfaceHit slot=%s mat=%d dura=%d/%d pos=(%.2f %.2f %.2f) reason=%s\n",
+              RangedSlotLabel(static_cast<RangedFuseSlotId>(slot)), materialIdRaw, curDurability, maxDurability,
+              impactPos->x, impactPos->y, impactPos->z, reason ? reason : "None");
+
+    if (materialIdRaw == static_cast<int>(MaterialId::None) || curDurability <= 0) {
+        return;
+    }
+
+    const MaterialId materialId = static_cast<MaterialId>(materialIdRaw);
+    const MaterialDef* def = Fuse::GetMaterialDef(materialId);
+    if (!def) {
+        return;
+    }
+
+    const uint8_t explosionLevel =
+        Fuse::GetMaterialModifierLevel(materialId, RangedSlotItemType(static_cast<RangedFuseSlotId>(slot)),
+                                       ModifierId::Explosion);
+    if (explosionLevel > 0) {
+        FuseExplosionParams params = Fuse_GetExplosionParams(materialId, explosionLevel);
+        params.hitFrames = 1;
+        Fuse_TriggerExplosion(play, *impactPos, FuseExplosionSelfMode::DamagePlayer, params,
+                              RangedSlotLabel(static_cast<RangedFuseSlotId>(slot)));
+    }
+}
+
 extern "C" void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Actor* victim) {
     if (!play || !victim) {
         return;
@@ -164,6 +199,18 @@ extern "C" void FuseHooks_OnRangedProjectileHit(PlayState* play, Actor* victim, 
     Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot::Arrows, "ProjectileHit");
 }
 
+extern "C" void FuseHooks_OnRangedProjectileHitSurface(PlayState* play, Vec3f* impactPos, int32_t isSeed) {
+    if (!play || !impactPos) {
+        return;
+    }
+
+    const RangedFuseSlot slot = isSeed ? RangedFuseSlot::Slingshot : RangedFuseSlot::Arrows;
+    Fuse::CommitQueuedRangedFuse(slot, "ProjectileSurfaceHit");
+    HandleRangedSurfaceHit(play, slot, impactPos, "ProjectileSurfaceHit");
+    Fuse::MarkRangedHitResolved(slot, "ProjectileSurfaceHit");
+    Fuse::OnRangedProjectileHitFinalize(slot, "ProjectileSurfaceHit");
+}
+
 extern "C" void FuseHooks_OnHookshotShotStarted(PlayState* play) {
     (void)play;
     Fuse::OnHookshotShotStarted("HookshotShotStarted");
@@ -174,6 +221,17 @@ extern "C" void FuseHooks_OnHookshotEnemyHit(PlayState* play, Actor* victim) {
     LogRangedKnockbackStatus("hookshot", RangedFuseSlot::Hookshot, "enemy-hit");
     Fuse_OnRangedHitActor(play, RANGED_FUSE_SLOT_HOOKSHOT, victim);
     Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot::Hookshot, "HookshotEnemyHit");
+}
+
+extern "C" void FuseHooks_OnHookshotSurfaceHit(PlayState* play, Vec3f* impactPos) {
+    if (!play || !impactPos) {
+        return;
+    }
+
+    Fuse::CommitQueuedRangedFuse(RangedFuseSlot::Hookshot, "HookshotSurfaceHit");
+    HandleRangedSurfaceHit(play, RangedFuseSlot::Hookshot, impactPos, "HookshotSurfaceHit");
+    Fuse::MarkRangedHitResolved(RangedFuseSlot::Hookshot, "HookshotSurfaceHit");
+    Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot::Hookshot, "HookshotSurfaceHit");
 }
 
 extern "C" void FuseHooks_OnHookshotLatched(PlayState* play) {
