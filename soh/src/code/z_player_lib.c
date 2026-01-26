@@ -1912,13 +1912,10 @@ void Player_PostLimbDrawGameplay(PlayState* play, s32 limbIndex, Gfx** dList, Ve
             Matrix_RotateZYX(kFuseGiNutRot.x, kFuseGiNutRot.y, kFuseGiNutRot.z, MTXMODE_APPLY);
             Matrix_Scale(kFuseGiNutScale, kFuseGiNutScale, kFuseGiNutScale, MTXMODE_APPLY);
             s32 playerObjIdx = this->actor.objBankIndex;
-            uintptr_t playerSeg06 = 0;
-
-            if (playerObjIdx >= 0) {
-                playerSeg06 = (uintptr_t)play->objectCtx.status[playerObjIdx].segment;
+            if (playerObjIdx >= 0 && play->objectCtx.status[playerObjIdx].segment != NULL) {
+                uintptr_t playerSeg06 = (uintptr_t)play->objectCtx.status[playerObjIdx].segment;
+                Fuse_DrawGiNutAttached(play, this, limbIndex, playerSeg06);
             }
-
-            Fuse_DrawGiNutAttached(play, this, limbIndex, playerSeg06);
             Matrix_Pop();
         }
 

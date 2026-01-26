@@ -86,8 +86,12 @@ extern "C" void Fuse_DrawGiNutAttached(PlayState* play, Player* player, s32 limb
         return;
     }
 
+    static int sLastSkipReason = -1;
     if (restoreSeg06Base == 0) {
-        Fuse::Log("[FuseDBG] GiNutSeg: skip restore (playerObjIdx invalid)\n");
+        if (sLastSkipReason != 0) {
+            Fuse::Log("[FuseDBG] GiNutSeg: skip reason=restore_invalid\n");
+            sLastSkipReason = 0;
+        }
         return;
     }
 
@@ -107,23 +111,49 @@ extern "C" void Fuse_DrawGiNutAttached(PlayState* play, Player* player, s32 limb
     }
 
     const s32 objectIndex = Fuse_EnsureGiNutObject(play);
-    if (objectIndex < 0 || !Object_IsLoaded(&play->objectCtx, objectIndex)) {
+    if (objectIndex < 0) {
+        if (sLastSkipReason != 1) {
+            Fuse::Log("[FuseDBG] GiNutSeg: skip reason=gi_not_loaded\n");
+            sLastSkipReason = 1;
+        }
+        return;
+    }
+    if (!Object_IsLoaded(&play->objectCtx, objectIndex)) {
+        if (sLastSkipReason != 1) {
+            Fuse::Log("[FuseDBG] GiNutSeg: skip reason=gi_not_loaded\n");
+            sLastSkipReason = 1;
+        }
+        return;
+    }
+
+    void* giSeg = play->objectCtx.status[objectIndex].segment;
+    if (giSeg == nullptr) {
+        if (sLastSkipReason != 2) {
+            Fuse::Log("[FuseDBG] GiNutSeg: skip reason=gi_seg_null\n");
+            sLastSkipReason = 2;
+        }
         return;
     }
 
     Fuse::Log("[FuseDBG] GiNutDraw: sword=%d mat=%d dura=%d/%d limb=%d\n", player->heldItemId,
               static_cast<int>(materialId), durabilityCur, durabilityMax, limbIndex);
 
-    static uintptr_t sLastGiNutRestoreSeg06Base = 0;
-    if (sLastGiNutRestoreSeg06Base != restoreSeg06Base) {
-        Fuse::Log("[FuseDBG] GiNutSeg: set06=GI_NUTS restore06=PLAYER base=%p\n",
+    static s32 sLastLoggedGiNutIdx = -2;
+    static uintptr_t sLastLoggedGiNutSeg = 0;
+    static uintptr_t sLastLoggedRestoreSeg = 0;
+    if (sLastLoggedGiNutIdx != objectIndex || sLastLoggedGiNutSeg != reinterpret_cast<uintptr_t>(giSeg) ||
+        sLastLoggedRestoreSeg != restoreSeg06Base) {
+        Fuse::Log("[FuseDBG] GiNutSeg: giIdx=%d giSeg=%p restore=%p draw=1\n", objectIndex, giSeg,
                   reinterpret_cast<void*>(restoreSeg06Base));
-        sLastGiNutRestoreSeg06Base = restoreSeg06Base;
+        sLastLoggedGiNutIdx = objectIndex;
+        sLastLoggedGiNutSeg = reinterpret_cast<uintptr_t>(giSeg);
+        sLastLoggedRestoreSeg = restoreSeg06Base;
     }
+    sLastSkipReason = -1;
 
     OPEN_DISPS(play->state.gfxCtx, __FILE__, __LINE__);
 
-    gSPSegment(POLY_OPA_DISP++, 0x06, (uintptr_t)play->objectCtx.status[objectIndex].segment);
+    gSPSegment(POLY_OPA_DISP++, 0x06, reinterpret_cast<uintptr_t>(giSeg));
     gSPMatrix(POLY_OPA_DISP++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
     gSPDisplayList(POLY_OPA_DISP++, (Gfx*)gGiNutDL);
     gSPSegment(POLY_OPA_DISP++, 0x06, restoreSeg06Base);
