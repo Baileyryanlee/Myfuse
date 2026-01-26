@@ -6,6 +6,8 @@
 
 #include "soh/Enhancements/Fuse/Fuse.h"
 
+#include "objects/object_gi_nuts/object_gi_nuts.h"
+
 #include <cstdint>
 #include <cmath>
 #include <algorithm>
@@ -35,6 +37,67 @@ static std::unordered_set<void*> gSwordATVictimCooldown;
 static std::unordered_set<void*> gAwardedFrozenShards;
 static uint32_t gSwordBaseDmgFlags[4];
 static bool gSwordBaseValid = false;
+
+extern "C" s32 Fuse_EnsureGiNutObject(PlayState* play) {
+    static s32 sLastGiNutIndex = -2;
+    static s32 sLastGiNutLoaded = -1;
+
+    if (!play) {
+        return -1;
+    }
+
+    s32 objectIndex = Object_GetIndex(&play->objectCtx, OBJECT_GI_NUTS);
+    if (objectIndex < 0 && play->objectCtx.num < OBJECT_EXCHANGE_BANK_MAX) {
+        objectIndex = Object_Spawn(&play->objectCtx, OBJECT_GI_NUTS);
+    }
+
+    const s32 isLoaded = (objectIndex >= 0) ? Object_IsLoaded(&play->objectCtx, objectIndex) : 0;
+    if (objectIndex != sLastGiNutIndex || isLoaded != sLastGiNutLoaded) {
+        Fuse::Log("[FuseDBG] GiNutObj: idx=%d loaded=%d\n", objectIndex, isLoaded ? 1 : 0);
+        sLastGiNutIndex = objectIndex;
+        sLastGiNutLoaded = isLoaded;
+    }
+
+    return objectIndex;
+}
+
+extern "C" void Fuse_DrawGiNutAttached(PlayState* play, Player* player, s32 limbIndex) {
+    if (!play || !player) {
+        return;
+    }
+
+    if (!Fuse::IsSwordFused()) {
+        return;
+    }
+
+    const MaterialId materialId = Fuse::GetSwordMaterial();
+    if (materialId != MaterialId::DekuNut) {
+        return;
+    }
+
+    const int durabilityCur = Fuse::GetSwordFuseDurability();
+    const int durabilityMax = Fuse::GetSwordFuseMaxDurability();
+    if (durabilityCur <= 0) {
+        return;
+    }
+
+    const s32 objectIndex = Fuse_EnsureGiNutObject(play);
+    if (objectIndex < 0 || !Object_IsLoaded(&play->objectCtx, objectIndex)) {
+        return;
+    }
+
+    Fuse::Log("[FuseDBG] GiNutDraw: sword=%d mat=%d dura=%d/%d limb=%d\n", player->heldItemId,
+              static_cast<int>(materialId), durabilityCur, durabilityMax, limbIndex);
+
+    OPEN_DISPS(play->state.gfxCtx);
+
+    gSPSegment(POLY_OPA_DISP++, 0x06, play->objectCtx.status[objectIndex].segment);
+    gSPMatrix(POLY_OPA_DISP++, MATRIX_NEWMTX(play->state.gfxCtx),
+              G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
+    gSPDisplayList(POLY_OPA_DISP++, gGiNutDL);
+
+    CLOSE_DISPS(play->state.gfxCtx);
+}
 
 static int GetSwordBaseWeaponDamage(int itemId) {
     switch (itemId) {

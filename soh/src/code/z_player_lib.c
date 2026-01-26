@@ -15,6 +15,7 @@
 
 extern float Fuse_GetSwordRangeUpScale(int32_t* outLevel);
 extern void Fuse_LogSwordRangeUp(int level, float scale);
+extern void Fuse_DrawGiNutAttached(PlayState* play, Player* player, s32 limbIndex);
 
 typedef struct {
     /* 0x00 */ u8 flag;
@@ -1811,6 +1812,9 @@ Vec3f sLeftRightFootLimbModelFootPos[] = {
 
 void Player_PostLimbDrawGameplay(PlayState* play, s32 limbIndex, Gfx** dList, Vec3s* rot, void* thisx) {
     Player* this = (Player*)thisx;
+    static const Vec3f kFuseGiNutOffset = { 450.0f, -120.0f, 1500.0f };
+    static const Vec3s kFuseGiNutRot = { 0, 0, 0 };
+    static const f32 kFuseGiNutScale = 0.6f;
 
     const Vec3s BoomerangViewAdult = { -31200, -9200, 17000 };
     const Vec3s BoomerangViewChild = { -31200, -8700, 17000 };
@@ -1901,6 +1905,15 @@ void Player_PostLimbDrawGameplay(PlayState* play, s32 limbIndex, Gfx** dList, Ve
         }
     } else if (limbIndex == PLAYER_LIMB_R_HAND) {
         Actor* heldActor = this->heldActor;
+
+        if (this->actor.scale.y >= 0.0f) {
+            Matrix_Push();
+            Matrix_Translate(kFuseGiNutOffset.x, kFuseGiNutOffset.y, kFuseGiNutOffset.z, MTXMODE_APPLY);
+            Matrix_RotateZYX(kFuseGiNutRot.x, kFuseGiNutRot.y, kFuseGiNutRot.z, MTXMODE_APPLY);
+            Matrix_Scale(kFuseGiNutScale, kFuseGiNutScale, kFuseGiNutScale, MTXMODE_APPLY);
+            Fuse_DrawGiNutAttached(play, this, limbIndex);
+            Matrix_Pop();
+        }
 
         if (this->rightHandType == PLAYER_MODELTYPE_RH_FF) {
             Matrix_Get(&this->shieldMf);
