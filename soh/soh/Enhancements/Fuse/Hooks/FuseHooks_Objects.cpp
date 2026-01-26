@@ -6,8 +6,6 @@
 
 #include "soh/Enhancements/Fuse/Fuse.h"
 
-#include "objects/object_gi_nuts/object_gi_nuts.h"
-
 #include <cstdint>
 #include <cmath>
 #include <algorithm>
@@ -37,129 +35,6 @@ static std::unordered_set<void*> gSwordATVictimCooldown;
 static std::unordered_set<void*> gAwardedFrozenShards;
 static uint32_t gSwordBaseDmgFlags[4];
 static bool gSwordBaseValid = false;
-
-extern "C" s32 Object_Spawn(ObjectContext* objectCtx, s16 objectId);
-
-extern "C" s32 Fuse_EnsureGiNutObject(PlayState* play) {
-    static s32 sLastGiNutIndex = -2;
-    static s32 sLastGiNutLoaded = -1;
-    static s32 sLastGiNutRequested = -1;
-    static s32 sLastGiNutRequestFrame = -1;
-    static s32 sGiNutRequestedIndex = -1;
-
-    if (!play) {
-        return -1;
-    }
-
-    s32 objectIndex = Object_GetIndex(&play->objectCtx, OBJECT_GI_NUTS);
-    if (objectIndex >= 0 && sGiNutRequestedIndex < 0) {
-        sGiNutRequestedIndex = objectIndex;
-    }
-
-    if (objectIndex < 0) {
-        const s32 currentFrame = static_cast<s32>(play->gameplayFrames);
-        if (sLastGiNutRequestFrame < 0 || (currentFrame - sLastGiNutRequestFrame) >= 30) {
-            sLastGiNutRequestFrame = currentFrame;
-            const s32 spawnedIndex = Object_Spawn(&play->objectCtx, OBJECT_GI_NUTS);
-            if (spawnedIndex >= 0) {
-                sGiNutRequestedIndex = spawnedIndex;
-            }
-            Fuse::Log("[FuseDBG] GiNutObj: request OBJECT_GI_NUTS\n");
-            objectIndex = Object_GetIndex(&play->objectCtx, OBJECT_GI_NUTS);
-        }
-    }
-
-    const s32 isLoaded = (objectIndex >= 0) ? Object_IsLoaded(&play->objectCtx, objectIndex) : 0;
-    const s32 isRequested = (sGiNutRequestedIndex >= 0) ? 1 : 0;
-    if (objectIndex != sLastGiNutIndex || isLoaded != sLastGiNutLoaded || isRequested != sLastGiNutRequested) {
-        Fuse::Log("[FuseDBG] GiNutObj: idx=%d loaded=%d requested=%d\n", objectIndex, isLoaded ? 1 : 0, isRequested);
-        sLastGiNutIndex = objectIndex;
-        sLastGiNutLoaded = isLoaded;
-        sLastGiNutRequested = isRequested;
-    }
-
-    return objectIndex;
-}
-
-extern "C" void Fuse_DrawGiNutAttached(PlayState* play, Player* player, s32 limbIndex, uintptr_t restoreSeg06Base) {
-    if (!play || !player) {
-        return;
-    }
-
-    static int sLastSkipReason = -1;
-    if (restoreSeg06Base == 0) {
-        if (sLastSkipReason != 0) {
-            Fuse::Log("[FuseDBG] GiNutSeg: skip reason=restore_invalid\n");
-            sLastSkipReason = 0;
-        }
-        return;
-    }
-
-    if (!Fuse::IsSwordFused()) {
-        return;
-    }
-
-    const MaterialId materialId = Fuse::GetSwordMaterial();
-    if (materialId != MaterialId::DekuNut) {
-        return;
-    }
-
-    const int durabilityCur = Fuse::GetSwordFuseDurability();
-    const int durabilityMax = Fuse::GetSwordFuseMaxDurability();
-    if (durabilityCur <= 0) {
-        return;
-    }
-
-    const s32 objectIndex = Fuse_EnsureGiNutObject(play);
-    if (objectIndex < 0) {
-        if (sLastSkipReason != 1) {
-            Fuse::Log("[FuseDBG] GiNutSeg: skip reason=gi_not_loaded\n");
-            sLastSkipReason = 1;
-        }
-        return;
-    }
-    if (!Object_IsLoaded(&play->objectCtx, objectIndex)) {
-        if (sLastSkipReason != 1) {
-            Fuse::Log("[FuseDBG] GiNutSeg: skip reason=gi_not_loaded\n");
-            sLastSkipReason = 1;
-        }
-        return;
-    }
-
-    void* giSeg = play->objectCtx.status[objectIndex].segment;
-    if (giSeg == nullptr) {
-        if (sLastSkipReason != 2) {
-            Fuse::Log("[FuseDBG] GiNutSeg: skip reason=gi_seg_null\n");
-            sLastSkipReason = 2;
-        }
-        return;
-    }
-
-    Fuse::Log("[FuseDBG] GiNutDraw: sword=%d mat=%d dura=%d/%d limb=%d\n", player->heldItemId,
-              static_cast<int>(materialId), durabilityCur, durabilityMax, limbIndex);
-
-    static s32 sLastLoggedGiNutIdx = -2;
-    static uintptr_t sLastLoggedGiNutSeg = 0;
-    static uintptr_t sLastLoggedRestoreSeg = 0;
-    if (sLastLoggedGiNutIdx != objectIndex || sLastLoggedGiNutSeg != reinterpret_cast<uintptr_t>(giSeg) ||
-        sLastLoggedRestoreSeg != restoreSeg06Base) {
-        Fuse::Log("[FuseDBG] GiNutSeg: giIdx=%d giSeg=%p restore=%p draw=1\n", objectIndex, giSeg,
-                  reinterpret_cast<void*>(restoreSeg06Base));
-        sLastLoggedGiNutIdx = objectIndex;
-        sLastLoggedGiNutSeg = reinterpret_cast<uintptr_t>(giSeg);
-        sLastLoggedRestoreSeg = restoreSeg06Base;
-    }
-    sLastSkipReason = -1;
-
-    OPEN_DISPS(play->state.gfxCtx, __FILE__, __LINE__);
-
-    gSPSegment(POLY_OPA_DISP++, 0x06, reinterpret_cast<uintptr_t>(giSeg));
-    gSPMatrix(POLY_OPA_DISP++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
-    gSPDisplayList(POLY_OPA_DISP++, (Gfx*)gGiNutDL);
-    gSPSegment(POLY_OPA_DISP++, 0x06, restoreSeg06Base);
-
-    CLOSE_DISPS(play->state.gfxCtx, __FILE__, __LINE__);
-}
 
 static int GetSwordBaseWeaponDamage(int itemId) {
     switch (itemId) {
