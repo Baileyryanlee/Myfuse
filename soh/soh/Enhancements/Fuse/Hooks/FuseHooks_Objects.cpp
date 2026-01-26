@@ -47,13 +47,10 @@ extern "C" s32 Fuse_EnsureGiNutObject(PlayState* play) {
     }
 
     s32 objectIndex = Object_GetIndex(&play->objectCtx, OBJECT_GI_NUTS);
-    if (objectIndex < 0 && play->objectCtx.num < OBJECT_EXCHANGE_BANK_MAX) {
-        objectIndex = Object_Spawn(&play->objectCtx, OBJECT_GI_NUTS);
-    }
 
     const s32 isLoaded = (objectIndex >= 0) ? Object_IsLoaded(&play->objectCtx, objectIndex) : 0;
     if (objectIndex != sLastGiNutIndex || isLoaded != sLastGiNutLoaded) {
-        Fuse::Log("[FuseDBG] GiNutObj: idx=%d loaded=%d\n", objectIndex, isLoaded ? 1 : 0);
+        Fuse::Log("[FuseDBG] GiNutObj: idx=%d loaded=%d (no spawn)\n", objectIndex, isLoaded ? 1 : 0);
         sLastGiNutIndex = objectIndex;
         sLastGiNutLoaded = isLoaded;
     }
@@ -89,14 +86,14 @@ extern "C" void Fuse_DrawGiNutAttached(PlayState* play, Player* player, s32 limb
     Fuse::Log("[FuseDBG] GiNutDraw: sword=%d mat=%d dura=%d/%d limb=%d\n", player->heldItemId,
               static_cast<int>(materialId), durabilityCur, durabilityMax, limbIndex);
 
-    OPEN_DISPS(play->state.gfxCtx);
+    OPEN_DISPS(play->state.gfxCtx, __FILE__, __LINE__);
 
-    gSPSegment(POLY_OPA_DISP++, 0x06, play->objectCtx.status[objectIndex].segment);
+    gSPSegment(POLY_OPA_DISP++, 0x06, (uintptr_t)play->objectCtx.status[objectIndex].segment);
     gSPMatrix(POLY_OPA_DISP++, MATRIX_NEWMTX(play->state.gfxCtx),
               G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
     gSPDisplayList(POLY_OPA_DISP++, gGiNutDL);
 
-    CLOSE_DISPS(play->state.gfxCtx);
+    CLOSE_DISPS(play->state.gfxCtx, __FILE__, __LINE__);
 }
 
 static int GetSwordBaseWeaponDamage(int itemId) {
