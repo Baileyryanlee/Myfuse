@@ -133,6 +133,7 @@ list(APPEND soh__
     ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/Hooks/FuseHooks_Objects.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/Hooks/FuseHooks_Ranged.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/Hooks/FuseHooks_Boomerang.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/Visuals/FuseVisual.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/UI/FuseMenuWindow.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/UI/FusePauseBridge.cpp
 )

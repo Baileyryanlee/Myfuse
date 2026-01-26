@@ -214,6 +214,7 @@ std::array<SwordFuseSlot, FusePersistence::kSwordSlotCount> GetSwordSlots();
 void ApplyLoadedSwordSlots(const std::array<SwordFuseSlot, FusePersistence::kSwordSlotCount>& slots);
 bool HasLoadedSwordSlots();
 FuseSlot GetActiveSwordSlot();
+FuseSlot GetActiveShieldSlot();
 FuseSlot GetActiveBoomerangSlot();
 FuseSlot GetActiveHammerSlot();
 FuseSlot GetBoomerangSlot();
