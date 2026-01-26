@@ -38,21 +38,44 @@ static std::unordered_set<void*> gAwardedFrozenShards;
 static uint32_t gSwordBaseDmgFlags[4];
 static bool gSwordBaseValid = false;
 
+extern "C" s32 Object_Spawn(ObjectContext* objectCtx, s16 objectId);
+
 extern "C" s32 Fuse_EnsureGiNutObject(PlayState* play) {
     static s32 sLastGiNutIndex = -2;
     static s32 sLastGiNutLoaded = -1;
+    static s32 sLastGiNutRequested = -1;
+    static s32 sLastGiNutRequestFrame = -1;
+    static s32 sGiNutRequestedIndex = -1;
 
     if (!play) {
         return -1;
     }
 
     s32 objectIndex = Object_GetIndex(&play->objectCtx, OBJECT_GI_NUTS);
+    if (objectIndex >= 0 && sGiNutRequestedIndex < 0) {
+        sGiNutRequestedIndex = objectIndex;
+    }
+
+    if (objectIndex < 0) {
+        const s32 currentFrame = static_cast<s32>(play->gameplayFrames);
+        if (sLastGiNutRequestFrame < 0 || (currentFrame - sLastGiNutRequestFrame) >= 30) {
+            sLastGiNutRequestFrame = currentFrame;
+            const s32 spawnedIndex = Object_Spawn(&play->objectCtx, OBJECT_GI_NUTS);
+            if (spawnedIndex >= 0) {
+                sGiNutRequestedIndex = spawnedIndex;
+            }
+            Fuse::Log("[FuseDBG] GiNutObj: request OBJECT_GI_NUTS\n");
+            objectIndex = Object_GetIndex(&play->objectCtx, OBJECT_GI_NUTS);
+        }
+    }
 
     const s32 isLoaded = (objectIndex >= 0) ? Object_IsLoaded(&play->objectCtx, objectIndex) : 0;
-    if (objectIndex != sLastGiNutIndex || isLoaded != sLastGiNutLoaded) {
-        Fuse::Log("[FuseDBG] GiNutObj: idx=%d loaded=%d (no spawn)\n", objectIndex, isLoaded ? 1 : 0);
+    const s32 isRequested = (sGiNutRequestedIndex >= 0) ? 1 : 0;
+    if (objectIndex != sLastGiNutIndex || isLoaded != sLastGiNutLoaded || isRequested != sLastGiNutRequested) {
+        Fuse::Log("[FuseDBG] GiNutObj: idx=%d loaded=%d requested=%d\n", objectIndex, isLoaded ? 1 : 0, isRequested);
         sLastGiNutIndex = objectIndex;
         sLastGiNutLoaded = isLoaded;
+        sLastGiNutRequested = isRequested;
     }
 
     return objectIndex;
