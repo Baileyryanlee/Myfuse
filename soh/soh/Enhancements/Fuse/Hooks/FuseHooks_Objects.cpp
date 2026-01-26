@@ -81,8 +81,13 @@ extern "C" s32 Fuse_EnsureGiNutObject(PlayState* play) {
     return objectIndex;
 }
 
-extern "C" void Fuse_DrawGiNutAttached(PlayState* play, Player* player, s32 limbIndex) {
+extern "C" void Fuse_DrawGiNutAttached(PlayState* play, Player* player, s32 limbIndex, uintptr_t restoreSeg06Base) {
     if (!play || !player) {
+        return;
+    }
+
+    if (restoreSeg06Base == 0) {
+        Fuse::Log("[FuseDBG] GiNutSeg: skip restore (playerObjIdx invalid)\n");
         return;
     }
 
@@ -109,11 +114,19 @@ extern "C" void Fuse_DrawGiNutAttached(PlayState* play, Player* player, s32 limb
     Fuse::Log("[FuseDBG] GiNutDraw: sword=%d mat=%d dura=%d/%d limb=%d\n", player->heldItemId,
               static_cast<int>(materialId), durabilityCur, durabilityMax, limbIndex);
 
+    static uintptr_t sLastGiNutRestoreSeg06Base = 0;
+    if (sLastGiNutRestoreSeg06Base != restoreSeg06Base) {
+        Fuse::Log("[FuseDBG] GiNutSeg: set06=GI_NUTS restore06=PLAYER base=%p\n",
+                  reinterpret_cast<void*>(restoreSeg06Base));
+        sLastGiNutRestoreSeg06Base = restoreSeg06Base;
+    }
+
     OPEN_DISPS(play->state.gfxCtx, __FILE__, __LINE__);
 
     gSPSegment(POLY_OPA_DISP++, 0x06, (uintptr_t)play->objectCtx.status[objectIndex].segment);
     gSPMatrix(POLY_OPA_DISP++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
     gSPDisplayList(POLY_OPA_DISP++, (Gfx*)gGiNutDL);
+    gSPSegment(POLY_OPA_DISP++, 0x06, restoreSeg06Base);
 
     CLOSE_DISPS(play->state.gfxCtx, __FILE__, __LINE__);
 }

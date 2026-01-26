@@ -15,7 +15,7 @@
 
 extern float Fuse_GetSwordRangeUpScale(int32_t* outLevel);
 extern void Fuse_LogSwordRangeUp(int level, float scale);
-extern void Fuse_DrawGiNutAttached(PlayState* play, Player* player, s32 limbIndex);
+extern void Fuse_DrawGiNutAttached(PlayState* play, Player* player, s32 limbIndex, uintptr_t restoreSeg06Base);
 
 typedef struct {
     /* 0x00 */ u8 flag;
@@ -1911,7 +1911,14 @@ void Player_PostLimbDrawGameplay(PlayState* play, s32 limbIndex, Gfx** dList, Ve
             Matrix_Translate(kFuseGiNutOffset.x, kFuseGiNutOffset.y, kFuseGiNutOffset.z, MTXMODE_APPLY);
             Matrix_RotateZYX(kFuseGiNutRot.x, kFuseGiNutRot.y, kFuseGiNutRot.z, MTXMODE_APPLY);
             Matrix_Scale(kFuseGiNutScale, kFuseGiNutScale, kFuseGiNutScale, MTXMODE_APPLY);
-            Fuse_DrawGiNutAttached(play, this, limbIndex);
+            s32 playerObjIdx = this->actor.objBankIndex;
+            uintptr_t playerSeg06 = 0;
+
+            if (playerObjIdx >= 0) {
+                playerSeg06 = (uintptr_t)play->objectCtx.status[playerObjIdx].segment;
+            }
+
+            Fuse_DrawGiNutAttached(play, this, limbIndex, playerSeg06);
             Matrix_Pop();
         }
 
