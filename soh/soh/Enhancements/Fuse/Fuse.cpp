@@ -2298,6 +2298,10 @@ FuseSlot Fuse::GetActiveSwordSlot() {
     return gFuseSave.GetActiveSwordSlot(nullptr);
 }
 
+FuseSlot Fuse::GetActiveShieldSlot() {
+    return gFuseSave.GetActiveShieldSlot(nullptr);
+}
+
 FuseSlot Fuse::GetActiveBoomerangSlot() {
     return gFuseSave.GetActiveBoomerangSlot(nullptr);
 }

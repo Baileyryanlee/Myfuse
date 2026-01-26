@@ -15,6 +15,8 @@
 
 extern float Fuse_GetSwordRangeUpScale(int32_t* outLevel);
 extern void Fuse_LogSwordRangeUp(int level, float scale);
+extern void FuseVisual_DrawLeftHandAttachments(PlayState* play, Player* player);
+extern void FuseVisual_DrawShieldAttachments(PlayState* play, Player* player);
 
 typedef struct {
     /* 0x00 */ u8 flag;
@@ -1899,11 +1901,14 @@ void Player_PostLimbDrawGameplay(PlayState* play, s32 limbIndex, Gfx** dList, Ve
                 Matrix_MtxFToYXZRotS(&this->mf_9E0, &this->unk_3BC, 0);
             }
         }
+
+        FuseVisual_DrawLeftHandAttachments(play, this);
     } else if (limbIndex == PLAYER_LIMB_R_HAND) {
         Actor* heldActor = this->heldActor;
 
         if (this->rightHandType == PLAYER_MODELTYPE_RH_FF) {
             Matrix_Get(&this->shieldMf);
+            FuseVisual_DrawShieldAttachments(play, this);
         } else if ((this->rightHandType == PLAYER_MODELTYPE_RH_BOW_SLINGSHOT) ||
                    (this->rightHandType == PLAYER_MODELTYPE_RH_BOW_SLINGSHOT_2)) {
             s32 stringModelToUse = gSaveContext.linkAge;
