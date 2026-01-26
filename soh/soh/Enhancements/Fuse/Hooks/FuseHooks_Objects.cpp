@@ -89,9 +89,8 @@ extern "C" void Fuse_DrawGiNutAttached(PlayState* play, Player* player, s32 limb
     OPEN_DISPS(play->state.gfxCtx, __FILE__, __LINE__);
 
     gSPSegment(POLY_OPA_DISP++, 0x06, (uintptr_t)play->objectCtx.status[objectIndex].segment);
-    gSPMatrix(POLY_OPA_DISP++, MATRIX_NEWMTX(play->state.gfxCtx),
-              G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
-    gSPDisplayList(POLY_OPA_DISP++, gGiNutDL);
+    gSPMatrix(POLY_OPA_DISP++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
+    gSPDisplayList(POLY_OPA_DISP++, (Gfx*)gGiNutDL);
 
     CLOSE_DISPS(play->state.gfxCtx, __FILE__, __LINE__);
 }
