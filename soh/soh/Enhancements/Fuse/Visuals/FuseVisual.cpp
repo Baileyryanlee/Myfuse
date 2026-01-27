@@ -3,7 +3,6 @@
 #include "soh/frame_interpolation.h" // <-- REQUIRED when using OPEN_DISPS/CLOSE_DISPS in some TUs
 
 #include <cstdint>
-#include <cstdio>
 
 extern "C" {
 #include "functions.h"
@@ -25,48 +24,10 @@ namespace {
 
     constexpr s32 kObjectSpawnRetryFrames = 30;
 
-    constexpr const char* kLeftHandAdultCVar = "gFuse.Visual.Rock.LeftHand.Adult";
-    constexpr const char* kLeftHandChildCVar = "gFuse.Visual.Rock.LeftHand.Child";
-    constexpr const char* kShieldAdultCVar = "gFuse.Visual.Rock.Shield.Adult";
-    constexpr const char* kShieldChildCVar = "gFuse.Visual.Rock.Shield.Child";
-
-    const AttachmentTransform kLeftHandAdultDefault = { { 0.0f, -80.0f, 1200.0f }, { 0, 0, 0 }, 0.45f };
-    const AttachmentTransform kLeftHandChildDefault = { { 0.0f, -70.0f, 1050.0f }, { 0, 0, 0 }, 0.40f };
-    const AttachmentTransform kShieldAdultDefault = { { 0.0f, 0.0f, 900.0f }, { 0, 0, 0 }, 0.55f };
-    const AttachmentTransform kShieldChildDefault = { { 0.0f, 0.0f, 820.0f }, { 0, 0, 0 }, 0.50f };
-
-    float GetCVarFloat(const char* base, const char* suffix, float defaultValue) {
-        char name[128];
-        std::snprintf(name, sizeof(name), "%s.%s", base, suffix);
-        return CVarGetFloat(name, defaultValue);
-    }
-
-    s32 GetCVarInt(const char* base, const char* suffix, s32 defaultValue) {
-        char name[128];
-        std::snprintf(name, sizeof(name), "%s.%s", base, suffix);
-        return CVarGetInteger(name, defaultValue);
-    }
-
-    AttachmentTransform GetCVarTransform(const char* base, const AttachmentTransform& defaults) {
-        AttachmentTransform xf{};
-        xf.offset.x = GetCVarFloat(base, "OffsetX", defaults.offset.x);
-        xf.offset.y = GetCVarFloat(base, "OffsetY", defaults.offset.y);
-        xf.offset.z = GetCVarFloat(base, "OffsetZ", defaults.offset.z);
-        xf.rot.x = static_cast<s16>(GetCVarInt(base, "RotX", defaults.rot.x));
-        xf.rot.y = static_cast<s16>(GetCVarInt(base, "RotY", defaults.rot.y));
-        xf.rot.z = static_cast<s16>(GetCVarInt(base, "RotZ", defaults.rot.z));
-        xf.scale = GetCVarFloat(base, "Scale", defaults.scale);
-        return xf;
-    }
-
-    void LogTransformOnce(const char* tag, const AttachmentTransform& xf, bool* hasLogged) {
-        if (hasLogged == nullptr || *hasLogged) {
-            return;
-        }
-        *hasLogged = true;
-        Fuse::Log("[FuseVisual] %s offset=(%.2f, %.2f, %.2f) rot=(%d, %d, %d) scale=%.3f\n", tag, xf.offset.x,
-                  xf.offset.y, xf.offset.z, xf.rot.x, xf.rot.y, xf.rot.z, xf.scale);
-    }
+    const AttachmentTransform kLeftHandAdult = { { 0.0f, -80.0f, 1200.0f }, { 0, 0, 0 }, 0.45f };
+    const AttachmentTransform kLeftHandChild = { { 0.0f, -70.0f, 1050.0f }, { 0, 0, 0 }, 0.40f };
+    const AttachmentTransform kShieldAdult = { { 0.0f, 0.0f, 900.0f }, { 0, 0, 0 }, 0.55f };
+    const AttachmentTransform kShieldChild = { { 0.0f, 0.0f, 820.0f }, { 0, 0, 0 }, 0.50f };
 
     s32 EnsureObjectLoaded(PlayState* play, s16 objectId, const char* tag) {
         static s32 sLastObjIndex = -2;
@@ -135,30 +96,12 @@ namespace {
         gfxCtx->polyOpa.p = polyOpa;
     }
 
-    AttachmentTransform GetLeftHandTransform() {
-        static bool sLoggedLeftHandAdult = false;
-        static bool sLoggedLeftHandChild = false;
-        if (LINK_IS_ADULT) {
-            AttachmentTransform xf = GetCVarTransform(kLeftHandAdultCVar, kLeftHandAdultDefault);
-            LogTransformOnce("LeftHand.Adult", xf, &sLoggedLeftHandAdult);
-            return xf;
-        }
-        AttachmentTransform xf = GetCVarTransform(kLeftHandChildCVar, kLeftHandChildDefault);
-        LogTransformOnce("LeftHand.Child", xf, &sLoggedLeftHandChild);
-        return xf;
+    const AttachmentTransform& GetLeftHandTransform() {
+        return LINK_IS_ADULT ? kLeftHandAdult : kLeftHandChild;
     }
 
-    AttachmentTransform GetShieldTransform() {
-        static bool sLoggedShieldAdult = false;
-        static bool sLoggedShieldChild = false;
-        if (LINK_IS_ADULT) {
-            AttachmentTransform xf = GetCVarTransform(kShieldAdultCVar, kShieldAdultDefault);
-            LogTransformOnce("Shield.Adult", xf, &sLoggedShieldAdult);
-            return xf;
-        }
-        AttachmentTransform xf = GetCVarTransform(kShieldChildCVar, kShieldChildDefault);
-        LogTransformOnce("Shield.Child", xf, &sLoggedShieldChild);
-        return xf;
+    const AttachmentTransform& GetShieldTransform() {
+        return LINK_IS_ADULT ? kShieldAdult : kShieldChild;
     }
 
     bool IsSegmentValid(uintptr_t segment) {
@@ -200,7 +143,7 @@ namespace FuseVisual {
             return;
         }
 
-        const AttachmentTransform xf = GetLeftHandTransform();
+        const AttachmentTransform& xf = GetLeftHandTransform();
 
         Matrix_Push();
         Matrix_Translate(xf.offset.x, xf.offset.y, xf.offset.z, MTXMODE_APPLY);
@@ -231,7 +174,7 @@ namespace FuseVisual {
             return;
         }
 
-        const AttachmentTransform xf = GetShieldTransform();
+        const AttachmentTransform& xf = GetShieldTransform();
 
         Matrix_Push();
         Matrix_Put(&player->shieldMf);
