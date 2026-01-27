@@ -1,7 +1,9 @@
 #include "soh/Enhancements/Fuse/Visuals/FuseVisual.h"
 #include "soh/Enhancements/Fuse/Fuse.h"
 #include "soh/frame_interpolation.h" // <-- REQUIRED when using OPEN_DISPS/CLOSE_DISPS in some TUs
+#include "libultraship/bridge/consolevariablebridge.h"
 
+#include <algorithm>
 #include <cstdint>
 
 extern "C" {
@@ -28,6 +30,37 @@ namespace {
     const AttachmentTransform kLeftHandChild = { { 0.0f, -70.0f, 1050.0f }, { 0, 0, 0 }, 0.40f };
     const AttachmentTransform kShieldAdult = { { 0.0f, 0.0f, 900.0f }, { 0, 0, 0 }, 0.55f };
     const AttachmentTransform kShieldChild = { { 0.0f, 0.0f, 820.0f }, { 0, 0, 0 }, 0.50f };
+
+    AttachmentTransform ReadAttachmentTransform(const AttachmentTransform& defaults, const char* offsetXKey,
+                                                 const char* offsetYKey, const char* offsetZKey, const char* rotXKey,
+                                                 const char* rotYKey, const char* rotZKey, const char* scaleKey) {
+        AttachmentTransform xf = defaults;
+        xf.offset.x = CVarGetFloat(offsetXKey, defaults.offset.x);
+        xf.offset.y = CVarGetFloat(offsetYKey, defaults.offset.y);
+        xf.offset.z = CVarGetFloat(offsetZKey, defaults.offset.z);
+        xf.rot.x = static_cast<s16>(CVarGetInteger(rotXKey, defaults.rot.x));
+        xf.rot.y = static_cast<s16>(CVarGetInteger(rotYKey, defaults.rot.y));
+        xf.rot.z = static_cast<s16>(CVarGetInteger(rotZKey, defaults.rot.z));
+        xf.scale = CVarGetFloat(scaleKey, defaults.scale);
+        xf.scale = std::clamp(xf.scale, 0.01f, 5.0f);
+        return xf;
+    }
+
+    void LogAttachmentTransform(PlayState* play, const char* kind, const char* age, const AttachmentTransform& xf) {
+        if (!play || CVarGetInteger("gFuse.Vis.DebugLog", 0) == 0) {
+            return;
+        }
+
+        static s32 sLastLogFrame = -10000;
+        constexpr s32 kLogIntervalFrames = 60;
+        if (play->gameplayFrames - sLastLogFrame < kLogIntervalFrames) {
+            return;
+        }
+
+        sLastLogFrame = play->gameplayFrames;
+        Fuse::Log("[FuseDBG] kind=%s age=%s off=<%.2f,%.2f,%.2f> rot=<%d,%d,%d> scale=%.2f\n", kind, age,
+                  xf.offset.x, xf.offset.y, xf.offset.z, xf.rot.x, xf.rot.y, xf.rot.z, xf.scale);
+    }
 
     s32 EnsureObjectLoaded(PlayState* play, s16 objectId, const char* tag) {
         static s32 sLastObjIndex = -2;
@@ -96,12 +129,30 @@ namespace {
         gfxCtx->polyOpa.p = polyOpa;
     }
 
-    const AttachmentTransform& GetLeftHandTransform() {
-        return LINK_IS_ADULT ? kLeftHandAdult : kLeftHandChild;
+    AttachmentTransform GetLeftHandTransform() {
+        if (LINK_IS_ADULT) {
+            return ReadAttachmentTransform(kLeftHandAdult, "gFuse.Vis.LeftHandAdult.OffsetX",
+                                           "gFuse.Vis.LeftHandAdult.OffsetY", "gFuse.Vis.LeftHandAdult.OffsetZ",
+                                           "gFuse.Vis.LeftHandAdult.RotX", "gFuse.Vis.LeftHandAdult.RotY",
+                                           "gFuse.Vis.LeftHandAdult.RotZ", "gFuse.Vis.LeftHandAdult.Scale");
+        }
+        return ReadAttachmentTransform(kLeftHandChild, "gFuse.Vis.LeftHandChild.OffsetX",
+                                       "gFuse.Vis.LeftHandChild.OffsetY", "gFuse.Vis.LeftHandChild.OffsetZ",
+                                       "gFuse.Vis.LeftHandChild.RotX", "gFuse.Vis.LeftHandChild.RotY",
+                                       "gFuse.Vis.LeftHandChild.RotZ", "gFuse.Vis.LeftHandChild.Scale");
     }
 
-    const AttachmentTransform& GetShieldTransform() {
-        return LINK_IS_ADULT ? kShieldAdult : kShieldChild;
+    AttachmentTransform GetShieldTransform() {
+        if (LINK_IS_ADULT) {
+            return ReadAttachmentTransform(kShieldAdult, "gFuse.Vis.ShieldAdult.OffsetX", "gFuse.Vis.ShieldAdult.OffsetY",
+                                           "gFuse.Vis.ShieldAdult.OffsetZ", "gFuse.Vis.ShieldAdult.RotX",
+                                           "gFuse.Vis.ShieldAdult.RotY", "gFuse.Vis.ShieldAdult.RotZ",
+                                           "gFuse.Vis.ShieldAdult.Scale");
+        }
+        return ReadAttachmentTransform(kShieldChild, "gFuse.Vis.ShieldChild.OffsetX", "gFuse.Vis.ShieldChild.OffsetY",
+                                       "gFuse.Vis.ShieldChild.OffsetZ", "gFuse.Vis.ShieldChild.RotX",
+                                       "gFuse.Vis.ShieldChild.RotY", "gFuse.Vis.ShieldChild.RotZ",
+                                       "gFuse.Vis.ShieldChild.Scale");
     }
 
     bool IsSegmentValid(uintptr_t segment) {
@@ -143,7 +194,8 @@ namespace FuseVisual {
             return;
         }
 
-        const AttachmentTransform& xf = GetLeftHandTransform();
+        const AttachmentTransform xf = GetLeftHandTransform();
+        LogAttachmentTransform(play, "LeftHand", LINK_IS_ADULT ? "Adult" : "Child", xf);
 
         Matrix_Push();
         Matrix_Translate(xf.offset.x, xf.offset.y, xf.offset.z, MTXMODE_APPLY);
@@ -174,7 +226,8 @@ namespace FuseVisual {
             return;
         }
 
-        const AttachmentTransform& xf = GetShieldTransform();
+        const AttachmentTransform xf = GetShieldTransform();
+        LogAttachmentTransform(play, "Shield", LINK_IS_ADULT ? "Adult" : "Child", xf);
 
         Matrix_Push();
         Matrix_Put(&player->shieldMf);
