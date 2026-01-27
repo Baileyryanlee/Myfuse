@@ -31,13 +31,23 @@ namespace {
     const AttachmentTransform kShieldAdult = { { 0.0f, 0.0f, 900.0f }, { 0, 0, 0 }, 0.55f };
     const AttachmentTransform kShieldChild = { { 0.0f, 0.0f, 820.0f }, { 0, 0, 0 }, 0.50f };
 
+    float CVarGetFloatCompat(const char* key, float def) {
+        float f = CVarGetFloat(key, def);
+        int idef = static_cast<int>(def);
+        int i = CVarGetInteger(key, idef);
+        if (i != idef) {
+            return static_cast<float>(i);
+        }
+        return f;
+    }
+
     AttachmentTransform ReadAttachmentTransform(const AttachmentTransform& defaults, const char* offsetXKey,
                                                  const char* offsetYKey, const char* offsetZKey, const char* rotXKey,
                                                  const char* rotYKey, const char* rotZKey, const char* scaleKey) {
         AttachmentTransform xf = defaults;
-        xf.offset.x = CVarGetFloat(offsetXKey, defaults.offset.x);
-        xf.offset.y = CVarGetFloat(offsetYKey, defaults.offset.y);
-        xf.offset.z = CVarGetFloat(offsetZKey, defaults.offset.z);
+        xf.offset.x = CVarGetFloatCompat(offsetXKey, defaults.offset.x);
+        xf.offset.y = CVarGetFloatCompat(offsetYKey, defaults.offset.y);
+        xf.offset.z = CVarGetFloatCompat(offsetZKey, defaults.offset.z);
         xf.rot.x = static_cast<s16>(CVarGetInteger(rotXKey, defaults.rot.x));
         xf.rot.y = static_cast<s16>(CVarGetInteger(rotYKey, defaults.rot.y));
         xf.rot.z = static_cast<s16>(CVarGetInteger(rotZKey, defaults.rot.z));
