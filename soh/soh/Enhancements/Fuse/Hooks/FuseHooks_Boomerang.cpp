@@ -126,7 +126,7 @@ extern "C" void FuseHooks_OnBoomerangHitActor(PlayState* play, Actor* victim) {
     Fuse::DamageBoomerangFuseDurability(play, 1, "Boomerang hit");
 }
 
-extern "C" void FuseHooks_OnBoomerangHitSurface(EnBoom* boom, PlayState* play, Vec3f* hitPos) {
+extern "C" void FuseHooks_OnBoomerangHitSurface(EnBoom* boom, PlayState* play, const Vec3f* hitPos) {
     if (!boom || !play || !hitPos) {
         return;
     }

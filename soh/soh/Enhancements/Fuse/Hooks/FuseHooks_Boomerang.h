@@ -1,4 +1,6 @@
 #pragma once
+#include "z64math.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -6,10 +8,9 @@ extern "C" {
 struct PlayState;
 struct Actor;
 struct EnBoom;
-struct Vec3f;
 
 void FuseHooks_OnBoomerangHitActor(struct PlayState* play, struct Actor* victim);
-void FuseHooks_OnBoomerangHitSurface(struct EnBoom* boom, struct PlayState* play, struct Vec3f* hitPos);
+void FuseHooks_OnBoomerangHitSurface(struct EnBoom* boom, struct PlayState* play, const Vec3f* hitPos);
 
 #ifdef __cplusplus
 }
