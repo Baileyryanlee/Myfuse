@@ -1472,22 +1472,8 @@ void Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfM
     const float radiusScale = params.radius / kFuseDefaultExplosionRadius;
     const float scaledRadius = std::clamp(vanillaRadius * radiusScale, 1.0f, kMaxFuseExplosionRadius);
     const s16 rad = static_cast<s16>(scaledRadius);
-
-    bomb->explosionCollider.elements[0].info.toucher.dmgFlags = params.dmgFlags;
-    bomb->explosionCollider.elements[0].info.toucher.effect = 0;
-    bomb->explosionCollider.elements[0].info.toucher.damage = params.damage;
-    bomb->explosionCollider.elements[0].info.toucherFlags = TOUCH_ON | TOUCH_SFX_NONE;
-
-    // For now: always allow enemy damage. If you later reintroduce "no self-damage",
-    // use AT_TYPE_ENEMY here.
-    const uint32_t atFlags = (selfMode == FuseExplosionSelfMode::DamagePlayer) ? (AT_ON | AT_TYPE_ALL)
-                                                                              : (AT_ON | AT_TYPE_ENEMY);
-    bomb->explosionCollider.base.atFlags = atFlags;
-    // IMPORTANT: EnBom_Explode uses worldSphere for collision. Seed it so the first
-    // explosion frames have the correct effective radius (especially for shield offset spawns).
     bomb->explosionCollider.elements[0].dim.modelSphere.radius = rad;
     bomb->explosionCollider.elements[0].dim.worldSphere.radius = rad;
-    // Ensure center/radius are synced to actor position immediately.
     Collider_UpdateSpheres(0, &bomb->explosionCollider);
 
     SpawnFuseExplosionEffects(play, &bomb->actor);
