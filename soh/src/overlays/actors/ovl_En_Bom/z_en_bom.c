@@ -135,6 +135,10 @@ void EnBom_Init(Actor* thisx, PlayState* play) {
         thisx->shape.rot.z |= 0xFF00;
     }
 
+    thisx->home.rot.x = 0;
+    thisx->home.rot.y = 0;
+    thisx->home.rot.z = 0;
+
     EnBom_SetupAction(this, EnBom_Move);
 }
 
@@ -228,6 +232,12 @@ void EnBom_Explode(EnBom* this, PlayState* play) {
     if (this->actor.params == BOMB_EXPLOSION) {
         // Fuse-spawned explosions should only deal damage once (not once per frame of the explosion timer),
         // otherwise damage stacks and becomes wildly higher than intended.
+        if (CVarGetInteger("gFuse.Vis.DebugLog", 0) != 0) {
+            osSyncPrintf("[FuseDBG] EnBomExplode: frame=%d marker=%d applied=%d timer=%d pos=(%.2f %.2f %.2f)\n",
+                         play->gameplayFrames, (this->actor.home.rot.z == FUSE_EXPLOSION_MARKER) ? 1 : 0,
+                         this->actor.home.rot.x, this->timer, this->actor.world.pos.x, this->actor.world.pos.y,
+                         this->actor.world.pos.z);
+        }
         if (this->actor.home.rot.z == FUSE_EXPLOSION_MARKER) {
             // home.rot.x is our "AT already applied" flag for fuse explosions
             if (this->actor.home.rot.x == 0) {

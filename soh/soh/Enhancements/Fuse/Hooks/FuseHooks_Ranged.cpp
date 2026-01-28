@@ -122,8 +122,7 @@ static void HandleRangedSurfaceHit(PlayState* play, RangedFuseSlot slot, const V
         int bombableFlag = 0;
         s16 victimId = 0;
         if (bombable) {
-            explodePos = bombable->world.pos;
-            kind = "assist";
+            kind = "candidate";
             bombableFlag = 1;
             victimId = bombable->id;
             Fuse::Log("[FuseDBG] ExplodeAssist: src=%s hit=(%.2f %.2f %.2f) bombable=0x%04X at=(%.2f %.2f %.2f) "

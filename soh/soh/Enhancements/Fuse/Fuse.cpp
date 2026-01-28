@@ -1450,7 +1450,7 @@ void Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfM
               srcLabel ? srcLabel : "unknown");
 
     Actor* explosionActor =
-        Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BOM, pos.x, pos.y, pos.z, 0, 0, 0, 0, BOMB_BODY);
+        Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BOM, pos.x, pos.y, pos.z, 0, 0, 0, 0, BOMB_EXPLOSION);
     if (!explosionActor) {
         return;
     }

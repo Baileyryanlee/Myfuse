@@ -160,8 +160,7 @@ extern "C" void FuseHooks_OnBoomerangHitSurface(EnBoom* boom, PlayState* play, c
     int bombableFlag = 0;
     s16 victimId = 0;
     if (bombable) {
-        explodePos = bombable->world.pos;
-        kind = "assist";
+        kind = "candidate";
         bombableFlag = 1;
         victimId = bombable->id;
         Fuse::Log("[FuseDBG] ExplodeAssist: src=boom hit=(%.2f %.2f %.2f) bombable=0x%04X at=(%.2f %.2f %.2f) "
