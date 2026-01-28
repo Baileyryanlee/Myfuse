@@ -225,6 +225,7 @@ void EnBoom_Fly(EnBoom* this, PlayState* play) {
                      hitActor->actor.id == ACTOR_BG_BDAN_OBJECTS && hitActor->actor.params == 0)) {
                     collided = false;
                 } else {
+                    FuseHooks_OnBoomerangHitSurface(this, play, &hitPoint);
                     CollisionCheck_SpawnShieldParticlesMetal(play, &hitPoint);
                 }
             }
