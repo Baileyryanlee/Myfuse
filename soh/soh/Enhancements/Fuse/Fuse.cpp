@@ -78,6 +78,10 @@ static std::unordered_set<Actor*> sHpOverrideApplied;
 static constexpr int32_t kFreezeNoReapplyFrames = 12;
 static std::unordered_map<Actor*, Vec3f> sFuseFrozenPos;
 static std::unordered_map<Actor*, bool> sFuseFrozenPinned;
+
+static bool Fuse_ShouldSkipExplosionVictim(const Actor* victim) {
+    return victim != nullptr && victim->id == ACTOR_BOSS_DODONGO;
+}
 static constexpr int kDekuStunInitialDelayFrames = 4;
 static constexpr int kDekuStunRetryStepFrames = 2;
 static constexpr int kDekuStunMaxAttempts = 8;
@@ -1418,16 +1422,24 @@ void Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfM
     bomb->actor.home.rot.z = 1;   // Fuse marker
     bomb->actor.home.rot.x = 0;   // "has applied AT" flag (0 = not yet, 1 = already applied)
 
+    constexpr float kFuseDefaultExplosionRadius = 80.0f;
+    constexpr float kMaxFuseExplosionRadius = 300.0f;
+    const float vanillaRadius =
+        std::max(1.0f, static_cast<float>(bomb->explosionCollider.elements[0].dim.modelSphere.radius));
+    const float radiusScale = params.radius / kFuseDefaultExplosionRadius;
+    const float scaledRadius = std::clamp(vanillaRadius * radiusScale, 1.0f, kMaxFuseExplosionRadius);
+    const s16 rad = static_cast<s16>(scaledRadius);
+
     bomb->explosionCollider.elements[0].info.toucher.dmgFlags = params.dmgFlags;
+    bomb->explosionCollider.elements[0].info.toucher.effect = 0;
     bomb->explosionCollider.elements[0].info.toucher.damage = params.damage;
+    bomb->explosionCollider.elements[0].info.toucherFlags = TOUCH_ON | TOUCH_SFX_NONE;
 
     // For now: always allow enemy damage. If you later reintroduce "no self-damage",
     // use AT_TYPE_ENEMY here.
     const uint32_t atFlags = (selfMode == FuseExplosionSelfMode::DamagePlayer) ? (AT_ON | AT_TYPE_ALL)
                                                                               : (AT_ON | AT_TYPE_ENEMY);
     bomb->explosionCollider.base.atFlags = atFlags;
-
-    const s16 rad = (s16)params.radius;
     // IMPORTANT: EnBom_Explode uses worldSphere for collision. Seed it so the first
     // explosion frames have the correct effective radius (especially for shield offset spawns).
     bomb->explosionCollider.elements[0].dim.modelSphere.radius = rad;
@@ -1437,6 +1449,10 @@ void Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfM
 
     SpawnFuseExplosionEffects(play, &bomb->actor);
     EnBom_SetupAction(bomb, EnBom_Explode);
+
+    Fuse::Log("[FuseDBG] ExplodeSpawn: src=%s dmgFlags=0x%08X atFlags=0x%04X radius=%d\n",
+              srcLabel ? srcLabel : "unknown", bomb->explosionCollider.elements[0].info.toucher.dmgFlags,
+              bomb->explosionCollider.base.atFlags, bomb->explosionCollider.elements[0].dim.worldSphere.radius);
 }
 
 void Fuse::QueueSwordFreeze(PlayState* play, Actor* victim, uint8_t level, const char* srcLabel, const char* slotLabel,
@@ -3437,8 +3453,12 @@ void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage)
     const uint8_t explosionLevel =
         Fuse::GetMaterialModifierLevel(materialId, FuseItemType::Sword, ModifierId::Explosion);
     if (explosionLevel > 0 && play && victim) {
-        Fuse_TriggerExplosion(play, victim->world.pos, FuseExplosionSelfMode::DamagePlayer,
-                              Fuse_GetExplosionParams(materialId, explosionLevel), "Sword");
+        if (Fuse_ShouldSkipExplosionVictim(victim)) {
+            Fuse::Log("[FuseDBG] ExplodeSkip: src=Sword victim=ACTOR_BOSS_DODONGO\n");
+        } else {
+            Fuse_TriggerExplosion(play, victim->world.pos, FuseExplosionSelfMode::DamagePlayer,
+                                  Fuse_GetExplosionParams(materialId, explosionLevel), "Sword");
+        }
     }
 
     if (Fuse::TryFreezeShatterWithDamage(play, victim, player ? &player->actor : nullptr, itemId, materialId,
@@ -3472,8 +3492,12 @@ void Fuse::OnHammerMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage
     const uint8_t explosionLevel =
         Fuse::GetMaterialModifierLevel(materialId, FuseItemType::Hammer, ModifierId::Explosion);
     if (explosionLevel > 0 && play && victim) {
-        Fuse_TriggerExplosion(play, victim->world.pos, FuseExplosionSelfMode::DamagePlayer,
-                              Fuse_GetExplosionParams(materialId, explosionLevel), "Hammer");
+        if (Fuse_ShouldSkipExplosionVictim(victim)) {
+            Fuse::Log("[FuseDBG] ExplodeSkip: src=Hammer victim=ACTOR_BOSS_DODONGO\n");
+        } else {
+            Fuse_TriggerExplosion(play, victim->world.pos, FuseExplosionSelfMode::DamagePlayer,
+                                  Fuse_GetExplosionParams(materialId, explosionLevel), "Hammer");
+        }
     }
     if (Fuse::TryFreezeShatterWithDamage(play, victim, player ? &player->actor : nullptr, ITEM_HAMMER, materialId,
                                          baseWeaponDamage, "hammer")) {

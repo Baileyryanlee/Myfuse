@@ -49,6 +49,23 @@ static FuseItemType RangedSlotItemType(RangedFuseSlotId slot) {
     }
 }
 
+static const char* RangedSlotExplodeLabel(RangedFuseSlotId slot) {
+    switch (slot) {
+        case RANGED_FUSE_SLOT_ARROWS:
+            return "arrow";
+        case RANGED_FUSE_SLOT_SLINGSHOT:
+            return "slingshot";
+        case RANGED_FUSE_SLOT_HOOKSHOT:
+            return "hookshot";
+        default:
+            return "unknown";
+    }
+}
+
+static bool Fuse_ShouldSkipExplosionVictim(const Actor* victim) {
+    return victim != nullptr && victim->id == ACTOR_BOSS_DODONGO;
+}
+
 static bool Fuse_ShouldTriggerExplosionOnActor(const Actor* actor) {
     if (!actor) {
         return false;
@@ -99,6 +116,9 @@ static void HandleRangedSurfaceHit(PlayState* play, RangedFuseSlot slot, const V
     if (explosionLevel > 0) {
         FuseExplosionParams params = Fuse_GetExplosionParams(materialId, explosionLevel);
         params.hitFrames = 1;
+        Fuse::Log("[FuseDBG] Explode: src=%s kind=bg pos=(%.2f %.2f %.2f) poly=1 victim=0\n",
+                  RangedSlotExplodeLabel(static_cast<RangedFuseSlotId>(slot)), impactPos->x, impactPos->y,
+                  impactPos->z);
         Fuse_TriggerExplosion(play, *impactPos, FuseExplosionSelfMode::DamagePlayer, params,
                               RangedSlotLabel(static_cast<RangedFuseSlotId>(slot)));
     }
@@ -137,8 +157,15 @@ extern "C" void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Ac
     if (explosionLevel > 0) {
         FuseExplosionParams params = Fuse_GetExplosionParams(materialId, explosionLevel);
         params.hitFrames = 1;
-        Fuse_TriggerExplosion(play, victim->world.pos, FuseExplosionSelfMode::DamagePlayer,
-                              params, RangedSlotLabel(slot));
+        if (Fuse_ShouldSkipExplosionVictim(victim)) {
+            Fuse::Log("[FuseDBG] ExplodeSkip: src=%s victim=ACTOR_BOSS_DODONGO\n", RangedSlotLabel(slot));
+        } else {
+            Fuse::Log("[FuseDBG] Explode: src=%s kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X\n",
+                      RangedSlotExplodeLabel(slot), victim->world.pos.x, victim->world.pos.y, victim->world.pos.z,
+                      victim->id);
+            Fuse_TriggerExplosion(play, victim->world.pos, FuseExplosionSelfMode::DamagePlayer,
+                                  params, RangedSlotLabel(slot));
+        }
     }
 
     Player* player = GET_PLAYER(play);
