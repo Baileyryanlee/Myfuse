@@ -49,6 +49,9 @@ struct FuseExplosionParams {
 FuseExplosionParams Fuse_GetExplosionParams(MaterialId mat, int level);
 void Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfMode selfMode, FuseExplosionParams params,
                            const char* srcLabel);
+bool Fuse_IsBombableActorId(s16 id);
+bool Fuse_IsExplosionImmuneVictim(const Actor* victim);
+Actor* Fuse_FindNearbyBombable(PlayState* play, const Vec3f* pos, float radius);
 
 void Fuse_ApplySavedSwordFuse(const PlayState* play, s16 savedMaterialId, s16 savedMaxDurability,
                               bool hasSavedCurDurability, u16 savedCurDurability, s16 legacyCurDurability);

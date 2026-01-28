@@ -10,11 +10,8 @@
 
 namespace {
 constexpr int kBoomerangBgCooldownFrames = 12;
+constexpr float kBombableAssistRadius = 120.0f;
 static std::unordered_map<const EnBoom*, int> sBoomerangBgLastExplodeFrame;
-
-bool Fuse_ShouldSkipExplosionVictim(const Actor* victim) {
-    return victim != nullptr && victim->id == ACTOR_BOSS_DODONGO;
-}
 
 void ApplyBoomerangKnockback(PlayState* play, Actor* victim, uint8_t level, MaterialId materialId, int curDurability,
                              int maxDurability) {
@@ -88,11 +85,12 @@ extern "C" void FuseHooks_OnBoomerangHitActor(PlayState* play, Actor* victim) {
             Fuse::Log("[FuseDBG] ExplosionProc: item=Boomerang mat=%d lvl=%u victim=%p dura=%d/%d\n",
                       static_cast<int>(materialId), static_cast<unsigned int>(explosionLevel), (void*)victim,
                       Fuse::GetBoomerangFuseDurability(), Fuse::GetBoomerangFuseMaxDurability());
-            if (Fuse_ShouldSkipExplosionVictim(victim)) {
+            if (Fuse_IsExplosionImmuneVictim(victim)) {
                 Fuse::Log("[FuseDBG] ExplodeSkip: src=Boomerang victim=ACTOR_BOSS_DODONGO\n");
-            } else {
-                Fuse::Log("[FuseDBG] Explode: src=boom kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X\n",
-                          victim->world.pos.x, victim->world.pos.y, victim->world.pos.z, victim->id);
+            } else if (FuseBash_IsEnemyActor(victim) || Fuse_IsBombableActorId(victim->id)) {
+                const int bombable = Fuse_IsBombableActorId(victim->id) ? 1 : 0;
+                Fuse::Log("[FuseDBG] Explode: src=boom kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n",
+                          victim->world.pos.x, victim->world.pos.y, victim->world.pos.z, victim->id, bombable);
                 Fuse_TriggerExplosion(play, victim->world.pos, FuseExplosionSelfMode::DamagePlayer,
                                       Fuse_GetExplosionParams(materialId, explosionLevel), "Boomerang");
             }
@@ -156,7 +154,24 @@ extern "C" void FuseHooks_OnBoomerangHitSurface(EnBoom* boom, PlayState* play, c
 
     sBoomerangBgLastExplodeFrame[boom] = curFrame;
 
-    Fuse::Log("[FuseDBG] Explode: src=boom kind=bg pos=(%.2f %.2f %.2f) cd=on\n", hitPos->x, hitPos->y, hitPos->z);
-    Fuse_TriggerExplosion(play, *hitPos, FuseExplosionSelfMode::DamagePlayer,
+    const Actor* bombable = Fuse_FindNearbyBombable(play, hitPos, kBombableAssistRadius);
+    Vec3f explodePos = *hitPos;
+    const char* kind = "bg";
+    int bombableFlag = 0;
+    s16 victimId = 0;
+    if (bombable) {
+        explodePos = bombable->world.pos;
+        kind = "assist";
+        bombableFlag = 1;
+        victimId = bombable->id;
+        Fuse::Log("[FuseDBG] ExplodeAssist: src=boom hit=(%.2f %.2f %.2f) bombable=0x%04X at=(%.2f %.2f %.2f) "
+                  "r=%.2f\n",
+                  hitPos->x, hitPos->y, hitPos->z, bombable->id, explodePos.x, explodePos.y, explodePos.z,
+                  kBombableAssistRadius);
+    }
+
+    Fuse::Log("[FuseDBG] Explode: src=boom kind=%s pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n", kind,
+              explodePos.x, explodePos.y, explodePos.z, victimId, bombableFlag);
+    Fuse_TriggerExplosion(play, explodePos, FuseExplosionSelfMode::DamagePlayer,
                           Fuse_GetExplosionParams(materialId, explosionLevel), "BoomerangBG");
 }
