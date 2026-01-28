@@ -11,6 +11,7 @@
 #include <stdlib.h>
 
 #define FLAGS (ACTOR_FLAG_UPDATE_CULLING_DISABLED | ACTOR_FLAG_DRAW_CULLING_DISABLED)
+#define FUSE_EXPLOSION_MARKER 0x5A7E
 
 void EnBom_Init(Actor* thisx, PlayState* play);
 void EnBom_Destroy(Actor* thisx, PlayState* play);
@@ -227,7 +228,7 @@ void EnBom_Explode(EnBom* this, PlayState* play) {
     if (this->actor.params == BOMB_EXPLOSION) {
         // Fuse-spawned explosions should only deal damage once (not once per frame of the explosion timer),
         // otherwise damage stacks and becomes wildly higher than intended.
-        if (this->actor.home.rot.z == 1) {
+        if (this->actor.home.rot.z == FUSE_EXPLOSION_MARKER) {
             // home.rot.x is our "AT already applied" flag for fuse explosions
             if (this->actor.home.rot.x == 0) {
                 CollisionCheck_SetAT(play, &play->colChkCtx, &this->explosionCollider.base);
