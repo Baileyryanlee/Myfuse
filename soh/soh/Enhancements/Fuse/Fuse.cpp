@@ -79,8 +79,51 @@ static constexpr int32_t kFreezeNoReapplyFrames = 12;
 static std::unordered_map<Actor*, Vec3f> sFuseFrozenPos;
 static std::unordered_map<Actor*, bool> sFuseFrozenPinned;
 
-static bool Fuse_ShouldSkipExplosionVictim(const Actor* victim) {
-    return victim != nullptr && victim->id == ACTOR_BOSS_DODONGO;
+bool Fuse_IsBombableActorId(s16 id) {
+    switch (id) {
+        case ACTOR_BG_BREAKWALL:
+        case ACTOR_BG_HIDAN_KOWARERUKABE:
+        case ACTOR_BG_BOMBWALL:
+        case ACTOR_OBJ_BOMBIWA:
+        case ACTOR_BG_JYA_BOMBIWA:
+        case ACTOR_BG_MIZU_BWALL:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool Fuse_IsExplosionImmuneVictim(const Actor* victim) {
+    return victim && victim->id == ACTOR_BOSS_DODONGO;
+}
+
+Actor* Fuse_FindNearbyBombable(PlayState* play, const Vec3f* pos, float radius) {
+    if (!play || !pos || radius <= 0.0f) {
+        return nullptr;
+    }
+
+    const float radiusSq = radius * radius;
+    Actor* nearest = nullptr;
+    float nearestDistSq = radiusSq;
+
+    for (int i = 0; i < ACTORCAT_MAX; ++i) {
+        Actor* actor = play->actorCtx.actorLists[i].head;
+        while (actor != nullptr) {
+            if (Fuse_IsBombableActorId(actor->id)) {
+                const float dx = actor->world.pos.x - pos->x;
+                const float dy = actor->world.pos.y - pos->y;
+                const float dz = actor->world.pos.z - pos->z;
+                const float distSq = (dx * dx) + (dy * dy) + (dz * dz);
+                if (distSq <= nearestDistSq) {
+                    nearestDistSq = distSq;
+                    nearest = actor;
+                }
+            }
+            actor = actor->next;
+        }
+    }
+
+    return nearest;
 }
 static constexpr int kDekuStunInitialDelayFrames = 4;
 static constexpr int kDekuStunRetryStepFrames = 2;
@@ -3453,9 +3496,12 @@ void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage)
     const uint8_t explosionLevel =
         Fuse::GetMaterialModifierLevel(materialId, FuseItemType::Sword, ModifierId::Explosion);
     if (explosionLevel > 0 && play && victim) {
-        if (Fuse_ShouldSkipExplosionVictim(victim)) {
+        if (Fuse_IsExplosionImmuneVictim(victim)) {
             Fuse::Log("[FuseDBG] ExplodeSkip: src=Sword victim=ACTOR_BOSS_DODONGO\n");
-        } else {
+        } else if (FuseBash_IsEnemyActor(victim) || Fuse_IsBombableActorId(victim->id)) {
+            const int bombable = Fuse_IsBombableActorId(victim->id) ? 1 : 0;
+            Fuse::Log("[FuseDBG] Explode: src=Sword kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n",
+                      victim->world.pos.x, victim->world.pos.y, victim->world.pos.z, victim->id, bombable);
             Fuse_TriggerExplosion(play, victim->world.pos, FuseExplosionSelfMode::DamagePlayer,
                                   Fuse_GetExplosionParams(materialId, explosionLevel), "Sword");
         }
@@ -3492,9 +3538,12 @@ void Fuse::OnHammerMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage
     const uint8_t explosionLevel =
         Fuse::GetMaterialModifierLevel(materialId, FuseItemType::Hammer, ModifierId::Explosion);
     if (explosionLevel > 0 && play && victim) {
-        if (Fuse_ShouldSkipExplosionVictim(victim)) {
+        if (Fuse_IsExplosionImmuneVictim(victim)) {
             Fuse::Log("[FuseDBG] ExplodeSkip: src=Hammer victim=ACTOR_BOSS_DODONGO\n");
-        } else {
+        } else if (FuseBash_IsEnemyActor(victim) || Fuse_IsBombableActorId(victim->id)) {
+            const int bombable = Fuse_IsBombableActorId(victim->id) ? 1 : 0;
+            Fuse::Log("[FuseDBG] Explode: src=Hammer kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n",
+                      victim->world.pos.x, victim->world.pos.y, victim->world.pos.z, victim->id, bombable);
             Fuse_TriggerExplosion(play, victim->world.pos, FuseExplosionSelfMode::DamagePlayer,
                                   Fuse_GetExplosionParams(materialId, explosionLevel), "Hammer");
         }
