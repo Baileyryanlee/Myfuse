@@ -11,6 +11,7 @@
 #include <stdlib.h>
 
 #define FLAGS (ACTOR_FLAG_UPDATE_CULLING_DISABLED | ACTOR_FLAG_DRAW_CULLING_DISABLED)
+
 void EnBom_Init(Actor* thisx, PlayState* play);
 void EnBom_Destroy(Actor* thisx, PlayState* play);
 void EnBom_Update(Actor* thisx, PlayState* play);
@@ -133,10 +134,6 @@ void EnBom_Init(Actor* thisx, PlayState* play) {
         thisx->shape.rot.z |= 0xFF00;
     }
 
-    thisx->home.rot.x = 0;
-    thisx->home.rot.y = 0;
-    thisx->home.rot.z = 0;
-
     EnBom_SetupAction(this, EnBom_Move);
 }
 
@@ -208,11 +205,6 @@ void EnBom_Explode(EnBom* this, PlayState* play) {
     } else {
         this->explosionCollider.elements[0].dim.worldSphere.radius += this->actor.shape.rot.z + 8;
     }
-
-    Collider_UpdateSpheres(0, &this->explosionCollider);
-    this->explosionCollider.elements[0].dim.worldSphere.center.x = (s16)this->actor.world.pos.x;
-    this->explosionCollider.elements[0].dim.worldSphere.center.y = (s16)this->actor.world.pos.y;
-    this->explosionCollider.elements[0].dim.worldSphere.center.z = (s16)this->actor.world.pos.z;
 
     if (this->actor.params == BOMB_EXPLOSION) {
         CollisionCheck_SetAT(play, &play->colChkCtx, &this->explosionCollider.base);
