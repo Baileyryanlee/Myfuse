@@ -11,8 +11,6 @@
 #include <stdlib.h>
 
 #define FLAGS (ACTOR_FLAG_UPDATE_CULLING_DISABLED | ACTOR_FLAG_DRAW_CULLING_DISABLED)
-#define FUSE_EXPLOSION_MARKER 0x5A7E
-
 void EnBom_Init(Actor* thisx, PlayState* play);
 void EnBom_Destroy(Actor* thisx, PlayState* play);
 void EnBom_Update(Actor* thisx, PlayState* play);
@@ -216,38 +214,8 @@ void EnBom_Explode(EnBom* this, PlayState* play) {
     this->explosionCollider.elements[0].dim.worldSphere.center.y = (s16)this->actor.world.pos.y;
     this->explosionCollider.elements[0].dim.worldSphere.center.z = (s16)this->actor.world.pos.z;
 
-    if (this->explosionCollider.elements[0].dim.modelSphere.radius == 0) {
-        osSyncPrintf("EnBom_Explode: actorPos=(%.2f %.2f %.2f) sphereCenter=(%.2f %.2f %.2f) radius=%.2f "
-                     "dmgFlags=0x%08X dmg=%d atFlags=0x%08X params=%d\n",
-                     this->actor.world.pos.x, this->actor.world.pos.y, this->actor.world.pos.z,
-                     this->explosionCollider.elements[0].dim.worldSphere.center.x,
-                     this->explosionCollider.elements[0].dim.worldSphere.center.y,
-                     this->explosionCollider.elements[0].dim.worldSphere.center.z,
-                     this->explosionCollider.elements[0].dim.worldSphere.radius,
-                     this->explosionCollider.elements[0].info.toucher.dmgFlags,
-                     this->explosionCollider.elements[0].info.toucher.damage, this->explosionCollider.base.atFlags,
-                     this->actor.params);
-    }
-
     if (this->actor.params == BOMB_EXPLOSION) {
-        // Fuse-spawned explosions should only deal damage once (not once per frame of the explosion timer),
-        // otherwise damage stacks and becomes wildly higher than intended.
-        if (CVarGetInteger("gFuse.Vis.DebugLog", 0) != 0) {
-            osSyncPrintf("[FuseDBG] EnBomExplode: frame=%d marker=%d applied=%d timer=%d pos=(%.2f %.2f %.2f)\n",
-                         play->gameplayFrames, (this->actor.home.rot.z == FUSE_EXPLOSION_MARKER) ? 1 : 0,
-                         this->actor.home.rot.x, this->timer, this->actor.world.pos.x, this->actor.world.pos.y,
-                         this->actor.world.pos.z);
-        }
-        if (this->actor.home.rot.z == FUSE_EXPLOSION_MARKER) {
-            // home.rot.x is our "AT already applied" flag for fuse explosions
-            if (this->actor.home.rot.x == 0) {
-                CollisionCheck_SetAT(play, &play->colChkCtx, &this->explosionCollider.base);
-                this->actor.home.rot.x = 1;
-            }
-        } else {
-            // Vanilla bombs keep their normal multi-frame AT behavior.
-            CollisionCheck_SetAT(play, &play->colChkCtx, &this->explosionCollider.base);
-        }
+        CollisionCheck_SetAT(play, &play->colChkCtx, &this->explosionCollider.base);
     }
 
     if (play->envCtx.adjLight1Color[0] != 0) {
