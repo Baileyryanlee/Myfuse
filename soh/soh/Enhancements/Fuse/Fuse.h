@@ -47,7 +47,7 @@ struct FuseExplosionParams {
 };
 
 FuseExplosionParams Fuse_GetExplosionParams(MaterialId mat, int level);
-void Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfMode selfMode, FuseExplosionParams params,
+bool Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfMode selfMode, FuseExplosionParams params,
                            const char* srcLabel);
 bool Fuse_IsBombableActorId(s16 id);
 bool Fuse_IsExplosionImmuneVictim(const Actor* victim);
