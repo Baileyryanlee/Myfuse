@@ -36,8 +36,6 @@ extern "C" {
 #include "src/overlays/actors/ovl_En_Zf/z_en_zf.h"
 extern "C" PlayState* gPlayState;
 using Fuse::MaterialDebugOverride;
-extern "C" void EnBom_Explode(EnBom* bomb, PlayState* play);
-extern "C" void EnBom_SetupAction(EnBom* bomb, EnBomActionFunc actionFunc);
 
 // -----------------------------------------------------------------------------
 // Module-local state
