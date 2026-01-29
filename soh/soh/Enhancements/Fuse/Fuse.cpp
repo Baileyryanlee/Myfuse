@@ -1438,10 +1438,10 @@ FuseExplosionParams Fuse_GetExplosionParams(MaterialId mat, int level) {
     return params;
 }
 
-void Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfMode selfMode,
+bool Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfMode selfMode,
                            FuseExplosionParams params, const char* srcLabel) {
     if (!play) {
-        return;
+        return false;
     }
 
     Fuse::Log("[FuseDBG] Explosion: pos=(%.2f %.2f %.2f) radius=%.2f dmg=%d flags=0x%08X self=%d frames=%d src=%s\n",
@@ -1452,33 +1452,16 @@ void Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfM
     Actor* explosionActor =
         Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BOM, pos.x, pos.y, pos.z, 0, 0, 0, 0, BOMB_EXPLOSION);
     if (!explosionActor) {
-        return;
+        return false;
     }
 
     EnBom* bomb = reinterpret_cast<EnBom*>(explosionActor);
     bomb->timer = 1;
     bomb->actor.params = BOMB_EXPLOSION;
-    bomb->actor.shape.rot.z = 0;
-    Fuse::Log("[FuseDBG] ExplodeSpawned: timer=%d params=%d pos=(%.2f %.2f %.2f)\n", bomb->timer,
-              bomb->actor.params, bomb->actor.world.pos.x, bomb->actor.world.pos.y, bomb->actor.world.pos.z);
-
-    constexpr float kFuseDefaultExplosionRadius = 80.0f;
-    constexpr float kMaxFuseExplosionRadius = 300.0f;
-    const float vanillaRadius =
-        std::max(1.0f, static_cast<float>(bomb->explosionCollider.elements[0].dim.modelSphere.radius));
-    const float radiusScale = params.radius / kFuseDefaultExplosionRadius;
-    const float scaledRadius = std::clamp(vanillaRadius * radiusScale, 1.0f, kMaxFuseExplosionRadius);
-    const s16 rad = static_cast<s16>(scaledRadius);
-    bomb->explosionCollider.elements[0].dim.modelSphere.radius = rad;
-    bomb->explosionCollider.elements[0].dim.worldSphere.radius = rad;
-    Collider_UpdateSpheres(0, &bomb->explosionCollider);
-
-    SpawnFuseExplosionEffects(play, &bomb->actor);
-    EnBom_SetupAction(bomb, EnBom_Explode);
-
-    Fuse::Log("[FuseDBG] ExplodeSpawn: src=%s dmgFlags=0x%08X atFlags=0x%04X radius=%d\n",
-              srcLabel ? srcLabel : "unknown", bomb->explosionCollider.elements[0].info.toucher.dmgFlags,
-              bomb->explosionCollider.base.atFlags, bomb->explosionCollider.elements[0].dim.worldSphere.radius);
+    Fuse::Log("[FuseDBG] ExplodeSpawn pos=(%.2f %.2f %.2f) timer=%d src=%s frame=%d\n", bomb->actor.world.pos.x,
+              bomb->actor.world.pos.y, bomb->actor.world.pos.z, bomb->timer, srcLabel ? srcLabel : "unknown",
+              play->gameplayFrames);
+    return true;
 }
 
 void Fuse::QueueSwordFreeze(PlayState* play, Actor* victim, uint8_t level, const char* srcLabel, const char* slotLabel,
