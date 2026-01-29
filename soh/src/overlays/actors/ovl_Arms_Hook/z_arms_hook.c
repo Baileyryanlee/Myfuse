@@ -178,8 +178,19 @@ void ArmsHook_Shoot(ArmsHook* this, PlayState* play) {
     if ((this->timer != 0) && (this->collider.base.atFlags & AT_HIT) && !this->fuseHitApplied) {
         touchedActor = this->collider.base.at;
         if (touchedActor != NULL) {
+            Vec3f impactPos;
+            Vec3f* impactPosPtr = NULL;
+            if (this->collider.info.atHitInfo != NULL) {
+                impactPos.x = this->collider.info.atHitInfo->bumper.hitPos.x;
+                impactPos.y = this->collider.info.atHitInfo->bumper.hitPos.y;
+                impactPos.z = this->collider.info.atHitInfo->bumper.hitPos.z;
+                impactPosPtr = &impactPos;
+            } else {
+                impactPos = this->actor.world.pos;
+                impactPosPtr = &impactPos;
+            }
             this->fuseHitApplied = 1;
-            FuseHooks_OnHookshotEnemyHit(play, touchedActor);
+            FuseHooks_OnHookshotEnemyHit(play, touchedActor, impactPosPtr);
         }
     }
 

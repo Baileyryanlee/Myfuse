@@ -140,7 +140,8 @@ static void HandleRangedSurfaceHit(PlayState* play, RangedFuseSlot slot, const V
     }
 }
 
-extern "C" void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Actor* victim) {
+extern "C" void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Actor* victim,
+                                      const Vec3f* impactPos) {
     if (!play || !victim) {
         return;
     }
@@ -171,6 +172,8 @@ extern "C" void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Ac
     const uint8_t explosionLevel =
         Fuse::GetMaterialModifierLevel(materialId, RangedSlotItemType(slot), ModifierId::Explosion);
     if (explosionLevel > 0) {
+        const Vec3f* explodePos = impactPos ? impactPos : &victim->focus.pos;
+        const Vec3f& loggedPos = explodePos ? *explodePos : victim->world.pos;
         FuseExplosionParams params = Fuse_GetExplosionParams(materialId, explosionLevel);
         params.hitFrames = 1;
         if (Fuse_ShouldSkipExplosionVictim(victim)) {
@@ -178,9 +181,9 @@ extern "C" void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Ac
         } else if (FuseBash_IsEnemyActor(victim) || Fuse_IsBombableActorId(victim->id)) {
             const int bombable = Fuse_IsBombableActorId(victim->id) ? 1 : 0;
             Fuse::Log("[FuseDBG] Explode: src=%s kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n",
-                      RangedSlotExplodeLabel(slot), victim->world.pos.x, victim->world.pos.y, victim->world.pos.z,
+                      RangedSlotExplodeLabel(slot), loggedPos.x, loggedPos.y, loggedPos.z,
                       victim->id, bombable);
-            Fuse_TriggerExplosion(play, victim->world.pos, FuseExplosionSelfMode::DamagePlayer,
+            Fuse_TriggerExplosion(play, loggedPos, FuseExplosionSelfMode::DamagePlayer,
                                   params, RangedSlotLabel(slot));
         }
     }
@@ -194,7 +197,9 @@ extern "C" void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Ac
 
     uint8_t stunLevel = 0;
     if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Stun, &stunLevel) && stunLevel > 0) {
-        Fuse_TriggerDekuNutAtPos(play, victim->world.pos, RangedSlotItemId(slot));
+        const Vec3f* stunPos = impactPos ? impactPos : &victim->focus.pos;
+        const Vec3f& loggedPos = stunPos ? *stunPos : victim->world.pos;
+        Fuse_TriggerDekuNutAtPos(play, loggedPos, RangedSlotItemId(slot));
     }
 
     if (Fuse::IsFuseFrozen(victim) || victim->freezeTimer > 0) {
@@ -252,14 +257,14 @@ extern "C" void FuseHooks_OnArrowProjectileFired(PlayState* play, int32_t isSeed
     LogRangedKnockbackStatus("arrows", RangedFuseSlot::Arrows, "fired");
 }
 
-extern "C" void FuseHooks_OnRangedProjectileHit(PlayState* play, Actor* victim, int32_t isSeed) {
+extern "C" void FuseHooks_OnRangedProjectileHit(PlayState* play, Actor* victim, Vec3f* impactPos, int32_t isSeed) {
     if (isSeed) {
-        Fuse_OnRangedHitActor(play, RANGED_FUSE_SLOT_SLINGSHOT, victim);
+        Fuse_OnRangedHitActor(play, RANGED_FUSE_SLOT_SLINGSHOT, victim, impactPos);
         Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot::Slingshot, "ProjectileHit");
         return;
     }
 
-    Fuse_OnRangedHitActor(play, RANGED_FUSE_SLOT_ARROWS, victim);
+    Fuse_OnRangedHitActor(play, RANGED_FUSE_SLOT_ARROWS, victim, impactPos);
     Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot::Arrows, "ProjectileHit");
 }
 
@@ -280,10 +285,10 @@ extern "C" void FuseHooks_OnHookshotShotStarted(PlayState* play) {
     Fuse::OnHookshotShotStarted("HookshotShotStarted");
 }
 
-extern "C" void FuseHooks_OnHookshotEnemyHit(PlayState* play, Actor* victim) {
+extern "C" void FuseHooks_OnHookshotEnemyHit(PlayState* play, Actor* victim, Vec3f* impactPos) {
     Fuse::CommitQueuedRangedFuse(RangedFuseSlot::Hookshot, "HookshotEnemyHit");
     LogRangedKnockbackStatus("hookshot", RangedFuseSlot::Hookshot, "enemy-hit");
-    Fuse_OnRangedHitActor(play, RANGED_FUSE_SLOT_HOOKSHOT, victim);
+    Fuse_OnRangedHitActor(play, RANGED_FUSE_SLOT_HOOKSHOT, victim, impactPos);
     Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot::Hookshot, "HookshotEnemyHit");
 }
 

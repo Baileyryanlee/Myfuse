@@ -170,7 +170,18 @@ void EnBoom_Fly(EnBoom* this, PlayState* play) {
     if (collided) {
         Actor* hitActor = this->collider.base.at;
         if (hitActor != NULL && hitActor->id != ACTOR_EN_ITEM00 && hitActor->id != ACTOR_EN_SI) {
-            FuseHooks_OnBoomerangHitActor(play, hitActor);
+            Vec3f impactPos;
+            Vec3f* impactPosPtr = NULL;
+            if (this->collider.info.atHitInfo != NULL) {
+                impactPos.x = this->collider.info.atHitInfo->bumper.hitPos.x;
+                impactPos.y = this->collider.info.atHitInfo->bumper.hitPos.y;
+                impactPos.z = this->collider.info.atHitInfo->bumper.hitPos.z;
+                impactPosPtr = &impactPos;
+            } else {
+                impactPos = this->actor.world.pos;
+                impactPosPtr = &impactPos;
+            }
+            FuseHooks_OnBoomerangHitActor(play, hitActor, impactPosPtr);
         }
         if (hitActor != NULL && ((hitActor->id == ACTOR_EN_ITEM00) || (hitActor->id == ACTOR_EN_SI))) {
             this->grabbed = hitActor;

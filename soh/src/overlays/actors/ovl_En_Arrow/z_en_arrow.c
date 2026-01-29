@@ -340,8 +340,19 @@ void EnArrow_Fly(EnArrow* this, PlayState* play) {
 
                 hitActor = this->collider.base.at;
                 if ((hitActor != NULL) && (hitActor->category == ACTORCAT_ENEMY) && !this->fuseHitApplied) {
+                    Vec3f impactPos;
+                    Vec3f* impactPosPtr = NULL;
+                    if (this->collider.info.atHitInfo != NULL) {
+                        impactPos.x = this->collider.info.atHitInfo->bumper.hitPos.x;
+                        impactPos.y = this->collider.info.atHitInfo->bumper.hitPos.y;
+                        impactPos.z = this->collider.info.atHitInfo->bumper.hitPos.z;
+                        impactPosPtr = &impactPos;
+                    } else {
+                        impactPos = this->actor.world.pos;
+                        impactPosPtr = &impactPos;
+                    }
                     this->fuseHitApplied = 1;
-                    FuseHooks_OnRangedProjectileHit(play, hitActor, true);
+                    FuseHooks_OnRangedProjectileHit(play, hitActor, impactPosPtr, true);
                 }
             }
             if (this->touchedPoly && !this->fuseHitApplied) {
@@ -364,8 +375,19 @@ void EnArrow_Fly(EnArrow* this, PlayState* play) {
             if (atTouched && (this->collider.info.atHitInfo->elemType != ELEMTYPE_UNK4)) {
                 hitActor = this->collider.base.at;
                 if ((hitActor != NULL) && (hitActor->category == ACTORCAT_ENEMY) && !this->fuseHitApplied) {
+                    Vec3f impactPos;
+                    Vec3f* impactPosPtr = NULL;
+                    if (this->collider.info.atHitInfo != NULL) {
+                        impactPos.x = this->collider.info.atHitInfo->bumper.hitPos.x;
+                        impactPos.y = this->collider.info.atHitInfo->bumper.hitPos.y;
+                        impactPos.z = this->collider.info.atHitInfo->bumper.hitPos.z;
+                        impactPosPtr = &impactPos;
+                    } else {
+                        impactPos = this->actor.world.pos;
+                        impactPosPtr = &impactPos;
+                    }
                     this->fuseHitApplied = 1;
-                    FuseHooks_OnRangedProjectileHit(play, hitActor, false);
+                    FuseHooks_OnRangedProjectileHit(play, hitActor, impactPosPtr, false);
                 }
 
                 if ((hitActor->update != NULL) && (!(this->collider.base.atFlags & AT_BOUNCED)) &&

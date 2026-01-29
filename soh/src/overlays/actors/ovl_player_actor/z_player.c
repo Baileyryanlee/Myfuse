@@ -4889,7 +4889,12 @@ s32 func_808382DC(Player* this, PlayState* play) {
                     u8 explosionLevel = 0;
                     Actor* attacker = this->shieldQuad.base.ac;
                     Vec3f explosionPos = this->actor.world.pos;
-                    if (attacker != NULL) {
+                    if ((this->shieldQuad.info.bumper.hitPos.x != 0) || (this->shieldQuad.info.bumper.hitPos.y != 0) ||
+                        (this->shieldQuad.info.bumper.hitPos.z != 0)) {
+                        explosionPos.x = this->shieldQuad.info.bumper.hitPos.x;
+                        explosionPos.y = this->shieldQuad.info.bumper.hitPos.y;
+                        explosionPos.z = this->shieldQuad.info.bumper.hitPos.z;
+                    } else if (attacker != NULL) {
                         explosionPos = attacker->world.pos;
                     }
                     const bool shouldExplode =

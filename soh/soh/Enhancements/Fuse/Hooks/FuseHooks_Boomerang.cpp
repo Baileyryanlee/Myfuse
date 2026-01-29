@@ -56,7 +56,7 @@ void ApplyBoomerangKnockback(PlayState* play, Actor* victim, uint8_t level, Mate
 }
 } // namespace
 
-extern "C" void FuseHooks_OnBoomerangHitActor(PlayState* play, Actor* victim) {
+extern "C" void FuseHooks_OnBoomerangHitActor(PlayState* play, Actor* victim, const Vec3f* impactPos) {
     if (!play || !victim) {
         return;
     }
@@ -89,9 +89,11 @@ extern "C" void FuseHooks_OnBoomerangHitActor(PlayState* play, Actor* victim) {
                 Fuse::Log("[FuseDBG] ExplodeSkip: src=Boomerang victim=ACTOR_BOSS_DODONGO\n");
             } else if (FuseBash_IsEnemyActor(victim) || Fuse_IsBombableActorId(victim->id)) {
                 const int bombable = Fuse_IsBombableActorId(victim->id) ? 1 : 0;
+                const Vec3f* explodePos = impactPos ? impactPos : &victim->focus.pos;
+                const Vec3f& loggedPos = explodePos ? *explodePos : victim->world.pos;
                 Fuse::Log("[FuseDBG] Explode: src=boom kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n",
-                          victim->world.pos.x, victim->world.pos.y, victim->world.pos.z, victim->id, bombable);
-                Fuse_TriggerExplosion(play, victim->world.pos, FuseExplosionSelfMode::DamagePlayer,
+                          loggedPos.x, loggedPos.y, loggedPos.z, victim->id, bombable);
+                Fuse_TriggerExplosion(play, loggedPos, FuseExplosionSelfMode::DamagePlayer,
                                       Fuse_GetExplosionParams(materialId, explosionLevel), "Boomerang");
             }
         }
