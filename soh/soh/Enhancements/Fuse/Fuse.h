@@ -49,6 +49,7 @@ struct FuseExplosionParams {
 FuseExplosionParams Fuse_GetExplosionParams(MaterialId mat, int level);
 bool Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfMode selfMode, FuseExplosionParams params,
                            const char* srcLabel);
+Vec3f Fuse_AdjustShieldExplosionPos(const Player* player, const Vec3f& impactPos);
 bool Fuse_IsBombableActorId(s16 id);
 bool Fuse_IsExplosionImmuneVictim(const Actor* victim);
 Actor* Fuse_FindNearbyBombable(PlayState* play, const Vec3f* pos, float radius);
@@ -76,8 +77,8 @@ struct MaterialDebugOverride {
 // Call once on load / init and every frame.
 void OnLoadGame(int32_t fileNum);
 void OnGameFrameUpdate(PlayState* play);
-void OnSwordMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage);
-void OnHammerMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage);
+    void OnSwordMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage, const Vec3f* impactPos);
+    void OnHammerMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage, const Vec3f* impactPos);
 void ProcessPendingStuns(PlayState* play);
 void ProcessDeferredSwordFreezes(PlayState* play);
 void ResetSwordFreezeQueue();

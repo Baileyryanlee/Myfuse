@@ -9,7 +9,7 @@ struct PlayState;
 struct Actor;
 struct EnBoom;
 
-void FuseHooks_OnBoomerangHitActor(struct PlayState* play, struct Actor* victim);
+void FuseHooks_OnBoomerangHitActor(struct PlayState* play, struct Actor* victim, const Vec3f* impactPos);
 void FuseHooks_OnBoomerangHitSurface(struct EnBoom* boom, struct PlayState* play, const Vec3f* hitPos);
 
 #ifdef __cplusplus

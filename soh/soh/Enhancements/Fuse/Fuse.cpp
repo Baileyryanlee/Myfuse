@@ -1462,6 +1462,35 @@ bool Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfM
     return true;
 }
 
+Vec3f Fuse_AdjustShieldExplosionPos(const Player* player, const Vec3f& impactPos) {
+    constexpr float kShieldExplosionEpsilon = 12.0f;
+    Vec3f outwardDir = { 0.0f, 0.0f, 0.0f };
+    if (player) {
+        outwardDir.x = impactPos.x - player->actor.world.pos.x;
+        outwardDir.y = impactPos.y - player->actor.world.pos.y;
+        outwardDir.z = impactPos.z - player->actor.world.pos.z;
+    }
+
+    const float distSq = (outwardDir.x * outwardDir.x) + (outwardDir.y * outwardDir.y) + (outwardDir.z * outwardDir.z);
+    if (distSq < 0.0001f) {
+        const s16 yaw = player ? player->actor.shape.rot.y : 0;
+        outwardDir.x = Math_SinS(yaw);
+        outwardDir.y = 0.0f;
+        outwardDir.z = Math_CosS(yaw);
+    } else {
+        const float invLen = 1.0f / sqrtf(distSq);
+        outwardDir.x *= invLen;
+        outwardDir.y *= invLen;
+        outwardDir.z *= invLen;
+    }
+
+    Vec3f adjusted = impactPos;
+    adjusted.x += outwardDir.x * kShieldExplosionEpsilon;
+    adjusted.y += outwardDir.y * kShieldExplosionEpsilon;
+    adjusted.z += outwardDir.z * kShieldExplosionEpsilon;
+    return adjusted;
+}
+
 void Fuse::QueueSwordFreeze(PlayState* play, Actor* victim, uint8_t level, const char* srcLabel, const char* slotLabel,
                             MaterialId materialId) {
     QueueSwordFreezeInternal(play, victim, level, srcLabel, slotLabel, materialId);
@@ -1818,7 +1847,8 @@ extern "C" void Fuse_ShieldTriggerExplosion(PlayState* play, s32 shieldMaterialI
 
     const MaterialId materialId = static_cast<MaterialId>(shieldMaterialId);
     const FuseExplosionParams params = Fuse_GetExplosionParams(materialId, level);
-    const Vec3f offsetPos = Fuse_GetPosInFrontOfPlayer(play, 32.0f, 18.0f);
+    Player* player = GET_PLAYER(play);
+    const Vec3f offsetPos = Fuse_AdjustShieldExplosionPos(player, *pos);
     const s16 yaw = GET_PLAYER(play) ? GET_PLAYER(play)->actor.shape.rot.y : 0;
     const uint32_t atFlags = AT_ON | AT_TYPE_ALL;
     const char* srcLabel = "Shield";
@@ -3441,7 +3471,7 @@ static void LogDurabilityGate(const char* itemLabel, MaterialId materialId, int 
               static_cast<int>(materialId), durabilityCur, durabilityMax);
 }
 
-void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage) {
+void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage, const Vec3f* impactPos) {
 
     if (!Fuse::IsSwordFused()) {
         LogDurabilityGate("sword", Fuse::GetSwordMaterial(), Fuse::GetSwordFuseDurability(),
@@ -3464,9 +3494,11 @@ void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage)
             Fuse::Log("[FuseDBG] ExplodeSkip: src=Sword victim=ACTOR_BOSS_DODONGO\n");
         } else if (FuseBash_IsEnemyActor(victim) || Fuse_IsBombableActorId(victim->id)) {
             const int bombable = Fuse_IsBombableActorId(victim->id) ? 1 : 0;
+            const Vec3f* explodePos = impactPos ? impactPos : &victim->focus.pos;
+            const Vec3f& loggedPos = explodePos ? *explodePos : victim->world.pos;
             Fuse::Log("[FuseDBG] Explode: src=Sword kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n",
-                      victim->world.pos.x, victim->world.pos.y, victim->world.pos.z, victim->id, bombable);
-            Fuse_TriggerExplosion(play, victim->world.pos, FuseExplosionSelfMode::DamagePlayer,
+                      loggedPos.x, loggedPos.y, loggedPos.z, victim->id, bombable);
+            Fuse_TriggerExplosion(play, loggedPos, FuseExplosionSelfMode::DamagePlayer,
                                   Fuse_GetExplosionParams(materialId, explosionLevel), "Sword");
         }
     }
@@ -3490,7 +3522,7 @@ void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage)
                                  "sword", true);
 }
 
-void Fuse::OnHammerMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage) {
+void Fuse::OnHammerMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage, const Vec3f* impactPos) {
     if (!Fuse::IsHammerFused()) {
         LogDurabilityGate("hammer", Fuse::GetHammerMaterial(), Fuse::GetHammerFuseDurability(),
                           Fuse::GetHammerFuseMaxDurability());
@@ -3506,9 +3538,11 @@ void Fuse::OnHammerMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage
             Fuse::Log("[FuseDBG] ExplodeSkip: src=Hammer victim=ACTOR_BOSS_DODONGO\n");
         } else if (FuseBash_IsEnemyActor(victim) || Fuse_IsBombableActorId(victim->id)) {
             const int bombable = Fuse_IsBombableActorId(victim->id) ? 1 : 0;
+            const Vec3f* explodePos = impactPos ? impactPos : &victim->focus.pos;
+            const Vec3f& loggedPos = explodePos ? *explodePos : victim->world.pos;
             Fuse::Log("[FuseDBG] Explode: src=Hammer kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n",
-                      victim->world.pos.x, victim->world.pos.y, victim->world.pos.z, victim->id, bombable);
-            Fuse_TriggerExplosion(play, victim->world.pos, FuseExplosionSelfMode::DamagePlayer,
+                      loggedPos.x, loggedPos.y, loggedPos.z, victim->id, bombable);
+            Fuse_TriggerExplosion(play, loggedPos, FuseExplosionSelfMode::DamagePlayer,
                                   Fuse_GetExplosionParams(materialId, explosionLevel), "Hammer");
         }
     }

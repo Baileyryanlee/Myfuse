@@ -12,12 +12,13 @@ extern "C" {
 		RANGED_FUSE_SLOT_HOOKSHOT = 2,
 	} RangedFuseSlotId;
 
-	void Fuse_OnRangedHitActor(struct PlayState* play, RangedFuseSlotId slot, struct Actor* victim);
+	void Fuse_OnRangedHitActor(struct PlayState* play, RangedFuseSlotId slot, struct Actor* victim,
+	                           const Vec3f* impactPos);
 	void FuseHooks_OnArrowProjectileFired(struct PlayState* play, int32_t isSeed);
-	void FuseHooks_OnRangedProjectileHit(struct PlayState* play, struct Actor* victim, int32_t isSeed);
+	void FuseHooks_OnRangedProjectileHit(struct PlayState* play, struct Actor* victim, Vec3f* impactPos, int32_t isSeed);
 	void FuseHooks_OnRangedProjectileHitSurface(struct PlayState* play, Vec3f* impactPos, int32_t isSeed);
 	void FuseHooks_OnHookshotShotStarted(PlayState* play);
-	void FuseHooks_OnHookshotEnemyHit(PlayState* play, struct Actor* victim);
+	void FuseHooks_OnHookshotEnemyHit(PlayState* play, struct Actor* victim, Vec3f* impactPos);
 	void FuseHooks_OnHookshotSurfaceHit(PlayState* play, Vec3f* impactPos);
 	void FuseHooks_OnHookshotLatched(PlayState* play);
 	void FuseHooks_OnHookshotRetracted(PlayState* play);

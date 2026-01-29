@@ -435,11 +435,19 @@ extern "C" void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollid
         const int itemId = isHammerAttack ? ITEM_HAMMER : gSaveContext.equips.buttonItems[0];
         const int baseWeaponDamage =
             ResolveMeleeHitBaseDamage(victimActor, atInfo, acInfo, shatterSrcLabel, itemId, materialId);
+        Vec3f impactPos;
+        const Vec3f* impactPosPtr = nullptr;
+        if (acInfo) {
+            impactPos.x = acInfo->bumper.hitPos.x;
+            impactPos.y = acInfo->bumper.hitPos.y;
+            impactPos.z = acInfo->bumper.hitPos.z;
+            impactPosPtr = &impactPos;
+        }
 
         if (isHammerAttack) {
-            Fuse::OnHammerMeleeHit(play, victimActor, baseWeaponDamage);
+            Fuse::OnHammerMeleeHit(play, victimActor, baseWeaponDamage, impactPosPtr);
         } else {
-            Fuse::OnSwordMeleeHit(play, victimActor, baseWeaponDamage);
+            Fuse::OnSwordMeleeHit(play, victimActor, baseWeaponDamage, impactPosPtr);
         }
     }
 
