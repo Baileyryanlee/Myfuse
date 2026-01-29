@@ -1456,14 +1456,11 @@ void Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfM
     }
 
     EnBom* bomb = reinterpret_cast<EnBom*>(explosionActor);
-    bomb->timer = std::max(1, params.hitFrames);
+    bomb->timer = 1;
     bomb->actor.params = BOMB_EXPLOSION;
     bomb->actor.shape.rot.z = 0;
-
-    // Mark this EnBom as a Fuse-spawned explosion so we can enforce single-hit AT in EnBom_Explode.
-    // IMPORTANT: use a magic marker that cannot collide with vanilla bombs
-    bomb->actor.home.rot.z = 0x5A7E; // Fuse marker
-    bomb->actor.home.rot.x = 0;      // "has applied AT" flag (0 = not yet, 1 = already applied)
+    Fuse::Log("[FuseDBG] ExplodeSpawned: timer=%d params=%d pos=(%.2f %.2f %.2f)\n", bomb->timer,
+              bomb->actor.params, bomb->actor.world.pos.x, bomb->actor.world.pos.y, bomb->actor.world.pos.z);
 
     constexpr float kFuseDefaultExplosionRadius = 80.0f;
     constexpr float kMaxFuseExplosionRadius = 300.0f;
