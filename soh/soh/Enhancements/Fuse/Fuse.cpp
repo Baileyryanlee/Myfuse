@@ -1447,18 +1447,23 @@ bool Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfM
               (selfMode == FuseExplosionSelfMode::DamagePlayer) ? 1 : 0, params.hitFrames,
               srcLabel ? srcLabel : "unknown");
 
+    // Root cause note: forcing params to BOMB_EXPLOSION here skips the vanilla BOMB_BODY countdown->explosion
+    // transition in z_en_bom.c, so EnBom_Explode never runs (no effects/damage) and the actor can persist,
+    // eventually exhausting the lit-bomb budget. Keep the actor as BOMB_BODY and let it transition naturally.
     Actor* explosionActor =
-        Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BOM, pos.x, pos.y, pos.z, 0, 0, 0, 0, BOMB_EXPLOSION);
+        Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BOM, pos.x, pos.y, pos.z, 0, 0, 0, 0, BOMB_BODY);
+    Fuse::Log("[FuseDBG] ExplodeSpawnAttempt pos=(%.2f %.2f %.2f) src=%s result=%p\n", pos.x, pos.y, pos.z,
+              srcLabel ? srcLabel : "unknown", (void*)explosionActor);
     if (!explosionActor) {
         return false;
     }
 
     EnBom* bomb = reinterpret_cast<EnBom*>(explosionActor);
-    bomb->timer = 1;
-    bomb->actor.params = BOMB_EXPLOSION;
-    Fuse::Log("[FuseDBG] ExplodeSpawn pos=(%.2f %.2f %.2f) timer=%d src=%s frame=%d\n", bomb->actor.world.pos.x,
-              bomb->actor.world.pos.y, bomb->actor.world.pos.z, bomb->timer, srcLabel ? srcLabel : "unknown",
-              play->gameplayFrames);
+    bomb->timer = 2;
+    bomb->actor.shape.rot.z = 0;
+    Fuse::Log("[FuseDBG] ExplodeSpawnInit pos=(%.2f %.2f %.2f) params=%d timer=%d src=%s frame=%d\n",
+              bomb->actor.world.pos.x, bomb->actor.world.pos.y, bomb->actor.world.pos.z, bomb->actor.params,
+              bomb->timer, srcLabel ? srcLabel : "unknown", play->gameplayFrames);
     return true;
 }
 
