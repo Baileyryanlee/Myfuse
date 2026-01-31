@@ -53,6 +53,7 @@ Vec3f Fuse_AdjustShieldExplosionPos(const Player* player, const Vec3f& impactPos
 bool Fuse_IsBombableActorId(s16 id);
 bool Fuse_IsExplosionImmuneVictim(const Actor* victim);
 Actor* Fuse_FindNearbyBombable(PlayState* play, const Vec3f* pos, float radius);
+extern "C" void Fuse_AdjustExplosionPosForBombable(const Actor* victim, const Actor* source, Vec3f* ioPos);
 
 void Fuse_ApplySavedSwordFuse(const PlayState* play, s16 savedMaterialId, s16 savedMaxDurability,
                               bool hasSavedCurDurability, u16 savedCurDurability, s16 legacyCurDurability);

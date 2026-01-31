@@ -29,6 +29,7 @@ static bool gPendingThrownRockCheck = false;
 static Actor* gTrackedThrownRock = nullptr;
 static int gFramesUntilThrownRockCheck = 0;
 static int gLastImpactDrainFrame = -1;
+static int gLastSwordBgExplodeFrame = -999;
 static int gSwordATVictimCooldownFrame = -1;
 static bool gWasHammerAttacking = false;
 static std::unordered_set<void*> gSwordATVictimCooldown;
@@ -137,6 +138,20 @@ static bool IsPlayerSafeForInput(const Player* player) {
 
 static bool IsPlayerSwingingSword(const Player* player) {
     return player && player->meleeWeaponState != 0;
+}
+
+static Vec3f GetPlayerImpactPos(Player* player, float forward, float up) {
+    Vec3f pos{ 0.0f, 0.0f, 0.0f };
+    if (!player) {
+        return pos;
+    }
+
+    pos = player->actor.world.pos;
+    const s16 yaw = player->actor.shape.rot.y;
+    pos.x += Math_SinS(yaw) * forward;
+    pos.z += Math_CosS(yaw) * forward;
+    pos.y += up;
+    return pos;
 }
 
 static bool IsPlayerHammerAttack(const Player* player) {
@@ -541,6 +556,7 @@ void OnLoadGame_RestoreObjects() {
     gTrackedThrownRock = nullptr;
     gFramesUntilThrownRockCheck = 0;
     gLastImpactDrainFrame = -1;
+    gLastSwordBgExplodeFrame = -999;
     gSwordATVictimCooldownFrame = -1;
     gWasHammerAttacking = false;
     gSwordATVictimCooldown.clear();
@@ -621,6 +637,8 @@ void OnPlayerUpdate(PlayState* play) {
             const MaterialDef* def = Fuse::GetMaterialDef(materialId);
             uint8_t poundLevel = 0;
             uint8_t megaStunLevel = 0;
+            uint8_t explosionLevel =
+                Fuse::GetMaterialModifierLevel(materialId, FuseItemType::Hammer, ModifierId::Explosion);
             if (def) {
                 HasModifier(def->modifiers, def->modifierCount, ModifierId::PoundUp, &poundLevel);
                 HasModifier(def->modifiers, def->modifierCount, ModifierId::MegaStun, &megaStunLevel);
@@ -636,6 +654,19 @@ void OnPlayerUpdate(PlayState* play) {
 
             if (megaStunLevel > 0) {
                 Fuse_TriggerMegaStun(play, player, materialId, ITEM_HAMMER);
+            }
+
+            if (explosionLevel > 0) {
+                Vec3f explodePos = GetPlayerImpactPos(player, 28.0f, 18.0f);
+                const Actor* bombable = Fuse_FindNearbyBombable(play, &explodePos, 120.0f);
+                if (bombable) {
+                    explodePos = bombable->focus.pos;
+                    Fuse_AdjustExplosionPosForBombable(bombable, &player->actor, &explodePos);
+                }
+                Fuse::Log("[FuseDBG] Explode: src=Hammer kind=bg pos=(%.2f %.2f %.2f)\n", explodePos.x, explodePos.y,
+                          explodePos.z);
+                Fuse_TriggerExplosion(play, explodePos, FuseExplosionSelfMode::DamagePlayer,
+                                      Fuse_GetExplosionParams(materialId, explosionLevel), "HammerBG");
             }
         }
 
@@ -653,7 +684,37 @@ void OnPlayerUpdate(PlayState* play) {
 
     const char* reason = "unknown";
     if (SwordHadImpactFlags(player, &reason)) {
-        Fuse::Log("[FuseMVP] Impact hook observed reason=%s (drain handled in AT collision hook)\n", reason);
+        const bool fused = Fuse::IsSwordFused();
+        const MaterialId materialId = Fuse::GetSwordMaterial();
+        const uint8_t explosionLevel =
+            Fuse::GetMaterialModifierLevel(materialId, FuseItemType::Sword, ModifierId::Explosion);
+        if (fused && explosionLevel > 0) {
+            const int curFrame = play ? play->gameplayFrames : -1;
+            if (curFrame < 0 || (curFrame - gLastSwordBgExplodeFrame) >= 10) {
+                Vec3f explodePos = GetPlayerImpactPos(player, 28.0f, 18.0f);
+                const Actor* bombable = Fuse_FindNearbyBombable(play, &explodePos, 120.0f);
+                if (bombable) {
+                    explodePos = bombable->focus.pos;
+                    Fuse_AdjustExplosionPosForBombable(bombable, &player->actor, &explodePos);
+                }
+                Fuse::Log("[FuseDBG] Explode: src=Sword kind=bg pos=(%.2f %.2f %.2f) reason=%s\n", explodePos.x,
+                          explodePos.y, explodePos.z, reason);
+                Fuse_TriggerExplosion(play, explodePos, FuseExplosionSelfMode::DamagePlayer,
+                                      Fuse_GetExplosionParams(materialId, explosionLevel), "SwordBG");
+
+                const int before = Fuse::GetSwordFuseDurability();
+                const bool broke = Fuse::DamageSwordFuseDurability(play, 1, reason);
+                const int after = Fuse::GetSwordFuseDurability();
+                Fuse::Log("[FuseMVP] Sword BG impact DRAIN frame=%d durability=%d->%d%s\n", curFrame, before, after,
+                          broke ? " (broke)" : "");
+                gLastSwordBgExplodeFrame = curFrame;
+            } else {
+                Fuse::Log("[FuseMVP] Impact hook fired but skipped (cooldown) event=hit reason=%s frame=%d\n", reason,
+                          curFrame);
+            }
+        } else {
+            Fuse::Log("[FuseMVP] Impact hook observed reason=%s (drain handled in AT collision hook)\n", reason);
+        }
     }
 }
 
