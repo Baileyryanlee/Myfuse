@@ -4,6 +4,7 @@
 #endif
 
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <vector>
 
@@ -54,6 +55,19 @@ bool Fuse_IsBombableActorId(s16 id);
 bool Fuse_IsExplosionImmuneVictim(const Actor* victim);
 Actor* Fuse_FindNearbyBombable(PlayState* play, const Vec3f* pos, float radius);
 extern "C" void Fuse_AdjustExplosionPosForBombable(const Actor* victim, const Actor* source, Vec3f* ioPos);
+
+static inline bool Fuse_IsZeroishPos(const Vec3f& v) {
+    return fabsf(v.x) < 0.01f && fabsf(v.y) < 0.01f && fabsf(v.z) < 0.01f;
+}
+
+static inline Vec3f Fuse_GetBombableAnchorPos(const Actor* victim, float yLift) {
+    Vec3f pos = victim ? victim->focus.pos : Vec3f{ 0.0f, 0.0f, 0.0f };
+    if (!victim || Fuse_IsZeroishPos(pos)) {
+        pos = victim ? victim->world.pos : Vec3f{ 0.0f, 0.0f, 0.0f };
+    }
+    pos.y += yLift;
+    return pos;
+}
 
 void Fuse_ApplySavedSwordFuse(const PlayState* play, s16 savedMaterialId, s16 savedMaxDurability,
                               bool hasSavedCurDurability, u16 savedCurDurability, s16 legacyCurDurability);

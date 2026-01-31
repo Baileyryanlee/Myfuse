@@ -129,6 +129,10 @@ extern "C" void Fuse_AdjustExplosionPosForBombable(const Actor* victim, const Ac
         return;
     }
 
+    if (Fuse_IsZeroishPos(*ioPos)) {
+        *ioPos = Fuse_GetBombableAnchorPos(victim, 25.0f);
+    }
+
     Vec3f from = *ioPos;
     Vec3f dir{ ioPos->x - victim->world.pos.x, 0.0f, ioPos->z - victim->world.pos.z };
     float distSq = (dir.x * dir.x) + (dir.z * dir.z);
@@ -149,9 +153,12 @@ extern "C" void Fuse_AdjustExplosionPosForBombable(const Actor* victim, const Ac
     dir.x *= invLen;
     dir.z *= invLen;
 
-    ioPos->x += dir.x * 12.0f;
-    ioPos->z += dir.z * 12.0f;
-    ioPos->y += 4.0f;
+    ioPos->x += dir.x * 8.0f;
+    ioPos->z += dir.z * 8.0f;
+    ioPos->y += 6.0f;
+    if (ioPos->y < victim->world.pos.y + 20.0f) {
+        ioPos->y = victim->world.pos.y + 20.0f;
+    }
 
     Fuse::Log("[FuseDBG] ExplodeNudge: victim=0x%04X from=(%.2f %.2f %.2f) to=(%.2f %.2f %.2f)\n", victim->id,
               from.x, from.y, from.z, ioPos->x, ioPos->y, ioPos->z);
@@ -3532,15 +3539,21 @@ void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage,
             Fuse::Log("[FuseDBG] ExplodeSkip: src=Sword victim=ACTOR_BOSS_DODONGO\n");
         } else if (FuseBash_IsEnemyActor(victim) || Fuse_IsBombableActorId(victim->id)) {
             const int bombable = Fuse_IsBombableActorId(victim->id) ? 1 : 0;
-            const Vec3f* explodePos = impactPos ? impactPos : &victim->focus.pos;
-            Vec3f adjustedPos = explodePos ? *explodePos : victim->world.pos;
             if (bombable) {
+                Vec3f adjustedPos = Fuse_GetBombableAnchorPos(victim, 25.0f);
                 Fuse_AdjustExplosionPosForBombable(victim, player ? &player->actor : nullptr, &adjustedPos);
+                Fuse::Log("[FuseDBG] Explode: src=Sword kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n",
+                          adjustedPos.x, adjustedPos.y, adjustedPos.z, victim->id, bombable);
+                Fuse_TriggerExplosion(play, adjustedPos, FuseExplosionSelfMode::DamagePlayer,
+                                      Fuse_GetExplosionParams(materialId, explosionLevel), "Sword");
+            } else {
+                const Vec3f* explodePos = impactPos ? impactPos : &victim->focus.pos;
+                Vec3f adjustedPos = explodePos ? *explodePos : victim->world.pos;
+                Fuse::Log("[FuseDBG] Explode: src=Sword kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n",
+                          adjustedPos.x, adjustedPos.y, adjustedPos.z, victim->id, bombable);
+                Fuse_TriggerExplosion(play, adjustedPos, FuseExplosionSelfMode::DamagePlayer,
+                                      Fuse_GetExplosionParams(materialId, explosionLevel), "Sword");
             }
-            Fuse::Log("[FuseDBG] Explode: src=Sword kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n",
-                      adjustedPos.x, adjustedPos.y, adjustedPos.z, victim->id, bombable);
-            Fuse_TriggerExplosion(play, adjustedPos, FuseExplosionSelfMode::DamagePlayer,
-                                  Fuse_GetExplosionParams(materialId, explosionLevel), "Sword");
         }
     }
 
