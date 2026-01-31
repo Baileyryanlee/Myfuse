@@ -90,10 +90,13 @@ extern "C" void FuseHooks_OnBoomerangHitActor(PlayState* play, Actor* victim, co
             } else if (FuseBash_IsEnemyActor(victim) || Fuse_IsBombableActorId(victim->id)) {
                 const int bombable = Fuse_IsBombableActorId(victim->id) ? 1 : 0;
                 const Vec3f* explodePos = impactPos ? impactPos : &victim->focus.pos;
-                const Vec3f& loggedPos = explodePos ? *explodePos : victim->world.pos;
+                Vec3f adjustedPos = explodePos ? *explodePos : victim->world.pos;
+                if (bombable) {
+                    Fuse_AdjustExplosionPosForBombable(victim, player ? &player->actor : nullptr, &adjustedPos);
+                }
                 Fuse::Log("[FuseDBG] Explode: src=boom kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n",
-                          loggedPos.x, loggedPos.y, loggedPos.z, victim->id, bombable);
-                Fuse_TriggerExplosion(play, loggedPos, FuseExplosionSelfMode::DamagePlayer,
+                          adjustedPos.x, adjustedPos.y, adjustedPos.z, victim->id, bombable);
+                Fuse_TriggerExplosion(play, adjustedPos, FuseExplosionSelfMode::DamagePlayer,
                                       Fuse_GetExplosionParams(materialId, explosionLevel), "Boomerang");
             }
         }
@@ -165,6 +168,8 @@ extern "C" void FuseHooks_OnBoomerangHitSurface(EnBoom* boom, PlayState* play, c
         kind = "candidate";
         bombableFlag = 1;
         victimId = bombable->id;
+        explodePos = bombable->focus.pos;
+        Fuse_AdjustExplosionPosForBombable(bombable, nullptr, &explodePos);
         Fuse::Log("[FuseDBG] ExplodeAssist: src=boom hit=(%.2f %.2f %.2f) bombable=0x%04X at=(%.2f %.2f %.2f) "
                   "r=%.2f\n",
                   hitPos->x, hitPos->y, hitPos->z, bombable->id, explodePos.x, explodePos.y, explodePos.z,
@@ -175,4 +180,5 @@ extern "C" void FuseHooks_OnBoomerangHitSurface(EnBoom* boom, PlayState* play, c
               explodePos.x, explodePos.y, explodePos.z, victimId, bombableFlag);
     Fuse_TriggerExplosion(play, explodePos, FuseExplosionSelfMode::DamagePlayer,
                           Fuse_GetExplosionParams(materialId, explosionLevel), "BoomerangBG");
+    Fuse::DamageBoomerangFuseDurability(play, 1, "Boomerang hit surface");
 }
