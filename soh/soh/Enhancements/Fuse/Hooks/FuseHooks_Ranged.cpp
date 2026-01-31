@@ -125,7 +125,7 @@ static void HandleRangedSurfaceHit(PlayState* play, RangedFuseSlot slot, const V
             kind = "candidate";
             bombableFlag = 1;
             victimId = bombable->id;
-            explodePos = bombable->focus.pos;
+            explodePos = Fuse_GetBombableAnchorPos(bombable, 25.0f);
             Fuse_AdjustExplosionPosForBombable(bombable, nullptr, &explodePos);
             Fuse::Log("[FuseDBG] ExplodeAssist: src=%s hit=(%.2f %.2f %.2f) bombable=0x%04X at=(%.2f %.2f %.2f) "
                       "r=%.2f\n",
@@ -182,15 +182,22 @@ extern "C" void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Ac
             Fuse::Log("[FuseDBG] ExplodeSkip: src=%s victim=ACTOR_BOSS_DODONGO\n", RangedSlotLabel(slot));
         } else if (FuseBash_IsEnemyActor(victim) || Fuse_IsBombableActorId(victim->id)) {
             const int bombable = Fuse_IsBombableActorId(victim->id) ? 1 : 0;
-            Vec3f adjustedPos = loggedPos;
             if (bombable) {
+                Vec3f adjustedPos = Fuse_GetBombableAnchorPos(victim, 25.0f);
                 Fuse_AdjustExplosionPosForBombable(victim, nullptr, &adjustedPos);
+                Fuse::Log("[FuseDBG] Explode: src=%s kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n",
+                          RangedSlotExplodeLabel(slot), adjustedPos.x, adjustedPos.y, adjustedPos.z,
+                          victim->id, bombable);
+                Fuse_TriggerExplosion(play, adjustedPos, FuseExplosionSelfMode::DamagePlayer,
+                                      params, RangedSlotLabel(slot));
+            } else {
+                Vec3f adjustedPos = loggedPos;
+                Fuse::Log("[FuseDBG] Explode: src=%s kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n",
+                          RangedSlotExplodeLabel(slot), adjustedPos.x, adjustedPos.y, adjustedPos.z,
+                          victim->id, bombable);
+                Fuse_TriggerExplosion(play, adjustedPos, FuseExplosionSelfMode::DamagePlayer,
+                                      params, RangedSlotLabel(slot));
             }
-            Fuse::Log("[FuseDBG] Explode: src=%s kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n",
-                      RangedSlotExplodeLabel(slot), adjustedPos.x, adjustedPos.y, adjustedPos.z,
-                      victim->id, bombable);
-            Fuse_TriggerExplosion(play, adjustedPos, FuseExplosionSelfMode::DamagePlayer,
-                                  params, RangedSlotLabel(slot));
         }
     }
 

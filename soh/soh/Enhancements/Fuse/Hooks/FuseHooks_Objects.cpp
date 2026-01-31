@@ -660,7 +660,7 @@ void OnPlayerUpdate(PlayState* play) {
                 Vec3f explodePos = GetPlayerImpactPos(player, 28.0f, 18.0f);
                 const Actor* bombable = Fuse_FindNearbyBombable(play, &explodePos, 120.0f);
                 if (bombable) {
-                    explodePos = bombable->focus.pos;
+                    explodePos = Fuse_GetBombableAnchorPos(bombable, 25.0f);
                     Fuse_AdjustExplosionPosForBombable(bombable, &player->actor, &explodePos);
                 }
                 Fuse::Log("[FuseDBG] Explode: src=Hammer kind=bg pos=(%.2f %.2f %.2f)\n", explodePos.x, explodePos.y,
@@ -679,11 +679,11 @@ void OnPlayerUpdate(PlayState* play) {
         }
     }
 
-    if (!IsPlayerSwingingSword(player))
-        return;
-
     const char* reason = "unknown";
-    if (SwordHadImpactFlags(player, &reason)) {
+    if (!SwordHadImpactFlags(player, &reason)) {
+        return;
+    }
+    {
         const bool fused = Fuse::IsSwordFused();
         const MaterialId materialId = Fuse::GetSwordMaterial();
         const uint8_t explosionLevel =
@@ -694,7 +694,7 @@ void OnPlayerUpdate(PlayState* play) {
                 Vec3f explodePos = GetPlayerImpactPos(player, 28.0f, 18.0f);
                 const Actor* bombable = Fuse_FindNearbyBombable(play, &explodePos, 120.0f);
                 if (bombable) {
-                    explodePos = bombable->focus.pos;
+                    explodePos = Fuse_GetBombableAnchorPos(bombable, 25.0f);
                     Fuse_AdjustExplosionPosForBombable(bombable, &player->actor, &explodePos);
                 }
                 Fuse::Log("[FuseDBG] Explode: src=Sword kind=bg pos=(%.2f %.2f %.2f) reason=%s\n", explodePos.x,
