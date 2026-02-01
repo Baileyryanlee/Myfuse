@@ -2032,6 +2032,14 @@ extern "C" void Fuse_ShieldTriggerExplosion(PlayState* play, s32 shieldMaterialI
     Fuse_TriggerExplosion(play, offsetPos, FuseExplosionSelfMode::DamagePlayer, params, srcLabel);
 }
 
+extern "C" void Fuse_AddMaterialById(s32 materialId, s32 amount) {
+    if (amount <= 0) {
+        return;
+    }
+
+    Fuse::AddMaterial(static_cast<MaterialId>(materialId), amount);
+}
+
 extern "C" void Fuse_ShieldApplyFreeze(PlayState* play, Actor* victim, uint8_t level) {
     if (victim && IsActorFrozenInternal(victim)) {
         Fuse::TryFreezeShatter(play, victim, nullptr, "shield");
