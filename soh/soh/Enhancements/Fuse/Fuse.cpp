@@ -3752,9 +3752,8 @@ void Fuse::TickRangedProjectileSeek(PlayState* play) {
                 const float horiz = sqrtf((newDir.x * newDir.x) + (newDir.z * newDir.z));
                 const float speedXZ = speed * horiz;
                 const float velY = speed * newDir.y;
-                const float pitchDenom = std::max(speedXZ, 0.0001f);
                 const s16 yawS = Math_Atan2S(newDir.x, newDir.z);
-                const s16 pitchS = -Math_Atan2S(velY, pitchDenom);
+                const s16 pitchS = (horiz <= 0.0001f) ? 0 : Math_Atan2S(-newDir.y, horiz);
 
                 proj->world.rot.y = yawS;
                 proj->shape.rot.y = yawS;
@@ -3766,8 +3765,8 @@ void Fuse::TickRangedProjectileSeek(PlayState* play) {
                 proj->velocity.z = newDir.z * speed;
 
                 if (Fuse_SeekDebugEnabled() && !state.loggedSteer) {
-                    Fuse::Log("[FuseDBG] SeekSteer proj=%p yaw=%d pitch=%d speedXZ=%.2f velY=%.2f\n", proj, yawS,
-                              pitchS, speedXZ, velY);
+                    Fuse::Log("[FuseDBG] SeekSteer proj=%p yaw=%d pitch=%d speedXZ=%.2f velY=%.2f dir=(%.2f %.2f %.2f)\n",
+                              proj, yawS, pitchS, speedXZ, velY, newDir.x, newDir.y, newDir.z);
                     state.loggedSteer = true;
                 }
             }
