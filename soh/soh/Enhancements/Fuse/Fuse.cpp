@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <unordered_map>
 #include <unordered_set>
@@ -76,6 +77,7 @@ static std::unordered_set<Actor*> sHpOverrideApplied;
 static constexpr int32_t kFreezeNoReapplyFrames = 12;
 static std::unordered_map<Actor*, Vec3f> sFuseFrozenPos;
 static std::unordered_map<Actor*, bool> sFuseFrozenPinned;
+static std::unordered_map<uintptr_t, Vec3f> sProjPrevPos;
 static int gLastSwordBgExplodeFrame = -999;
 static int gLastSwordActorExplodeFrame = -999999;
 
@@ -226,6 +228,39 @@ static Vec3f GetPlayerImpactPos(Player* player, float forward, float up) {
     pos.z += Math_CosS(yaw) * forward;
     pos.y += up;
     return pos;
+}
+
+static float DistSqPointToSegmentXZ(const Vec3f* p, const Vec3f* a, const Vec3f* b, float* outT) {
+    if (!p || !a || !b) {
+        if (outT) {
+            *outT = 0.0f;
+        }
+        return 0.0f;
+    }
+
+    const float abx = b->x - a->x;
+    const float abz = b->z - a->z;
+    const float apx = p->x - a->x;
+    const float apz = p->z - a->z;
+    const float lenSq = (abx * abx) + (abz * abz);
+    float t = 0.0f;
+    if (lenSq > 0.0001f) {
+        t = (apx * abx + apz * abz) / lenSq;
+        if (t < 0.0f) {
+            t = 0.0f;
+        } else if (t > 1.0f) {
+            t = 1.0f;
+        }
+    }
+
+    const float cx = a->x + (abx * t);
+    const float cz = a->z + (abz * t);
+    const float dx = p->x - cx;
+    const float dz = p->z - cz;
+    if (outT) {
+        *outT = t;
+    }
+    return (dx * dx) + (dz * dz);
 }
 
 static bool IsPlayerSwingingSword(const Player* player) {
@@ -3460,43 +3495,63 @@ void Fuse::TickRangedProjectileBombableProximity(PlayState* play) {
     }
 
     const int curFrame = play->gameplayFrames;
-    const float kMaxCandidateDist = 2000.0f;
-    const float kMaxCandidateDistSq = kMaxCandidateDist * kMaxCandidateDist;
     int candidateCount = 0;
-    Actor* bestSameRoom = nullptr;
-    float bestSameRoomDistSq = kMaxCandidateDistSq + 1.0f;
-    Actor* bestWithin = nullptr;
-    float bestWithinDistSq = kMaxCandidateDistSq + 1.0f;
-    Actor* bestAny = nullptr;
-    float bestAnyDistSq = std::numeric_limits<float>::max();
+    const bool shouldCleanup = (curFrame >= 0) && (curFrame % 120 == 0);
+    std::unordered_set<uintptr_t> liveProjectileKeys;
+    if (shouldCleanup) {
+        liveProjectileKeys.reserve(sProjPrevPos.size());
+    }
 
     for (int i = 0; i < ACTORCAT_MAX; ++i) {
-        Actor* actor = play->actorCtx.actorLists[i].head;
-        while (actor != nullptr) {
-            if (actor->id == ACTOR_EN_ARROW) {
-                ++candidateCount;
-                const float dx = actor->world.pos.x - player->actor.world.pos.x;
-                const float dy = actor->world.pos.y - player->actor.world.pos.y;
-                const float dz = actor->world.pos.z - player->actor.world.pos.z;
-                const float distSq = (dx * dx) + (dy * dy) + (dz * dz);
-
-                if (distSq < bestAnyDistSq) {
-                    bestAnyDistSq = distSq;
-                    bestAny = actor;
-                }
-
-                if (distSq <= kMaxCandidateDistSq) {
-                    if (distSq < bestWithinDistSq) {
-                        bestWithinDistSq = distSq;
-                        bestWithin = actor;
-                    }
-                    if (actor->room == player->actor.room && distSq < bestSameRoomDistSq) {
-                        bestSameRoomDistSq = distSq;
-                        bestSameRoom = actor;
-                    }
-                }
+        Actor* proj = play->actorCtx.actorLists[i].head;
+        while (proj != nullptr) {
+            if (proj->id != ACTOR_EN_ARROW) {
+                proj = proj->next;
+                continue;
             }
-            actor = actor->next;
+
+            ++candidateCount;
+            const uintptr_t key = reinterpret_cast<uintptr_t>(proj);
+            if (shouldCleanup) {
+                liveProjectileKeys.insert(key);
+            }
+
+            auto it = sProjPrevPos.find(key);
+            Vec3f prev = (it != sProjPrevPos.end()) ? it->second : proj->world.pos;
+            const Vec3f cur = proj->world.pos;
+            sProjPrevPos[key] = cur;
+
+            Actor* bombable = Fuse_FindNearbyBombable(play, &cur, 220.0f);
+            if (!bombable) {
+                proj = proj->next;
+                continue;
+            }
+
+            const Vec3f center = Fuse_GetBombableAnchorPos(bombable, 25.0f);
+            float t = 0.0f;
+            const float d2 = DistSqPointToSegmentXZ(&center, &prev, &cur, &t);
+            const float radius = 110.0f;
+            if (d2 > radius * radius) {
+                proj = proj->next;
+                continue;
+            }
+
+            const float y = prev.y + (cur.y - prev.y) * t;
+            if (fabsf(y - center.y) > 140.0f) {
+                proj = proj->next;
+                continue;
+            }
+
+            Vec3f explodePos = center;
+            Fuse_AdjustExplosionPosForBombable(bombable, &player->actor, &explodePos);
+            Fuse::Log("[FuseDBG] RangedBombableSweep slot=%s proj=0x%p id=0x%04X d2=%.1f\n", RangedSlotName(slot),
+                      proj, bombable->id, d2);
+            Fuse_TriggerExplosion(play, explodePos, FuseExplosionSelfMode::DamagePlayer,
+                                  Fuse_GetExplosionParams(materialId, explosionLevel), "RangedBombableSweep");
+            Actor_Kill(proj);
+            sProjPrevPos.erase(key);
+            Fuse::OnRangedProjectileHitFinalize(slot, "BombableSweep");
+            return;
         }
     }
 
@@ -3507,7 +3562,7 @@ void Fuse::TickRangedProjectileBombableProximity(PlayState* play) {
     }
 
     static int sSlingshotScanLogFrame = -999999;
-    if (slot == RangedFuseSlot::Slingshot && bestWithin == nullptr && curFrame >= 0 &&
+    if (slot == RangedFuseSlot::Slingshot && candidateCount == 0 && curFrame >= 0 &&
         (curFrame - sSlingshotScanLogFrame) >= 60) {
         int logged = 0;
         const int kLikelyCats[] = { ACTORCAT_ITEMACTION, ACTORCAT_PROP, ACTORCAT_MISC, ACTORCAT_NPC };
@@ -3523,25 +3578,15 @@ void Fuse::TickRangedProjectileBombableProximity(PlayState* play) {
         sSlingshotScanLogFrame = curFrame;
     }
 
-    Actor* projectile = bestSameRoom ? bestSameRoom : (bestWithin ? bestWithin : bestAny);
-    if (!projectile) {
-        return;
+    if (shouldCleanup && !sProjPrevPos.empty()) {
+        for (auto it = sProjPrevPos.begin(); it != sProjPrevPos.end();) {
+            if (liveProjectileKeys.find(it->first) == liveProjectileKeys.end()) {
+                it = sProjPrevPos.erase(it);
+            } else {
+                ++it;
+            }
+        }
     }
-
-    const float kBombableProximityRadius = 35.0f;
-    Actor* bombable = Fuse_FindNearbyBombable(play, &projectile->world.pos, kBombableProximityRadius);
-    if (!bombable) {
-        return;
-    }
-
-    Vec3f explodePos = Fuse_GetBombableAnchorPos(bombable, 25.0f);
-    Fuse_AdjustExplosionPosForBombable(bombable, &player->actor, &explodePos);
-    Fuse::Log("[FuseDBG] RangedBombableProx: slot=%s proj=(%.2f %.2f %.2f) bombable=0x%04X\n", RangedSlotName(slot),
-              projectile->world.pos.x, projectile->world.pos.y, projectile->world.pos.z, bombable->id);
-    Fuse_TriggerExplosion(play, explodePos, FuseExplosionSelfMode::DamagePlayer,
-                          Fuse_GetExplosionParams(materialId, explosionLevel), "RangedBombableProx");
-    Fuse::OnRangedProjectileHitFinalize(slot, "BombableProximity");
-    Actor_Kill(projectile);
 }
 
 void Fuse::OnGameFrameUpdate(PlayState* play) {
