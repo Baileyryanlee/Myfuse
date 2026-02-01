@@ -228,33 +228,8 @@ static Vec3f GetPlayerImpactPos(Player* player, float forward, float up) {
     return pos;
 }
 
-static bool SwordHadImpactFlags(Player* player, const char** reasonOut = nullptr) {
-    if (!player) {
-        return false;
-    }
-
-    for (int i = 0; i < 4; i++) {
-        ColliderQuad* quad = &player->meleeWeaponQuads[i];
-        if (quad->base.atFlags & AT_HIT) {
-            quad->base.atFlags &= ~AT_HIT;
-            if (reasonOut) {
-                *reasonOut = "AT_HIT";
-            }
-            return true;
-        }
-
-#ifdef AT_BOUNCED
-        if (quad->base.atFlags & AT_BOUNCED) {
-            quad->base.atFlags &= ~AT_BOUNCED;
-            if (reasonOut) {
-                *reasonOut = "AT_BOUNCED";
-            }
-            return true;
-        }
-#endif
-    }
-
-    return false;
+static bool IsPlayerSwingingSword(const Player* player) {
+    return player && player->meleeWeaponState != 0;
 }
 
 static bool IsFuseFrozenInternal(Actor* actor) {
@@ -3390,8 +3365,7 @@ void Fuse::TickSwordBgExplosions(PlayState* play) {
         return;
     }
 
-    const char* reason = nullptr;
-    if (!SwordHadImpactFlags(player, &reason)) {
+    if (!IsPlayerSwingingSword(player)) {
         return;
     }
 
@@ -3404,15 +3378,31 @@ void Fuse::TickSwordBgExplosions(PlayState* play) {
         return;
     }
 
-    Vec3f explodePos = GetPlayerImpactPos(player, 28.0f, 18.0f);
+    Vec3f from = player->meleeWeaponInfo[0].base;
+    Vec3f to = player->meleeWeaponInfo[0].tip;
+    if (Fuse_IsZeroishPos(from) || Fuse_IsZeroishPos(to)) {
+        from = GetPlayerImpactPos(player, 10.0f, 14.0f);
+        to = GetPlayerImpactPos(player, 40.0f, 14.0f);
+    }
+
+    Vec3f hitPos{ 0.0f, 0.0f, 0.0f };
+    CollisionPoly* hitPoly = nullptr;
+    s32 bgId = -1;
+    if (!BgCheck_EntityLineTest1(&play->colCtx, &from, &to, &hitPos, &hitPoly, true, true, true, true, &bgId)) {
+        return;
+    }
+    (void)hitPoly;
+    (void)bgId;
+
+    Vec3f explodePos = hitPos;
+    explodePos.y += 6.0f;
     const Actor* bombable = Fuse_FindNearbyBombable(play, &explodePos, 120.0f);
     if (bombable) {
         explodePos = Fuse_GetBombableAnchorPos(bombable, 25.0f);
         Fuse_AdjustExplosionPosForBombable(bombable, &player->actor, &explodePos);
     }
 
-    Fuse::Log("[FuseDBG] SwordBGTickExplode pos=(%.2f %.2f %.2f) reason=%s\n", explodePos.x, explodePos.y,
-              explodePos.z, reason ? reason : "unknown");
+    Fuse::Log("[FuseDBG] SwordBGLineHit pos=(%.2f %.2f %.2f)\n", hitPos.x, hitPos.y, hitPos.z);
     Fuse_TriggerExplosion(play, explodePos, FuseExplosionSelfMode::DamagePlayer,
                           Fuse_GetExplosionParams(materialId, explosionLevel), "SwordBG");
     gLastSwordBgExplodeFrame = curFrame;
@@ -3469,27 +3459,89 @@ void Fuse::TickRangedProjectileBombableProximity(PlayState* play) {
         }
     }
 
-    Actor* actor = play->actorCtx.actorLists[ACTORCAT_ITEMACTION].head;
-    while (actor != nullptr) {
-        Actor* next = actor->next;
-        if (actor->id == ACTOR_EN_ARROW && actor->parent == &player->actor) {
-            const float kBombableProximityRadius = 35.0f;
-            Actor* bombable = Fuse_FindNearbyBombable(play, &actor->world.pos, kBombableProximityRadius);
-            if (bombable) {
-                Vec3f explodePos = Fuse_GetBombableAnchorPos(bombable, 25.0f);
-                Fuse_AdjustExplosionPosForBombable(bombable, &player->actor, &explodePos);
-                Fuse::Log("[FuseDBG] RangedBombableProx: slot=%s proj=(%.2f %.2f %.2f) bombable=0x%04X\n",
-                          RangedSlotName(slot), actor->world.pos.x, actor->world.pos.y, actor->world.pos.z,
-                          bombable->id);
-                Fuse_TriggerExplosion(play, explodePos, FuseExplosionSelfMode::DamagePlayer,
-                                      Fuse_GetExplosionParams(materialId, explosionLevel), "RangedBombableProx");
-                Fuse::OnRangedProjectileHitFinalize(slot, "BombableProximity");
-                Actor_Kill(actor);
-                return;
+    const int curFrame = play->gameplayFrames;
+    const float kMaxCandidateDist = 2000.0f;
+    const float kMaxCandidateDistSq = kMaxCandidateDist * kMaxCandidateDist;
+    int candidateCount = 0;
+    Actor* bestSameRoom = nullptr;
+    float bestSameRoomDistSq = kMaxCandidateDistSq + 1.0f;
+    Actor* bestWithin = nullptr;
+    float bestWithinDistSq = kMaxCandidateDistSq + 1.0f;
+    Actor* bestAny = nullptr;
+    float bestAnyDistSq = std::numeric_limits<float>::max();
+
+    for (int i = 0; i < ACTORCAT_MAX; ++i) {
+        Actor* actor = play->actorCtx.actorLists[i].head;
+        while (actor != nullptr) {
+            if (actor->id == ACTOR_EN_ARROW) {
+                ++candidateCount;
+                const float dx = actor->world.pos.x - player->actor.world.pos.x;
+                const float dy = actor->world.pos.y - player->actor.world.pos.y;
+                const float dz = actor->world.pos.z - player->actor.world.pos.z;
+                const float distSq = (dx * dx) + (dy * dy) + (dz * dz);
+
+                if (distSq < bestAnyDistSq) {
+                    bestAnyDistSq = distSq;
+                    bestAny = actor;
+                }
+
+                if (distSq <= kMaxCandidateDistSq) {
+                    if (distSq < bestWithinDistSq) {
+                        bestWithinDistSq = distSq;
+                        bestWithin = actor;
+                    }
+                    if (actor->room == player->actor.room && distSq < bestSameRoomDistSq) {
+                        bestSameRoomDistSq = distSq;
+                        bestSameRoom = actor;
+                    }
+                }
+            }
+            actor = actor->next;
+        }
+    }
+
+    static int sRangedProxLogFrame = -999999;
+    if (curFrame >= 0 && (curFrame - sRangedProxLogFrame) >= 30) {
+        Fuse::Log("[FuseDBG] ProxTick slot=%s candidates=%d\n", RangedSlotName(slot), candidateCount);
+        sRangedProxLogFrame = curFrame;
+    }
+
+    static int sSlingshotScanLogFrame = -999999;
+    if (slot == RangedFuseSlot::Slingshot && bestWithin == nullptr && curFrame >= 0 &&
+        (curFrame - sSlingshotScanLogFrame) >= 60) {
+        int logged = 0;
+        const int kLikelyCats[] = { ACTORCAT_ITEMACTION, ACTORCAT_PROP, ACTORCAT_MISC, ACTORCAT_NPC };
+        for (size_t idx = 0; idx < std::size(kLikelyCats) && logged < 20; ++idx) {
+            Actor* actor = play->actorCtx.actorLists[kLikelyCats[idx]].head;
+            while (actor != nullptr && logged < 20) {
+                Fuse::Log("[FuseDBG] SlingshotScan cat=%d id=0x%04X pos=(%.2f %.2f %.2f)\n", kLikelyCats[idx],
+                          actor->id, actor->world.pos.x, actor->world.pos.y, actor->world.pos.z);
+                ++logged;
+                actor = actor->next;
             }
         }
-        actor = next;
+        sSlingshotScanLogFrame = curFrame;
     }
+
+    Actor* projectile = bestSameRoom ? bestSameRoom : (bestWithin ? bestWithin : bestAny);
+    if (!projectile) {
+        return;
+    }
+
+    const float kBombableProximityRadius = 35.0f;
+    Actor* bombable = Fuse_FindNearbyBombable(play, &projectile->world.pos, kBombableProximityRadius);
+    if (!bombable) {
+        return;
+    }
+
+    Vec3f explodePos = Fuse_GetBombableAnchorPos(bombable, 25.0f);
+    Fuse_AdjustExplosionPosForBombable(bombable, &player->actor, &explodePos);
+    Fuse::Log("[FuseDBG] RangedBombableProx: slot=%s proj=(%.2f %.2f %.2f) bombable=0x%04X\n", RangedSlotName(slot),
+              projectile->world.pos.x, projectile->world.pos.y, projectile->world.pos.z, bombable->id);
+    Fuse_TriggerExplosion(play, explodePos, FuseExplosionSelfMode::DamagePlayer,
+                          Fuse_GetExplosionParams(materialId, explosionLevel), "RangedBombableProx");
+    Fuse::OnRangedProjectileHitFinalize(slot, "BombableProximity");
+    Actor_Kill(projectile);
 }
 
 void Fuse::OnGameFrameUpdate(PlayState* play) {
