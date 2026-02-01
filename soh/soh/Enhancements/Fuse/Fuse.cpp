@@ -50,6 +50,7 @@ struct FuseSeekState {
     Actor* targetActor = nullptr;
     bool loggedNoTarget = false;
     bool loggedStop = false;
+    bool loggedSteer = false;
 };
 
 static FuseSaveData gFuseSave; // persistent-ready (not serialized yet)
@@ -3748,9 +3749,27 @@ void Fuse::TickRangedProjectileSeek(PlayState* play) {
             }
 
             if (Fuse_Vec3fLength(newDir) > 0.0f) {
+                const float horiz = sqrtf((newDir.x * newDir.x) + (newDir.z * newDir.z));
+                const float speedXZ = speed * horiz;
+                const float velY = speed * newDir.y;
+                const float pitchDenom = std::max(speedXZ, 0.0001f);
+                const s16 yawS = Math_Atan2S(newDir.x, newDir.z);
+                const s16 pitchS = -Math_Atan2S(velY, pitchDenom);
+
+                proj->world.rot.y = yawS;
+                proj->shape.rot.y = yawS;
+                proj->world.rot.x = pitchS;
+                proj->shape.rot.x = pitchS;
+                proj->speedXZ = speedXZ;
+                proj->velocity.y = velY;
                 proj->velocity.x = newDir.x * speed;
-                proj->velocity.y = newDir.y * speed;
                 proj->velocity.z = newDir.z * speed;
+
+                if (Fuse_SeekDebugEnabled() && !state.loggedSteer) {
+                    Fuse::Log("[FuseDBG] SeekSteer proj=%p yaw=%d pitch=%d speedXZ=%.2f velY=%.2f\n", proj, yawS,
+                              pitchS, speedXZ, velY);
+                    state.loggedSteer = true;
+                }
             }
 
             proj = proj->next;
