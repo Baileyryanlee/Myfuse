@@ -782,7 +782,8 @@ void FuseMenuWindow::DrawElement() {
                 ImGui::TableSetupColumn("Qty", ImGuiTableColumnFlags_WidthFixed, 140.0f);
                 ImGui::TableHeadersRow();
 
-                const MaterialId inventoryMaterials[] = { MaterialId::Rock, MaterialId::Stick, MaterialId::FrozenShard };
+                const MaterialId inventoryMaterials[] = { MaterialId::Rock, MaterialId::Stick, MaterialId::FrozenShard,
+                                                          MaterialId::KeeseEye };
                 const size_t inventoryMaterialCount = sizeof(inventoryMaterials) / sizeof(inventoryMaterials[0]);
                 for (size_t index = 0; index < inventoryMaterialCount; index++) {
                     const MaterialId id = inventoryMaterials[index];
