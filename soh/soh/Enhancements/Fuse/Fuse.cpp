@@ -139,6 +139,34 @@ static inline float Fuse_Vec3fDot(const Vec3f& a, const Vec3f& b) {
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
+static inline Vec3f Fuse_GetArrowEffectiveDir(Actor* proj, float* outSpeed) {
+    const s16 yaw = proj->world.rot.y;
+    const float sinYaw = Math_SinS(yaw);
+    const float cosYaw = Math_CosS(yaw);
+    Vec3f effVel{ sinYaw * proj->speedXZ, proj->velocity.y, cosYaw * proj->speedXZ };
+    return Fuse_Vec3fNormalize(effVel, outSpeed);
+}
+
+static inline void Fuse_ApplyArrowSteer(Actor* proj, const Vec3f& newDir, float speed) {
+    const float horiz = sqrtf((newDir.x * newDir.x) + (newDir.z * newDir.z));
+    const float newSpeedXZ = speed * horiz;
+    const float newVelY = speed * newDir.y;
+    const s16 yawS = Math_Atan2S(newDir.x, newDir.z);
+    s16 pitchS = 0;
+    if (horiz > 0.0001f) {
+        pitchS = Math_Atan2S(-newDir.y, horiz);
+    }
+
+    proj->world.rot.y = yawS;
+    proj->shape.rot.y = yawS;
+    proj->world.rot.x = pitchS;
+    proj->shape.rot.x = pitchS;
+    proj->speedXZ = newSpeedXZ;
+    proj->velocity.y = newVelY;
+    proj->velocity.x = Math_SinS(yawS) * newSpeedXZ;
+    proj->velocity.z = Math_CosS(yawS) * newSpeedXZ;
+}
+
 bool Fuse_IsBombableActorId(s16 id) {
     switch (id) {
         case ACTOR_BG_BREAKWALL:
@@ -3628,9 +3656,8 @@ void Fuse::TickRangedProjectileSeek(PlayState* play) {
                     continue;
                 }
 
-                const Vec3f velocity = proj->velocity;
                 float speed = 0.0f;
-                const Vec3f currentDir = Fuse_Vec3fNormalize(velocity, &speed);
+                const Vec3f currentDir = Fuse_GetArrowEffectiveDir(proj, &speed);
                 if (speed <= 0.01f) {
                     state.hasAcquired = true;
                     state.isSeekingActive = false;
@@ -3714,7 +3741,7 @@ void Fuse::TickRangedProjectileSeek(PlayState* play) {
             }
 
             float speed = 0.0f;
-            const Vec3f currentDir = Fuse_Vec3fNormalize(proj->velocity, &speed);
+            const Vec3f currentDir = Fuse_GetArrowEffectiveDir(proj, &speed);
             if (speed <= 0.01f) {
                 stopSeeking(proj, state, "out_of_cone");
                 proj = proj->next;
@@ -3755,18 +3782,12 @@ void Fuse::TickRangedProjectileSeek(PlayState* play) {
                 const s16 yawS = Math_Atan2S(newDir.x, newDir.z);
                 const s16 pitchS = (horiz <= 0.0001f) ? 0 : Math_Atan2S(-newDir.y, horiz);
 
-                proj->world.rot.y = yawS;
-                proj->shape.rot.y = yawS;
-                proj->world.rot.x = pitchS;
-                proj->shape.rot.x = pitchS;
-                proj->speedXZ = speedXZ;
-                proj->velocity.y = velY;
-                proj->velocity.x = newDir.x * speed;
-                proj->velocity.z = newDir.z * speed;
+                Fuse_ApplyArrowSteer(proj, newDir, speed);
 
                 if (Fuse_SeekDebugEnabled() && !state.loggedSteer) {
-                    Fuse::Log("[FuseDBG] SeekSteer proj=%p yaw=%d pitch=%d speedXZ=%.2f velY=%.2f dir=(%.2f %.2f %.2f)\n",
-                              proj, yawS, pitchS, speedXZ, velY, newDir.x, newDir.y, newDir.z);
+                    Fuse::Log(
+                        "[FuseDBG] SeekSteer proj=%p dot=%.2f yaw=%d pitch=%d speedXZ=%.2f velY=%.2f dir=(%.2f %.2f %.2f)\n",
+                        proj, dot, yawS, pitchS, speedXZ, velY, newDir.x, newDir.y, newDir.z);
                     state.loggedSteer = true;
                 }
             }
