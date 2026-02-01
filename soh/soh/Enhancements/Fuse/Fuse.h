@@ -93,6 +93,7 @@ struct MaterialDebugOverride {
 void OnLoadGame(int32_t fileNum);
 void OnGameFrameUpdate(PlayState* play);
 void TickSwordBgExplosions(PlayState* play);
+void TickRangedProjectileSeek(PlayState* play);
 void TickRangedProjectileBombableProximity(PlayState* play);
     void OnSwordMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage, const Vec3f* impactPos);
     void OnHammerMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage, const Vec3f* impactPos);
