@@ -17,6 +17,7 @@ enum class ModifierId : uint16_t {
     RangeUp = 8,
     WideRange = 9,
     Explosion = 10,
+    Seek = 11,
 };
 
 struct ModifierSpec {

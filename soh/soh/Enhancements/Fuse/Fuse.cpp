@@ -35,12 +35,22 @@ extern "C" {
 #include "src/overlays/actors/ovl_En_Bom/z_en_bom.h"
 #include "src/overlays/actors/ovl_En_Tite/z_en_tite.h"
 #include "src/overlays/actors/ovl_En_Zf/z_en_zf.h"
+#include "src/overlays/actors/ovl_En_Arrow/z_en_arrow.h"
 extern "C" PlayState* gPlayState;
 using Fuse::MaterialDebugOverride;
 
 // -----------------------------------------------------------------------------
 // Module-local state
 // -----------------------------------------------------------------------------
+
+struct FuseSeekState {
+    int acquireDelayFramesRemaining = 0;
+    bool hasAcquired = false;
+    bool isSeekingActive = false;
+    Actor* targetActor = nullptr;
+    bool loggedNoTarget = false;
+    bool loggedStop = false;
+};
 
 static FuseSaveData gFuseSave; // persistent-ready (not serialized yet)
 static FuseRuntimeState gFuseRuntime;
@@ -78,6 +88,7 @@ static constexpr int32_t kFreezeNoReapplyFrames = 12;
 static std::unordered_map<Actor*, Vec3f> sFuseFrozenPos;
 static std::unordered_map<Actor*, bool> sFuseFrozenPinned;
 static std::unordered_map<uintptr_t, Vec3f> sProjPrevPos;
+static std::unordered_map<Actor*, FuseSeekState> sSeekStates;
 static int gLastSwordBgExplodeFrame = -999;
 static int gLastSwordActorExplodeFrame = -999999;
 
@@ -102,6 +113,30 @@ static inline bool Fuse_LogMvpEnabled() {
             Fuse::Log(__VA_ARGS__);                                                                                  \
         }                                                                                                            \
     } while (0)
+
+static inline bool Fuse_SeekDebugEnabled() {
+    return CVarGetInteger("gFuseSeekDebug", 0) != 0;
+}
+
+static inline float Fuse_Vec3fLength(const Vec3f& value) {
+    return sqrtf(value.x * value.x + value.y * value.y + value.z * value.z);
+}
+
+static inline Vec3f Fuse_Vec3fNormalize(const Vec3f& value, float* outLength = nullptr) {
+    const float length = Fuse_Vec3fLength(value);
+    if (outLength) {
+        *outLength = length;
+    }
+    if (length <= 0.0001f) {
+        return Vec3f{ 0.0f, 0.0f, 0.0f };
+    }
+    const float inv = 1.0f / length;
+    return Vec3f{ value.x * inv, value.y * inv, value.z * inv };
+}
+
+static inline float Fuse_Vec3fDot(const Vec3f& a, const Vec3f& b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
 
 bool Fuse_IsBombableActorId(s16 id) {
     switch (id) {
@@ -1041,7 +1076,7 @@ static inline int RangedSlotToIndex(RangedFuseSlot slot) {
 
 static bool IsMaterialIdInRange(MaterialId id) {
     const int value = static_cast<int>(id);
-    return value >= static_cast<int>(MaterialId::None) && value <= static_cast<int>(MaterialId::Bomb);
+    return value >= static_cast<int>(MaterialId::None) && value <= static_cast<int>(MaterialId::KeeseEye);
 }
 
 #ifndef NDEBUG
@@ -1893,6 +1928,20 @@ static bool Fuse_ShieldHasModifier(PlayState* play, ModifierId modifierId, int* 
     return true;
 }
 
+static void Fuse_PruneSeekStates(PlayState* play) {
+    if (!play || sSeekStates.empty()) {
+        return;
+    }
+
+    for (auto it = sSeekStates.begin(); it != sSeekStates.end();) {
+        if (!IsActorAliveInPlay(play, it->first)) {
+            it = sSeekStates.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
 extern "C" bool Fuse_ShieldHasNegateKnockback(PlayState* play, int* outMaterialId, int* outDurabilityCur,
                                               int* outDurabilityMax, uint8_t* outLevel) {
     return Fuse_ShieldHasModifier(play, ModifierId::NegateKnockback, outMaterialId, outDurabilityCur, outDurabilityMax,
@@ -2218,9 +2267,21 @@ static bool Fuse_ModifierAppliesForItem(ModifierId id, FuseItemType itemType) {
                    itemType == FuseItemType::Boomerang || itemType == FuseItemType::Hammer ||
                    itemType == FuseItemType::Arrows || itemType == FuseItemType::Slingshot ||
                    itemType == FuseItemType::Hookshot;
+        case ModifierId::Seek:
+            return itemType == FuseItemType::Arrows || itemType == FuseItemType::Slingshot;
         default:
             return true;
     }
+}
+
+static bool Fuse_MaterialHasSeek(MaterialId materialId) {
+    const MaterialDef* def = Fuse::GetMaterialDef(materialId);
+    if (!def) {
+        return false;
+    }
+
+    uint8_t level = 0;
+    return HasModifier(def->modifiers, def->modifierCount, ModifierId::Seek, &level) && level > 0;
 }
 
 uint8_t Fuse::GetMaterialModifierLevel(MaterialId materialId, FuseItemType itemType, ModifierId id) {
@@ -2801,6 +2862,10 @@ Fuse::FuseResult Fuse::TryFuseSword(MaterialId id) {
         return FuseResult::InvalidMaterial;
     }
 
+    if (Fuse_MaterialHasSeek(id)) {
+        return FuseResult::NotAllowed;
+    }
+
     const int preConsumeCount = (id == MaterialId::DekuNut) ? Fuse::GetMaterialCount(id) : -1;
 
     if (!Fuse::ConsumeMaterial(id, 1)) {
@@ -2842,6 +2907,10 @@ Fuse::FuseResult Fuse::TryFuseBoomerang(MaterialId id) {
         return FuseResult::InvalidMaterial;
     }
 
+    if (Fuse_MaterialHasSeek(id)) {
+        return FuseResult::NotAllowed;
+    }
+
     if (!Fuse::ConsumeMaterial(id, 1)) {
         return FuseResult::NotEnoughMaterial;
     }
@@ -2874,6 +2943,10 @@ Fuse::FuseResult Fuse::TryFuseHammer(MaterialId id) {
     const MaterialDef* def = Fuse::GetMaterialDef(id);
     if (!def) {
         return FuseResult::InvalidMaterial;
+    }
+
+    if (Fuse_MaterialHasSeek(id)) {
+        return FuseResult::NotAllowed;
     }
 
     if (!Fuse::ConsumeMaterial(id, 1)) {
@@ -2962,6 +3035,10 @@ Fuse::FuseResult Fuse::TryQueueRangedFuse(RangedFuseSlot slot, MaterialId mat, c
 
     if (!Fuse::GetMaterialDef(mat)) {
         return FuseResult::InvalidMaterial;
+    }
+
+    if (slot == RangedFuseSlot::Hookshot && Fuse_MaterialHasSeek(mat)) {
+        return FuseResult::NotAllowed;
     }
 
     if (IsRangedActiveBusy(slot)) {
@@ -3136,6 +3213,9 @@ void Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot slot, const char* reason
               newCur, maxDurability, reason ? reason : "None");
 
     Fuse::ClearActiveRangedFuse(slot, reason);
+    if (gPlayState) {
+        Fuse_PruneSeekStates(gPlayState);
+    }
 }
 
 void Fuse::OnHookshotShotStarted(const char* reason) {
@@ -3313,6 +3393,7 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
     sFuseFrozenOrigGravity.clear();
     sFuseFrozenPos.clear();
     sFuseFrozenPinned.clear();
+    sSeekStates.clear();
     sShatterImpulseUntilFrame.clear();
     sShatterImpulseDir.clear();
     sShatterImpulseYaw.clear();
@@ -3471,6 +3552,214 @@ void Fuse::TickSwordBgExplosions(PlayState* play) {
               broke ? " (broke)" : "");
 }
 
+void Fuse::TickRangedProjectileSeek(PlayState* play) {
+    if (!play) {
+        return;
+    }
+
+    const float seekRadius = CVarGetFloat("gFuseSeekRadius", 900.0f);
+    if (seekRadius <= 1.0f) {
+        return;
+    }
+
+    const float seekDotMin = std::clamp(CVarGetFloat("gFuseSeekDotMin", 0.65f), -1.0f, 1.0f);
+    const float seekMaxTurnDeg = std::max(0.0f, CVarGetFloat("gFuseSeekMaxTurnDeg", 6.0f));
+    const float seekTurnScaleFar = std::clamp(CVarGetFloat("gFuseSeekTurnScaleFar", 0.4f), 0.0f, 1.0f);
+    const int seekAcquireDelayFrames = std::max(0, CVarGetInteger("gFuseSeekAcquireDelay", 2));
+
+    const int curFrame = play->gameplayFrames;
+    const bool shouldCleanup = (curFrame >= 0) && (curFrame % 120 == 0);
+    std::unordered_set<Actor*> liveProjectileKeys;
+    if (shouldCleanup) {
+        liveProjectileKeys.reserve(sSeekStates.size());
+    }
+
+    auto stopSeeking = [&](Actor* proj, FuseSeekState& state, const char* reason) {
+        state.isSeekingActive = false;
+        state.hasAcquired = true;
+        state.targetActor = nullptr;
+        if (Fuse_SeekDebugEnabled() && !state.loggedStop) {
+            Fuse::Log("[FuseDBG] SeekStop proj=%p reason=%s\n", proj, reason);
+            state.loggedStop = true;
+        }
+    };
+
+    for (int i = 0; i < ACTORCAT_MAX; ++i) {
+        Actor* proj = play->actorCtx.actorLists[i].head;
+        while (proj != nullptr) {
+            if (proj->id != ACTOR_EN_ARROW) {
+                proj = proj->next;
+                continue;
+            }
+
+            if (shouldCleanup) {
+                liveProjectileKeys.insert(proj);
+            }
+
+            const bool isSeed = (proj->params == ARROW_SEED);
+            const RangedFuseSlot slot = isSeed ? RangedFuseSlot::Slingshot : RangedFuseSlot::Arrows;
+            const RangedFuseState& active = GetRangedActive(slot);
+            if (active.materialId == MaterialId::None || active.durabilityCur <= 0 ||
+                !Fuse_MaterialHasSeek(active.materialId)) {
+                sSeekStates.erase(proj);
+                proj = proj->next;
+                continue;
+            }
+
+            auto [it, inserted] = sSeekStates.emplace(proj, FuseSeekState{});
+            FuseSeekState& state = it->second;
+            if (inserted) {
+                state.acquireDelayFramesRemaining = seekAcquireDelayFrames;
+            }
+
+            if (!state.hasAcquired) {
+                if (state.acquireDelayFramesRemaining > 0) {
+                    --state.acquireDelayFramesRemaining;
+                    proj = proj->next;
+                    continue;
+                }
+
+                const Vec3f velocity = proj->velocity;
+                float speed = 0.0f;
+                const Vec3f currentDir = Fuse_Vec3fNormalize(velocity, &speed);
+                if (speed <= 0.01f) {
+                    state.hasAcquired = true;
+                    state.isSeekingActive = false;
+                    proj = proj->next;
+                    continue;
+                }
+
+                Actor* bestTarget = nullptr;
+                float bestScore = 0.0f;
+                float bestDist = 0.0f;
+                float bestDot = -1.0f;
+
+                Actor* actor = play->actorCtx.actorLists[ACTORCAT_ENEMY].head;
+                while (actor != nullptr) {
+                    if (!IsActorAliveInPlay(play, actor) || !FuseBash_IsEnemyActor(actor)) {
+                        actor = actor->next;
+                        continue;
+                    }
+
+                    const Vec3f toTarget{ actor->focus.pos.x - proj->world.pos.x,
+                                          actor->focus.pos.y - proj->world.pos.y,
+                                          actor->focus.pos.z - proj->world.pos.z };
+                    const float dist = Fuse_Vec3fLength(toTarget);
+                    if (dist > seekRadius || dist <= 0.01f) {
+                        actor = actor->next;
+                        continue;
+                    }
+
+                    const Vec3f desiredDir = Fuse_Vec3fNormalize(toTarget);
+                    const float dot = Fuse_Vec3fDot(currentDir, desiredDir);
+                    if (dot < seekDotMin) {
+                        actor = actor->next;
+                        continue;
+                    }
+
+                    const float score = (dot * dot) / (dist * dist + (200.0f * 200.0f));
+                    if (!bestTarget || score > bestScore) {
+                        bestTarget = actor;
+                        bestScore = score;
+                        bestDist = dist;
+                        bestDot = dot;
+                    }
+
+                    actor = actor->next;
+                }
+
+                state.hasAcquired = true;
+                state.targetActor = bestTarget;
+                state.isSeekingActive = (bestTarget != nullptr);
+                if (bestTarget && Fuse_SeekDebugEnabled()) {
+                    Fuse::Log("[FuseDBG] SeekAcquire proj=%p target=%p dist=%d dot=%.2f\n", proj, bestTarget,
+                              static_cast<int>(bestDist), bestDot);
+                } else if (!bestTarget && Fuse_SeekDebugEnabled() && !state.loggedNoTarget) {
+                    Fuse::Log("[FuseDBG] SeekNoTarget proj=%p\n", proj);
+                    state.loggedNoTarget = true;
+                }
+
+                proj = proj->next;
+                continue;
+            }
+
+            if (!state.isSeekingActive || !state.targetActor) {
+                proj = proj->next;
+                continue;
+            }
+
+            if (!IsActorAliveInPlay(play, state.targetActor)) {
+                stopSeeking(proj, state, "target_dead");
+                proj = proj->next;
+                continue;
+            }
+
+            const Vec3f toTarget{ state.targetActor->focus.pos.x - proj->world.pos.x,
+                                  state.targetActor->focus.pos.y - proj->world.pos.y,
+                                  state.targetActor->focus.pos.z - proj->world.pos.z };
+            const float dist = Fuse_Vec3fLength(toTarget);
+            if (dist > seekRadius) {
+                stopSeeking(proj, state, "out_of_range");
+                proj = proj->next;
+                continue;
+            }
+
+            float speed = 0.0f;
+            const Vec3f currentDir = Fuse_Vec3fNormalize(proj->velocity, &speed);
+            if (speed <= 0.01f) {
+                stopSeeking(proj, state, "out_of_cone");
+                proj = proj->next;
+                continue;
+            }
+
+            const Vec3f desiredDir = Fuse_Vec3fNormalize(toTarget);
+            const float dot = Fuse_Vec3fDot(currentDir, desiredDir);
+            if (dot < 0.0f) {
+                stopSeeking(proj, state, "behind");
+                proj = proj->next;
+                continue;
+            }
+            if (dot < seekDotMin) {
+                stopSeeking(proj, state, "out_of_cone");
+                proj = proj->next;
+                continue;
+            }
+
+            const float t = std::clamp(dist / seekRadius, 0.0f, 1.0f);
+            const float turnScale = 1.0f - (1.0f - seekTurnScaleFar) * t;
+            constexpr float kDegToRad = 3.1415926535f / 180.0f;
+            const float maxTurnRad = (seekMaxTurnDeg * kDegToRad) * turnScale;
+            const float angle = acosf(std::clamp(dot, -1.0f, 1.0f));
+            Vec3f newDir = desiredDir;
+            if (angle > maxTurnRad && maxTurnRad > 0.0f) {
+                const float a = maxTurnRad / angle;
+                const Vec3f blended{ currentDir.x * (1.0f - a) + desiredDir.x * a,
+                                     currentDir.y * (1.0f - a) + desiredDir.y * a,
+                                     currentDir.z * (1.0f - a) + desiredDir.z * a };
+                newDir = Fuse_Vec3fNormalize(blended);
+            }
+
+            if (Fuse_Vec3fLength(newDir) > 0.0f) {
+                proj->velocity.x = newDir.x * speed;
+                proj->velocity.y = newDir.y * speed;
+                proj->velocity.z = newDir.z * speed;
+            }
+
+            proj = proj->next;
+        }
+    }
+
+    if (shouldCleanup && !sSeekStates.empty()) {
+        for (auto it = sSeekStates.begin(); it != sSeekStates.end();) {
+            if (liveProjectileKeys.find(it->first) == liveProjectileKeys.end()) {
+                it = sSeekStates.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+}
+
 void Fuse::TickRangedProjectileBombableProximity(PlayState* play) {
     if (!play) {
         return;
@@ -3617,6 +3906,7 @@ void Fuse::OnGameFrameUpdate(PlayState* play) {
     ProcessPendingStuns(play);
     UpdateRangedFuseLifecycle(play);
     TickSwordBgExplosions(play);
+    TickRangedProjectileSeek(play);
     TickRangedProjectileBombableProximity(play);
 
     if (play != nullptr) {
