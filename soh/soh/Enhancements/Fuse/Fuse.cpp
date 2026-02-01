@@ -81,6 +81,28 @@ static std::unordered_map<uintptr_t, Vec3f> sProjPrevPos;
 static int gLastSwordBgExplodeFrame = -999;
 static int gLastSwordActorExplodeFrame = -999999;
 
+static inline bool Fuse_LogDbgEnabled() {
+    return CVarGetInteger("gFuseLogDbg", 0) != 0;
+}
+
+static inline bool Fuse_LogMvpEnabled() {
+    return CVarGetInteger("gFuseLogMvp", 0) != 0;
+}
+
+#define FUSE_LOG_DBG(...)                                                                                           \
+    do {                                                                                                             \
+        if (Fuse_LogDbgEnabled()) {                                                                                  \
+            Fuse::Log(__VA_ARGS__);                                                                                  \
+        }                                                                                                            \
+    } while (0)
+
+#define FUSE_LOG_MVP(...)                                                                                           \
+    do {                                                                                                             \
+        if (Fuse_LogMvpEnabled()) {                                                                                  \
+            Fuse::Log(__VA_ARGS__);                                                                                  \
+        }                                                                                                            \
+    } while (0)
+
 bool Fuse_IsBombableActorId(s16 id) {
     switch (id) {
         case ACTOR_BG_BREAKWALL:
@@ -164,7 +186,7 @@ extern "C" void Fuse_AdjustExplosionPosForBombable(const Actor* victim, const Ac
         ioPos->y = victim->world.pos.y + 20.0f;
     }
 
-    Fuse::Log("[FuseDBG] ExplodeNudge: victim=0x%04X from=(%.2f %.2f %.2f) to=(%.2f %.2f %.2f)\n", victim->id,
+    FUSE_LOG_DBG("[FuseDBG] ExplodeNudge: victim=0x%04X from=(%.2f %.2f %.2f) to=(%.2f %.2f %.2f)\n", victim->id,
               from.x, from.y, from.z, ioPos->x, ioPos->y, ioPos->z);
 }
 static constexpr int kDekuStunInitialDelayFrames = 4;
@@ -388,7 +410,7 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
             if (it != sFreezeAppliedFrame.end()) {
                 dt = frame - it->second;
             }
-            Fuse::Log("[FuseDBG] FreezeShatterSkip: reason=RecentlyApplied frame=%d victim=%p dt=%d\n", frame,
+            FUSE_LOG_DBG("[FuseDBG] FreezeShatterSkip: reason=RecentlyApplied frame=%d victim=%p dt=%d\n", frame,
                       (void*)victim, dt);
         }
         return false;
@@ -396,13 +418,13 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
 
     RemoveDeferredFreezeRequestsFor(victim);
     ClearFuseFreeze(victim);
-    Fuse::Log("[FuseDBG] ShatterUnfreeze: victim=%p restored_grav=%.2f\n", (void*)victim, victim->gravity);
+    FUSE_LOG_DBG("[FuseDBG] ShatterUnfreeze: victim=%p restored_grav=%.2f\n", (void*)victim, victim->gravity);
     if (play) {
         sFreezeLastShatterFrame[victim] = play->gameplayFrames;
         sFreezeNoReapplyUntilFrame[victim] = play->gameplayFrames + kFreezeNoReapplyFrames;
     }
 
-    Fuse::Log("[FuseDBG] ShatterKB pre: victim=%p vel=(%.2f,%.2f,%.2f) spd=%.2f grav=%.2f\n", (void*)victim,
+    FUSE_LOG_DBG("[FuseDBG] ShatterKB pre: victim=%p vel=(%.2f,%.2f,%.2f) spd=%.2f grav=%.2f\n", (void*)victim,
               victim->velocity.x, victim->velocity.y, victim->velocity.z, victim->speedXZ, victim->gravity);
 
     int materialAtk = 0;
@@ -427,7 +449,7 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
         }
     }
 
-    Fuse::Log("[FuseDBG] ShatterKB postDamage: victim=%p vel=(%.2f,%.2f,%.2f) spd=%.2f grav=%.2f\n", (void*)victim,
+    FUSE_LOG_DBG("[FuseDBG] ShatterKB postDamage: victim=%p vel=(%.2f,%.2f,%.2f) spd=%.2f grav=%.2f\n", (void*)victim,
               victim->velocity.x, victim->velocity.y, victim->velocity.z, victim->speedXZ, victim->gravity);
 
     if (frame >= 0) {
@@ -435,7 +457,7 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
         sFreezeLastShatterFrame[victim] = frame;
     }
 
-    Fuse::Log("[FuseMVP] FreezeShatter: src=%s victim=%p item=%d mat=%d base=%d matAtk=%d mult=%.2f final=%d\n",
+    FUSE_LOG_MVP("[FuseMVP] FreezeShatter: src=%s victim=%p item=%d mat=%d base=%d matAtk=%d mult=%.2f final=%d\n",
               srcLabel ? srcLabel : "unknown", (void*)victim, itemId, static_cast<int>(materialId), baseWeaponDamage,
               materialAtk, damageMult, finalDamage);
 
@@ -455,7 +477,7 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
     }
 
     Vec3f away = { 0.0f, 0.0f, 1.0f };
-    Fuse::Log("[FuseDBG] ShatterSrc: src=%s victim=%p attacker=%p source=%p usePlayer=%d\n",
+    FUSE_LOG_DBG("[FuseDBG] ShatterSrc: src=%s victim=%p attacker=%p source=%p usePlayer=%d\n",
               srcLabel ? srcLabel : "unknown", (void*)victim, (void*)attacker, (void*)sourceActor,
               usePlayerAsSource ? 1 : 0);
     if (sourceActor != nullptr) {
@@ -486,7 +508,7 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
         float dz1 = pz1 - distRef->world.pos.z;
         float dist1 = dx1 * dx1 + dz1 * dz1;
 
-        Fuse::Log("[FuseDBG] ShatterDirCheck: src=%s victim=%p ref=%p dist0=%.2f dist1=%.2f dir=(%.2f,%.2f)\n",
+        FUSE_LOG_DBG("[FuseDBG] ShatterDirCheck: src=%s victim=%p ref=%p dist0=%.2f dist1=%.2f dir=(%.2f,%.2f)\n",
                   srcLabel ? srcLabel : "unknown", (void*)victim, (void*)distRef, dist0, dist1, kbDir.x, kbDir.z);
     }
 
@@ -498,7 +520,7 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
         sShatterImpulseDir[victim] = { kbDir.x, 0.0f, kbDir.z };
         sShatterImpulseUntilFrame[victim] = play->gameplayFrames + kShatterImpulseFrames;
         sShatterImpulseYaw[victim] = knockbackYaw;
-        Fuse::Log("[FuseDBG] ShatterImpulse start: victim=%p until=%d step=%.2f\n", (void*)victim,
+        FUSE_LOG_DBG("[FuseDBG] ShatterImpulse start: victim=%p until=%d step=%.2f\n", (void*)victim,
                   sShatterImpulseUntilFrame[victim], kShatterImpulseStep);
     }
 
@@ -509,11 +531,11 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
     victim->world.rot.y = knockbackYaw;
     victim->shape.rot.y = victim->world.rot.y;
 
-    Fuse::Log("[FuseDBG] ShatterKB applied: victim=%p source=%p flip=1 dir=(%.2f,%.2f) vel=(%.2f,%.2f,%.2f) spd=%.2f "
+    FUSE_LOG_DBG("[FuseDBG] ShatterKB applied: victim=%p source=%p flip=1 dir=(%.2f,%.2f) vel=(%.2f,%.2f,%.2f) spd=%.2f "
               "yaw=%d\n",
               (void*)victim, (void*)sourceActor, kbDir.x, kbDir.z, victim->velocity.x, victim->velocity.y,
               victim->velocity.z, victim->speedXZ, knockbackYaw);
-    Fuse::Log("[FuseMVP] FreezeShatterKB: src=%s victim=%p vel=(%.2f,%.2f,%.2f) spd=%.2f\n",
+    FUSE_LOG_MVP("[FuseMVP] FreezeShatterKB: src=%s victim=%p vel=(%.2f,%.2f,%.2f) spd=%.2f\n",
               srcLabel ? srcLabel : "unknown", (void*)victim, victim->velocity.x, victim->velocity.y,
               victim->velocity.z, victim->speedXZ);
 
@@ -576,11 +598,11 @@ extern "C" float Fuse_GetBoomerangWideRangeScale(int32_t* outLevel) {
 }
 
 extern "C" void Fuse_LogSwordRangeUp(int level, float scale) {
-    Fuse::Log("[FuseDBG] SwordRangeUp: level=%d scale=%.2f\n", level, static_cast<double>(scale));
+    FUSE_LOG_DBG("[FuseDBG] SwordRangeUp: level=%d scale=%.2f\n", level, static_cast<double>(scale));
 }
 
 extern "C" void Fuse_LogBoomerangWideRange(int level, float scale) {
-    Fuse::Log("[FuseDBG] BoomerangWideRange: level=%d scale=%.2f\n", level, static_cast<double>(scale));
+    FUSE_LOG_DBG("[FuseDBG] BoomerangWideRange: level=%d scale=%.2f\n", level, static_cast<double>(scale));
 }
 
 // -----------------------------------------------------------------------------
@@ -606,7 +628,7 @@ bool ConsumeDekuNutAmmo(int amount) {
     }
 
     const int cur = GetDekuNutAmmoCount();
-    Fuse::Log("[FuseMVP] Consume DekuNut: cur=%d amount=%d\n", cur, amount);
+    FUSE_LOG_MVP("[FuseMVP] Consume DekuNut: cur=%d amount=%d\n", cur, amount);
 
     if (cur < amount) {
         return false;
@@ -619,7 +641,7 @@ bool ConsumeDekuNutAmmo(int amount) {
         Inventory_ChangeAmmo(ITEM_NUT, delta);
     }
 
-    Fuse::Log("[FuseMVP] Consume DekuNut: new=%d\n", newCount);
+    FUSE_LOG_MVP("[FuseMVP] Consume DekuNut: new=%d\n", newCount);
     return true;
 }
 
@@ -630,11 +652,11 @@ bool ConsumeDekuStickAmmo(int amount) {
 
     const int cur = GetDekuStickAmmoCount();
     if (cur < amount) {
-        Fuse::Log("[FuseDBG] Consume Stick FAILED: cur=%d need=%d\n", cur, amount);
+        FUSE_LOG_DBG("[FuseDBG] Consume Stick FAILED: cur=%d need=%d\n", cur, amount);
         return false;
     }
 
-    Fuse::Log("[FuseMVP] Consume Stick: cur=%d amount=%d\n", cur, amount);
+    FUSE_LOG_MVP("[FuseMVP] Consume Stick: cur=%d amount=%d\n", cur, amount);
 
     const int newCount = std::max(0, cur - amount);
     const int delta = newCount - cur;
@@ -653,11 +675,11 @@ bool ConsumeBombAmmo(int amount) {
 
     const int cur = GetBombAmmoCount();
     if (cur < amount) {
-        Fuse::Log("[FuseDBG] Consume Bomb FAILED: cur=%d need=%d\n", cur, amount);
+        FUSE_LOG_DBG("[FuseDBG] Consume Bomb FAILED: cur=%d need=%d\n", cur, amount);
         return false;
     }
 
-    Fuse::Log("[FuseMVP] Consume Bomb: cur=%d amount=%d\n", cur, amount);
+    FUSE_LOG_MVP("[FuseMVP] Consume Bomb: cur=%d amount=%d\n", cur, amount);
 
     const int newCount = std::max(0, cur - amount);
     const int delta = newCount - cur;
@@ -746,13 +768,13 @@ Actor* SpawnVanillaDekuNutFlash(PlayState* play, const Vec3f& pos, int srcItemId
 
     if (CVarGetInteger(CVAR_ENHANCEMENT("FuseDekuNutSpawn"), 1) == 0) {
         const char* srcLabel = GetStunSourceLabel(srcItemId);
-        Fuse::Log("[FuseDBG] DekuNutSpawnDisabled src=%s frame=%d\n", srcLabel, play->gameplayFrames);
+        FUSE_LOG_DBG("[FuseDBG] DekuNutSpawnDisabled src=%s frame=%d\n", srcLabel, play->gameplayFrames);
         return nullptr;
     }
 
     Actor* flashActor = EnArrow_TriggerDekuNutEffect(play, &pos);
     if (flashActor != nullptr) {
-        Fuse::Log("[FuseDBG] DekuNutEffect: vanilla_call ok frame=%d src=%s\n", play->gameplayFrames,
+        FUSE_LOG_DBG("[FuseDBG] DekuNutEffect: vanilla_call ok frame=%d src=%s\n", play->gameplayFrames,
                   GetStunSourceLabel(srcItemId));
     }
     return flashActor;
@@ -766,18 +788,18 @@ void ApplyDekuNutStunVanilla(PlayState* play, Player* player, Actor* victim, uin
     }
 
     Vec3f spawnPos = victim->world.pos;
-    Fuse::Log("[FuseDBG] DekuNutVanilla: trigger frame=%d victim=%p params=%d radius=%.2f pos=(%.2f, %.2f, %.2f)\n",
+    FUSE_LOG_DBG("[FuseDBG] DekuNutVanilla: trigger frame=%d victim=%p params=%d radius=%.2f pos=(%.2f, %.2f, %.2f)\n",
               play->gameplayFrames, (void*)victim, kVanillaDekuNutParams, kVanillaDekuNutRadius, spawnPos.x, spawnPos.y,
               spawnPos.z);
-    Fuse::Log("[FuseMVP] DekuNut stun: using vanilla nut effect frame=%d victim=%p\n", play->gameplayFrames,
+    FUSE_LOG_MVP("[FuseMVP] DekuNut stun: using vanilla nut effect frame=%d victim=%p\n", play->gameplayFrames,
               (void*)victim);
 
     Actor* flashActor = SpawnVanillaDekuNutFlash(play, spawnPos, srcItemId);
 
     if (flashActor) {
-        Fuse::Log("[FuseMVP] DekuNut stun: spawned actor id=0x%04X ptr=%p\n", flashActor->id, (void*)flashActor);
+        FUSE_LOG_MVP("[FuseMVP] DekuNut stun: spawned actor id=0x%04X ptr=%p\n", flashActor->id, (void*)flashActor);
     } else {
-        Fuse::Log("[FuseMVP] DekuNut stun: spawn failed\n");
+        FUSE_LOG_MVP("[FuseMVP] DekuNut stun: spawn failed\n");
     }
 }
 
@@ -895,13 +917,13 @@ void ApplyIceArrowFreeze(PlayState* play, Actor* victim, uint8_t level) {
     }
 
     if (IsFreezeReapplyBlocked(play, victim)) {
-        Fuse::Log("[FuseDBG] FreezeSkip: reason=NoReapplyWindow frame=%d victim=%p\n", play ? play->gameplayFrames : -1,
+        FUSE_LOG_DBG("[FuseDBG] FreezeSkip: reason=NoReapplyWindow frame=%d victim=%p\n", play ? play->gameplayFrames : -1,
                   (void*)victim);
         return;
     }
 
     if (WasFreezeRecentlyShattered(play, victim)) {
-        Fuse::Log("[FuseDBG] FreezeSkip: reason=RecentlyShattered frame=%d victim=%p\n",
+        FUSE_LOG_DBG("[FuseDBG] FreezeSkip: reason=RecentlyShattered frame=%d victim=%p\n",
                   play ? play->gameplayFrames : -1, (void*)victim);
         return;
     }
@@ -957,7 +979,7 @@ void ApplyIceArrowFreeze(PlayState* play, Actor* victim, uint8_t level) {
         }
     }
 
-    Fuse::Log("[FuseDBG] FreezeApply: victim=%p duration=%d mat=FrozenShard\n", (void*)victim, duration);
+    FUSE_LOG_DBG("[FuseDBG] FreezeApply: victim=%p duration=%d mat=FrozenShard\n", (void*)victim, duration);
 }
 
 void ApplyFuseKnockback(PlayState* play, Player* player, Actor* victim, uint8_t level, const char* itemLabel,
@@ -967,7 +989,7 @@ void ApplyFuseKnockback(PlayState* play, Player* player, Actor* victim, uint8_t 
     }
 
     if (victim->id == ACTOR_EN_SKB) {
-        Fuse::Log("[FuseDBG] knockback_skip_blacklist: event=%s item=%s victim=%p id=0x%04X\n",
+        FUSE_LOG_DBG("[FuseDBG] knockback_skip_blacklist: event=%s item=%s victim=%p id=0x%04X\n",
                   eventLabel ? eventLabel : "hit", itemLabel ? itemLabel : "unknown", (void*)victim, victim->id);
         return;
     }
@@ -998,7 +1020,7 @@ void ApplyFuseKnockback(PlayState* play, Player* player, Actor* victim, uint8_t 
     victim->world.rot.y = Math_Atan2S(dir.x, dir.z);
     victim->shape.rot.y = victim->world.rot.y;
 
-    Fuse::Log("[FuseDBG] Knockback: event=%s item=%s mat=%d lvl=%u victim=%p dura=%d/%d v=(%.2f,%.2f,%.2f)\n",
+    FUSE_LOG_DBG("[FuseDBG] Knockback: event=%s item=%s mat=%d lvl=%u victim=%p dura=%d/%d v=(%.2f,%.2f,%.2f)\n",
               eventLabel ? eventLabel : "hit", itemLabel ? itemLabel : "unknown", static_cast<int>(materialId),
               static_cast<unsigned int>(level), (void*)victim, curDurability, maxDurability, victim->velocity.x,
               victim->velocity.y, victim->velocity.z);
@@ -1055,7 +1077,7 @@ static void DebugAssertDurabilityValues(int durabilityCur, int durabilityMax) {
 static RangedFuseState& GetRangedQueued(RangedFuseSlot slot) {
     const int idx = RangedSlotToIndex(slot);
     if (idx < 0) {
-        Fuse::Log("[FuseDBG] RangedSlotInvalid slot=%d\n", static_cast<int>(slot));
+        FUSE_LOG_DBG("[FuseDBG] RangedSlotInvalid slot=%d\n", static_cast<int>(slot));
         return gRangedQueued[0];
     }
 #ifndef NDEBUG
@@ -1067,7 +1089,7 @@ static RangedFuseState& GetRangedQueued(RangedFuseSlot slot) {
 static RangedFuseState& GetRangedActive(RangedFuseSlot slot) {
     const int idx = RangedSlotToIndex(slot);
     if (idx < 0) {
-        Fuse::Log("[FuseDBG] RangedSlotInvalid slot=%d\n", static_cast<int>(slot));
+        FUSE_LOG_DBG("[FuseDBG] RangedSlotInvalid slot=%d\n", static_cast<int>(slot));
         return gRangedActive[0];
     }
 #ifndef NDEBUG
@@ -1096,7 +1118,7 @@ bool IsRangedActiveBusy(RangedFuseSlot slot) {
 
 void LogRangedBusy(RangedFuseSlot slot, const char* reason) {
     const RangedFuseState& active = GetRangedActive(slot);
-    Fuse::Log("[FuseDBG] RangedBusy slot=%s activeMat=%d reason=%s\n", RangedSlotName(slot),
+    FUSE_LOG_DBG("[FuseDBG] RangedBusy slot=%s activeMat=%d reason=%s\n", RangedSlotName(slot),
               static_cast<int>(active.materialId), reason ? reason : "None");
 }
 
@@ -1128,19 +1150,19 @@ int GetGameplayFrame() {
 void LogRangedEvent(const char* tag, RangedFuseSlot slot, MaterialId mat, const char* reason) {
     const int matId = static_cast<int>(mat);
     const int count = (mat != MaterialId::None) ? Fuse::GetMaterialCount(mat) : -1;
-    Fuse::Log("[FuseDBG] %s: slot=%s mat=%d count=%d reason=%s\n", tag, RangedSlotName(slot), matId, count,
+    FUSE_LOG_DBG("[FuseDBG] %s: slot=%s mat=%d count=%d reason=%s\n", tag, RangedSlotName(slot), matId, count,
               reason ? reason : "None");
 }
 
 void LogRangedActiveEvent(const char* tag, RangedFuseSlot slot) {
     const RangedFuseState& active = GetRangedActive(slot);
-    Fuse::Log("[FuseDBG] %s slot=%s mat=%d dura=%d/%d\n", tag, RangedSlotName(slot),
+    FUSE_LOG_DBG("[FuseDBG] %s slot=%s mat=%d dura=%d/%d\n", tag, RangedSlotName(slot),
               static_cast<int>(active.materialId), active.durabilityCur, active.durabilityMax);
 }
 
 void LogRangedQueuedEvent(const char* tag, RangedFuseSlot slot) {
     const RangedFuseState& queued = GetRangedQueued(slot);
-    Fuse::Log("[FuseDBG] %s slot=%s mat=%d dura=%d/%d\n", tag, RangedSlotName(slot),
+    FUSE_LOG_DBG("[FuseDBG] %s slot=%s mat=%d dura=%d/%d\n", tag, RangedSlotName(slot),
               static_cast<int>(queued.materialId), queued.durabilityCur, queued.durabilityMax);
 }
 
@@ -1343,7 +1365,7 @@ static void TickShatterImpulse(PlayState* play) {
                     sShatterImpulseDir[actor] = dir;
                     if (sShatterImpulseFlipped.find(actor) == sShatterImpulseFlipped.end()) {
                         sShatterImpulseFlipped.insert(actor);
-                        Fuse::Log("[FuseDBG] ShatterImpulseFlip: victim=%p dist0=%.2f dist1=%.2f\n",
+                        FUSE_LOG_DBG("[FuseDBG] ShatterImpulseFlip: victim=%p dist0=%.2f dist1=%.2f\n",
                                   static_cast<void*>(actor), dist0, dist1);
                     }
                 }
@@ -1426,7 +1448,7 @@ static void TryApplyEnemyHpOverride(Actor* actor) {
     overrideHp = std::clamp(overrideHp, 1, 255);
     const int before = static_cast<int>(actor->colChkInfo.health);
     actor->colChkInfo.health = static_cast<uint8_t>(overrideHp);
-    Fuse::Log("[FuseDBG] EnemyHpOverride: id=%d actor=%p hp=%d->%d key=%s\n", static_cast<int>(actor->id),
+    FUSE_LOG_DBG("[FuseDBG] EnemyHpOverride: id=%d actor=%p hp=%d->%d key=%s\n", static_cast<int>(actor->id),
               static_cast<void*>(actor), before, overrideHp, key);
 }
 
@@ -1516,7 +1538,7 @@ void QueueSwordFreezeInternal(PlayState* play, Actor* victim, uint8_t level, con
         return;
     }
 
-    Fuse::Log("[FuseDBG] FreezeApply: src=%s slot=%s mat=%d lvl=%u victim=%p\n", srcLabel ? srcLabel : "unknown",
+    FUSE_LOG_DBG("[FuseDBG] FreezeApply: src=%s slot=%s mat=%d lvl=%u victim=%p\n", srcLabel ? srcLabel : "unknown",
               slotLabel ? slotLabel : "unknown", static_cast<int>(materialId), static_cast<unsigned int>(level),
               (void*)victim);
 }
@@ -1537,7 +1559,7 @@ bool Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfM
         return false;
     }
 
-    Fuse::Log("[FuseDBG] Explosion: pos=(%.2f %.2f %.2f) radius=%.2f dmg=%d flags=0x%08X self=%d frames=%d src=%s\n",
+    FUSE_LOG_DBG("[FuseDBG] Explosion: pos=(%.2f %.2f %.2f) radius=%.2f dmg=%d flags=0x%08X self=%d frames=%d src=%s\n",
               pos.x, pos.y, pos.z, static_cast<double>(params.radius), params.damage, params.dmgFlags,
               (selfMode == FuseExplosionSelfMode::DamagePlayer) ? 1 : 0, params.hitFrames,
               srcLabel ? srcLabel : "unknown");
@@ -1547,7 +1569,7 @@ bool Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfM
     // eventually exhausting the lit-bomb budget. Keep the actor as BOMB_BODY and let it transition naturally.
     Actor* explosionActor =
         Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BOM, pos.x, pos.y, pos.z, 0, 0, 0, 0, BOMB_BODY);
-    Fuse::Log("[FuseDBG] ExplodeSpawnAttempt pos=(%.2f %.2f %.2f) src=%s result=%p\n", pos.x, pos.y, pos.z,
+    FUSE_LOG_DBG("[FuseDBG] ExplodeSpawnAttempt pos=(%.2f %.2f %.2f) src=%s result=%p\n", pos.x, pos.y, pos.z,
               srcLabel ? srcLabel : "unknown", (void*)explosionActor);
     if (!explosionActor) {
         return false;
@@ -1556,7 +1578,7 @@ bool Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfM
     EnBom* bomb = reinterpret_cast<EnBom*>(explosionActor);
     bomb->timer = 2;
     bomb->actor.shape.rot.z = 0;
-    Fuse::Log("[FuseDBG] ExplodeSpawnInit pos=(%.2f %.2f %.2f) params=%d timer=%d src=%s frame=%d\n",
+    FUSE_LOG_DBG("[FuseDBG] ExplodeSpawnInit pos=(%.2f %.2f %.2f) params=%d timer=%d src=%s frame=%d\n",
               bomb->actor.world.pos.x, bomb->actor.world.pos.y, bomb->actor.world.pos.z, bomb->actor.params,
               bomb->timer, srcLabel ? srcLabel : "unknown", play->gameplayFrames);
     return true;
@@ -1601,7 +1623,7 @@ void Fuse_TriggerDekuNutAtPos(PlayState* play, const Vec3f& pos, int srcItemId) 
         return;
     }
 
-    Fuse::Log("[FuseDBG] DekuNutAtPos: trigger frame=%d src=%s item=%d pos=(%.2f, %.2f, %.2f)\n", play->gameplayFrames,
+    FUSE_LOG_DBG("[FuseDBG] DekuNutAtPos: trigger frame=%d src=%s item=%d pos=(%.2f, %.2f, %.2f)\n", play->gameplayFrames,
               GetStunSourceLabel(srcItemId), srcItemId, pos.x, pos.y, pos.z);
 
     TriggerDekuNutAtPosInternal(play, pos, srcItemId);
@@ -1616,7 +1638,7 @@ void Fuse_EnqueuePendingStun(Actor* victim, uint8_t level, MaterialId materialId
     const int curFrame = GetGameplayFrame();
     auto cooldownIt = sDekuStunCooldownUntil.find(victim);
     if (curFrame >= 0 && cooldownIt != sDekuStunCooldownUntil.end() && curFrame < cooldownIt->second) {
-        Fuse::Log("[FuseDBG] dekunut_skip_cooldown victim=%p id=0x%04X until=%d\n", (void*)victim, victim->id,
+        FUSE_LOG_DBG("[FuseDBG] dekunut_skip_cooldown victim=%p id=0x%04X until=%d\n", (void*)victim, victim->id,
                   cooldownIt->second);
         return;
     }
@@ -1630,7 +1652,7 @@ void Fuse_EnqueuePendingStun(Actor* victim, uint8_t level, MaterialId materialId
         request.retryStepFrames = kDekuStunRetryStepFrames;
         request.materialId = materialId;
         request.itemId = itemId;
-        Fuse::Log("[FuseDBG] dekunut_enqueue victim=%p id=0x%04X src=%s notBefore=%d\n", (void*)victim, victim->id,
+        FUSE_LOG_DBG("[FuseDBG] dekunut_enqueue victim=%p id=0x%04X src=%s notBefore=%d\n", (void*)victim, victim->id,
                   srcLabel, request.applyNotBeforeFrame);
         return;
     }
@@ -1645,7 +1667,7 @@ void Fuse_EnqueuePendingStun(Actor* victim, uint8_t level, MaterialId materialId
     request.itemId = itemId;
     sPendingStunIndex[victim] = sPendingStunQueue.size();
     sPendingStunQueue.push_back(request);
-    Fuse::Log("[FuseDBG] dekunut_enqueue victim=%p id=0x%04X src=%s notBefore=%d\n", (void*)victim, victim->id,
+    FUSE_LOG_DBG("[FuseDBG] dekunut_enqueue victim=%p id=0x%04X src=%s notBefore=%d\n", (void*)victim, victim->id,
               srcLabel, request.applyNotBeforeFrame);
 }
 
@@ -1665,7 +1687,7 @@ void Fuse_TriggerMegaStun(PlayState* play, Player* player, MaterialId materialId
     sMegaStunCooldownUntil = (curFrame >= 0) ? (curFrame + kMegaStunCooldownFrames) : kMegaStunCooldownFrames;
 
     const char* srcLabel = GetStunSourceLabel(itemId);
-    Fuse::Log("[FuseDBG] megastun_trigger src=%s count=%d\n", srcLabel, kMegaStunCount);
+    FUSE_LOG_DBG("[FuseDBG] megastun_trigger src=%s count=%d\n", srcLabel, kMegaStunCount);
 
     Vec3f basePos = player->actor.world.pos;
     const s16 baseYaw = player->actor.shape.rot.y;
@@ -1778,10 +1800,10 @@ void Fuse_ApplySavedSwordFuse(const PlayState* play, s16 savedMaterial, s16 save
     gFuseRuntime.swordFuseLoadedFromSave = true;
     Fuse::SetLastEvent("Sword fuse restored from save");
 
-    Fuse::Log("[FuseMVP] Sword fused with material=%d (durability %u/%u)\n", static_cast<int>(materialId),
+    FUSE_LOG_MVP("[FuseMVP] Sword fused with material=%d (durability %u/%u)\n", static_cast<int>(materialId),
               static_cast<unsigned int>(Fuse::GetSwordFuseDurability()),
               static_cast<unsigned int>(Fuse::GetSwordFuseMaxDurability()));
-    Fuse::Log("[FuseDBG] Applied saved fuse matId=%d cur=%d max=%d\n", static_cast<int>(materialId), targetCur,
+    FUSE_LOG_DBG("[FuseDBG] Applied saved fuse matId=%d cur=%d max=%d\n", static_cast<int>(materialId), targetCur,
               Fuse::GetSwordFuseMaxDurability());
 }
 
@@ -1953,7 +1975,7 @@ extern "C" void Fuse_ShieldTriggerExplosion(PlayState* play, s32 shieldMaterialI
     const uint32_t atFlags = AT_ON | AT_TYPE_ALL;
     const char* srcLabel = "Shield";
 
-    Fuse::Log("[FuseDBG] ShieldExplosionOffset: src=%s orig=(%.2f %.2f %.2f) offset=(%.2f %.2f %.2f) yaw=%d "
+    FUSE_LOG_DBG("[FuseDBG] ShieldExplosionOffset: src=%s orig=(%.2f %.2f %.2f) offset=(%.2f %.2f %.2f) yaw=%d "
               "atFlags=0x%08X dmg=%d radius=%.2f\n",
               srcLabel, pos->x, pos->y, pos->z, offsetPos.x, offsetPos.y, offsetPos.z, yaw, atFlags, params.damage,
               static_cast<double>(params.radius));
@@ -1996,7 +2018,7 @@ extern "C" void Fuse_ShieldGuardDrain(PlayState* play) {
         slot.ResetToUnfused();
     }
 
-    Fuse::Log("[FuseDBG] shield_guard_drain: shield=%s mat=%d dura=%d/%d\n", ShieldSlotName(key), materialId, newCur,
+    FUSE_LOG_DBG("[FuseDBG] shield_guard_drain: shield=%s mat=%d dura=%d/%d\n", ShieldSlotName(key), materialId, newCur,
               maxDurability);
 }
 
@@ -2126,7 +2148,7 @@ void Fuse::LoadDebugOverrides() {
                         entry.baseDurabilityOverride = durabilityOverride;
                         sMaterialDebugOverrides[id] = entry;
 
-                        Fuse::Log("[FuseDBG] OverrideLoad: mat=%d atkDelta=%d duraOvr=%d\n", static_cast<int>(id),
+                        FUSE_LOG_DBG("[FuseDBG] OverrideLoad: mat=%d atkDelta=%d duraOvr=%d\n", static_cast<int>(id),
                                   attackDelta, durabilityOverride);
                     }
                 });
@@ -2135,7 +2157,7 @@ void Fuse::LoadDebugOverrides() {
     });
 
     sUseDebugOverrides = enabledInt != 0;
-    Fuse::Log("[FuseDBG] OverrideLoad: enabled=%d\n", sUseDebugOverrides ? 1 : 0);
+    FUSE_LOG_DBG("[FuseDBG] OverrideLoad: enabled=%d\n", sUseDebugOverrides ? 1 : 0);
 }
 
 void Fuse::SaveDebugOverrides() {
@@ -2158,13 +2180,13 @@ void Fuse::SaveDebugOverrides() {
                     }
                 });
 
-                Fuse::Log("[FuseDBG] OverrideSave: mat=%d atkDelta=%d duraOvr=%d\n", static_cast<int>(kvp.first),
+                FUSE_LOG_DBG("[FuseDBG] OverrideSave: mat=%d atkDelta=%d duraOvr=%d\n", static_cast<int>(kvp.first),
                           kvp.second.attackBonusDelta, kvp.second.baseDurabilityOverride);
             }
         });
     });
 
-    Fuse::Log("[FuseDBG] OverrideSave: enabled=%d\n", sUseDebugOverrides ? 1 : 0);
+    FUSE_LOG_DBG("[FuseDBG] OverrideSave: enabled=%d\n", sUseDebugOverrides ? 1 : 0);
 }
 
 uint8_t Fuse::GetSwordModifierLevel(ModifierId id) {
@@ -2610,7 +2632,7 @@ void Fuse::FuseSwordWithMaterial(MaterialId id, uint16_t maxDurability, bool ini
     }
 
     if (logDurability) {
-        Fuse::Log("[FuseMVP] Sword fused with material=%d (durability %u/%u)\n", static_cast<int>(id),
+        FUSE_LOG_MVP("[FuseMVP] Sword fused with material=%d (durability %u/%u)\n", static_cast<int>(id),
                   static_cast<unsigned int>(slot.durabilityCur), static_cast<unsigned int>(maxDurability));
     }
 }
@@ -2635,7 +2657,7 @@ void Fuse::FuseBoomerangWithMaterial(MaterialId id, uint16_t maxDurability, bool
     }
 
     if (logDurability) {
-        Fuse::Log("[FuseMVP] Boomerang fused with material=%d (durability %u/%u)\n", static_cast<int>(id),
+        FUSE_LOG_MVP("[FuseMVP] Boomerang fused with material=%d (durability %u/%u)\n", static_cast<int>(id),
                   static_cast<unsigned int>(slot.durabilityCur), static_cast<unsigned int>(maxDurability));
     }
 }
@@ -2660,7 +2682,7 @@ void Fuse::FuseHammerWithMaterial(MaterialId id, uint16_t maxDurability, bool in
     }
 
     if (logDurability) {
-        Fuse::Log("[FuseMVP] Hammer fused with material=%d (durability %u/%u)\n", static_cast<int>(id),
+        FUSE_LOG_MVP("[FuseMVP] Hammer fused with material=%d (durability %u/%u)\n", static_cast<int>(id),
                   static_cast<unsigned int>(slot.durabilityCur), static_cast<unsigned int>(maxDurability));
     }
 }
@@ -2692,7 +2714,7 @@ void Fuse::FuseArrowsWithMaterial(MaterialId id, uint16_t maxDurability, bool in
     }
 
     if (logDurability) {
-        Fuse::Log("[FuseMVP] Arrows fused with material=%d (durability %u/%u)\n", static_cast<int>(id),
+        FUSE_LOG_MVP("[FuseMVP] Arrows fused with material=%d (durability %u/%u)\n", static_cast<int>(id),
                   static_cast<unsigned int>(slot.durabilityCur), static_cast<unsigned int>(maxDurability));
     }
 }
@@ -2724,7 +2746,7 @@ void Fuse::FuseSlingshotWithMaterial(MaterialId id, uint16_t maxDurability, bool
     }
 
     if (logDurability) {
-        Fuse::Log("[FuseMVP] Slingshot fused with material=%d (durability %u/%u)\n", static_cast<int>(id),
+        FUSE_LOG_MVP("[FuseMVP] Slingshot fused with material=%d (durability %u/%u)\n", static_cast<int>(id),
                   static_cast<unsigned int>(slot.durabilityCur), static_cast<unsigned int>(maxDurability));
     }
 }
@@ -2756,7 +2778,7 @@ void Fuse::FuseHookshotWithMaterial(MaterialId id, uint16_t maxDurability, bool 
     }
 
     if (logDurability) {
-        Fuse::Log("[FuseMVP] Hookshot fused with material=%d (durability %u/%u)\n", static_cast<int>(id),
+        FUSE_LOG_MVP("[FuseMVP] Hookshot fused with material=%d (durability %u/%u)\n", static_cast<int>(id),
                   static_cast<unsigned int>(slot.durabilityCur), static_cast<unsigned int>(maxDurability));
     }
 }
@@ -2790,13 +2812,13 @@ Fuse::FuseResult Fuse::TryFuseSword(MaterialId id) {
     const uint8_t rangeUpLevel = Fuse::GetMaterialModifierLevel(id, FuseItemType::Sword, ModifierId::RangeUp);
     if (rangeUpLevel > 0) {
         const char* matName = def ? def->name : "Unknown";
-        Fuse::Log("[FuseDBG] ApplyMods: item=Sword mat=%s rangeUp=%u\n", matName,
+        FUSE_LOG_DBG("[FuseDBG] ApplyMods: item=Sword mat=%s rangeUp=%u\n", matName,
                   static_cast<unsigned int>(rangeUpLevel));
     }
 
     if (id == MaterialId::DekuNut) {
         const int postConsumeCount = Fuse::GetMaterialCount(id);
-        Fuse::Log("[FuseMVP] TryFuseSword(DekuNut): before=%d after=%d\n", preConsumeCount, postConsumeCount);
+        FUSE_LOG_MVP("[FuseMVP] TryFuseSword(DekuNut): before=%d after=%d\n", preConsumeCount, postConsumeCount);
     }
 
     return FuseResult::Ok;
@@ -2829,7 +2851,7 @@ Fuse::FuseResult Fuse::TryFuseBoomerang(MaterialId id) {
     const uint8_t wideRangeLevel = Fuse::GetMaterialModifierLevel(id, FuseItemType::Boomerang, ModifierId::WideRange);
     if (wideRangeLevel > 0) {
         const char* matName = def ? def->name : "Unknown";
-        Fuse::Log("[FuseDBG] ApplyMods: item=Boomerang mat=%s wideRange=%u\n", matName,
+        FUSE_LOG_DBG("[FuseDBG] ApplyMods: item=Boomerang mat=%s wideRange=%u\n", matName,
                   static_cast<unsigned int>(wideRangeLevel));
     }
 
@@ -2983,9 +3005,9 @@ Fuse::FuseResult Fuse::TryQueueRangedFuse(RangedFuseSlot slot, MaterialId mat, c
         const int before = Fuse::GetMaterialCount(pendingMat);
         Fuse_AddMaterialOrAmmo(pendingMat, 1);
         const int after = Fuse::GetMaterialCount(pendingMat);
-        Fuse::Log("[FuseDBG] Refund mat=%d amount=1 before=%d after=%d reason=%s\n", static_cast<int>(pendingMat),
+        FUSE_LOG_DBG("[FuseDBG] Refund mat=%d amount=1 before=%d after=%d reason=%s\n", static_cast<int>(pendingMat),
                   before, after, "SwapRefund");
-        Fuse::Log("[FuseDBG] RangedRefundQueued slot=%s mat=%d amount=1 reason=%s\n", RangedSlotName(slot),
+        FUSE_LOG_DBG("[FuseDBG] RangedRefundQueued slot=%s mat=%d amount=1 reason=%s\n", RangedSlotName(slot),
                   static_cast<int>(pendingMat), "SwapRefund");
     }
 
@@ -3017,7 +3039,7 @@ void Fuse::ClearQueuedRangedFuse_NoRefund(RangedFuseSlot slot, const char* reaso
     const int before = Fuse::GetMaterialCount(mat);
     Fuse_AddMaterialOrAmmo(mat, 1);
     const int after = Fuse::GetMaterialCount(mat);
-    Fuse::Log("[FuseDBG] Refund mat=%d amount=1 before=%d after=%d reason=%s\n", static_cast<int>(mat), before, after,
+    FUSE_LOG_DBG("[FuseDBG] Refund mat=%d amount=1 before=%d after=%d reason=%s\n", static_cast<int>(mat), before, after,
               reason ? reason : "None");
     state.pendingRefundMaterial = MaterialId::None;
     state.pendingRefundFrame = -1;
@@ -3044,7 +3066,7 @@ void Fuse::CommitQueuedRangedFuse(RangedFuseSlot slot, const char* reason) {
     state.hadSuccess = true;
     state.pendingRefundMaterial = MaterialId::None;
     state.pendingRefundFrame = -1;
-    Fuse::Log("[FuseDBG] RangedCommitActive slot=%s mat=%d dura=%d/%d\n", RangedSlotName(slot), static_cast<int>(mat),
+    FUSE_LOG_DBG("[FuseDBG] RangedCommitActive slot=%s mat=%d dura=%d/%d\n", RangedSlotName(slot), static_cast<int>(mat),
               active.durabilityCur, active.durabilityMax);
     LogRangedEvent("RangedCommit", slot, mat, reason);
 }
@@ -3064,14 +3086,14 @@ void Fuse::CancelQueuedRangedFuse_Refund(RangedFuseSlot slot, const char* reason
     const int before = Fuse::GetMaterialCount(mat);
     Fuse_AddMaterialOrAmmo(mat, 1);
     const int after = Fuse::GetMaterialCount(mat);
-    Fuse::Log("[FuseDBG] Refund mat=%d amount=1 before=%d after=%d reason=%s\n", static_cast<int>(mat), before, after,
+    FUSE_LOG_DBG("[FuseDBG] Refund mat=%d amount=1 before=%d after=%d reason=%s\n", static_cast<int>(mat), before, after,
               reason ? reason : "None");
     state.ResetToUnfused();
     state.inFlight = false;
     state.hadSuccess = false;
     state.pendingRefundMaterial = MaterialId::None;
     state.pendingRefundFrame = -1;
-    Fuse::Log("[FuseDBG] RangedRefundQueued slot=%s mat=%d amount=1 reason=%s\n", RangedSlotName(slot),
+    FUSE_LOG_DBG("[FuseDBG] RangedRefundQueued slot=%s mat=%d amount=1 reason=%s\n", RangedSlotName(slot),
               static_cast<int>(mat), reason ? reason : "None");
 }
 
@@ -3084,7 +3106,7 @@ void Fuse::ClearActiveRangedFuse(RangedFuseSlot slot, const char* reason) {
     const int materialId = static_cast<int>(active.materialId);
     active.ResetToUnfused();
 
-    Fuse::Log("[FuseDBG] RangedClearActive slot=%s mat=%d reason=%s\n", RangedSlotName(slot), materialId,
+    FUSE_LOG_DBG("[FuseDBG] RangedClearActive slot=%s mat=%d reason=%s\n", RangedSlotName(slot), materialId,
               reason ? reason : "None");
 }
 
@@ -3107,10 +3129,10 @@ void Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot slot, const char* reason
     const int maxDurability = active.durabilityMax;
     const int newCur = std::max(0, active.durabilityCur - 1);
     active.durabilityCur = newCur;
-    Fuse::Log("[FuseDBG] RangedHitActive slot=%s mat=%d dura=%d/%d\n", RangedSlotName(slot), materialId, newCur,
+    FUSE_LOG_DBG("[FuseDBG] RangedHitActive slot=%s mat=%d dura=%d/%d\n", RangedSlotName(slot), materialId, newCur,
               maxDurability);
 
-    Fuse::Log("[FuseDBG] RangedHitFinalize slot=%s mat=%d dura=%d/%d reason=%s\n", RangedSlotName(slot), materialId,
+    FUSE_LOG_DBG("[FuseDBG] RangedHitFinalize slot=%s mat=%d dura=%d/%d reason=%s\n", RangedSlotName(slot), materialId,
               newCur, maxDurability, reason ? reason : "None");
 
     Fuse::ClearActiveRangedFuse(slot, reason);
@@ -3188,7 +3210,7 @@ bool Fuse::DamageSwordFuseDurability(PlayState* play, int amount, const char* re
     if (cur == 0) {
         Fuse_ClearSavedSwordFuse(play);
         const int frame = play ? play->gameplayFrames : -1;
-        Log("[FuseMVP] Sword fuse broke at frame=%d; clearing fuse and reverting to vanilla (reason=%s)\n", frame,
+        FUSE_LOG_MVP("[FuseMVP] Sword fuse broke at frame=%d; clearing fuse and reverting to vanilla (reason=%s)\n", frame,
             reason ? reason : "unknown");
         OnSwordFuseBroken(play);
         return true;
@@ -3210,7 +3232,7 @@ bool Fuse::DamageBoomerangFuseDurability(PlayState* play, int amount, const char
 
     if (cur == 0) {
         const int frame = play ? play->gameplayFrames : -1;
-        Log("[FuseMVP] Boomerang fuse broke at frame=%d; clearing fuse (reason=%s)\n", frame,
+        FUSE_LOG_MVP("[FuseMVP] Boomerang fuse broke at frame=%d; clearing fuse (reason=%s)\n", frame,
             reason ? reason : "unknown");
         OnBoomerangFuseBroken(play);
         return true;
@@ -3232,7 +3254,7 @@ bool Fuse::DamageHammerFuseDurability(PlayState* play, int amount, const char* r
 
     if (cur == 0) {
         const int frame = play ? play->gameplayFrames : -1;
-        Log("[FuseMVP] Hammer fuse broke at frame=%d; clearing fuse (reason=%s)\n", frame, reason ? reason : "unknown");
+        FUSE_LOG_MVP("[FuseMVP] Hammer fuse broke at frame=%d; clearing fuse (reason=%s)\n", frame, reason ? reason : "unknown");
         OnHammerFuseBroken(play);
         return true;
     }
@@ -3265,7 +3287,7 @@ void Fuse::AwardRockMaterial() {
 
     const int count = Fuse::GetMaterialCount(MaterialId::Rock);
     Fuse::SetLastEvent("Acquired ROCK");
-    Fuse::Log("[FuseMVP] Acquired material: ROCK (count=%d)\n", count);
+    FUSE_LOG_MVP("[FuseMVP] Acquired material: ROCK (count=%d)\n", count);
 }
 
 // -----------------------------------------------------------------------------
@@ -3309,8 +3331,8 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
         gFuseRuntime.swordFuseLoadedFromSave = slot.materialId != MaterialId::None;
     }
 
-    Fuse::Log("[FuseMVP] Save loaded -> Fuse ACTIVE (always enabled)\n");
-    Fuse::Log("[FuseMVP] MVP: Throw a liftable rock until it BREAKS to acquire ROCK.\n");
+    FUSE_LOG_MVP("[FuseMVP] Save loaded -> Fuse ACTIVE (always enabled)\n");
+    FUSE_LOG_MVP("[FuseMVP] MVP: Throw a liftable rock until it BREAKS to acquire ROCK.\n");
 }
 
 static void UpdateRangedFuseLifecycle(PlayState* play) {
@@ -3437,7 +3459,7 @@ void Fuse::TickSwordBgExplosions(PlayState* play) {
         Fuse_AdjustExplosionPosForBombable(bombable, &player->actor, &explodePos);
     }
 
-    Fuse::Log("[FuseDBG] SwordBGLineHit pos=(%.2f %.2f %.2f)\n", hitPos.x, hitPos.y, hitPos.z);
+    FUSE_LOG_DBG("[FuseDBG] SwordBGLineHit pos=(%.2f %.2f %.2f)\n", hitPos.x, hitPos.y, hitPos.z);
     Fuse_TriggerExplosion(play, explodePos, FuseExplosionSelfMode::DamagePlayer,
                           Fuse_GetExplosionParams(materialId, explosionLevel), "SwordBG");
     gLastSwordBgExplodeFrame = curFrame;
@@ -3445,7 +3467,7 @@ void Fuse::TickSwordBgExplosions(PlayState* play) {
     const int before = Fuse::GetSwordFuseDurability();
     const bool broke = Fuse::DamageSwordFuseDurability(play, 1, "SwordBG");
     const int after = Fuse::GetSwordFuseDurability();
-    Fuse::Log("[FuseMVP] Sword BG impact DRAIN frame=%d durability=%d->%d%s\n", curFrame, before, after,
+    FUSE_LOG_MVP("[FuseMVP] Sword BG impact DRAIN frame=%d durability=%d->%d%s\n", curFrame, before, after,
               broke ? " (broke)" : "");
 }
 
@@ -3544,7 +3566,7 @@ void Fuse::TickRangedProjectileBombableProximity(PlayState* play) {
 
             Vec3f explodePos = center;
             Fuse_AdjustExplosionPosForBombable(bombable, &player->actor, &explodePos);
-            Fuse::Log("[FuseDBG] RangedBombableSweep slot=%s proj=0x%p id=0x%04X d2=%.1f\n", RangedSlotName(slot),
+            FUSE_LOG_DBG("[FuseDBG] RangedBombableSweep slot=%s proj=0x%p id=0x%04X d2=%.1f\n", RangedSlotName(slot),
                       proj, bombable->id, d2);
             Fuse_TriggerExplosion(play, explodePos, FuseExplosionSelfMode::DamagePlayer,
                                   Fuse_GetExplosionParams(materialId, explosionLevel), "RangedBombableSweep");
@@ -3557,7 +3579,7 @@ void Fuse::TickRangedProjectileBombableProximity(PlayState* play) {
 
     static int sRangedProxLogFrame = -999999;
     if (curFrame >= 0 && (curFrame - sRangedProxLogFrame) >= 30) {
-        Fuse::Log("[FuseDBG] ProxTick slot=%s candidates=%d\n", RangedSlotName(slot), candidateCount);
+        FUSE_LOG_DBG("[FuseDBG] ProxTick slot=%s candidates=%d\n", RangedSlotName(slot), candidateCount);
         sRangedProxLogFrame = curFrame;
     }
 
@@ -3569,7 +3591,7 @@ void Fuse::TickRangedProjectileBombableProximity(PlayState* play) {
         for (size_t idx = 0; idx < std::size(kLikelyCats) && logged < 20; ++idx) {
             Actor* actor = play->actorCtx.actorLists[kLikelyCats[idx]].head;
             while (actor != nullptr && logged < 20) {
-                Fuse::Log("[FuseDBG] SlingshotScan cat=%d id=0x%04X pos=(%.2f %.2f %.2f)\n", kLikelyCats[idx],
+                FUSE_LOG_DBG("[FuseDBG] SlingshotScan cat=%d id=0x%04X pos=(%.2f %.2f %.2f)\n", kLikelyCats[idx],
                           actor->id, actor->world.pos.x, actor->world.pos.y, actor->world.pos.z);
                 ++logged;
                 actor = actor->next;
@@ -3681,7 +3703,7 @@ void Fuse::ProcessPendingStuns(PlayState* play) {
         if (isLikelyInvincible(victim, curFrame) && request.attemptsRemaining > 0) {
             request.applyNotBeforeFrame = curFrame + request.retryStepFrames;
             --request.attemptsRemaining;
-            Fuse::Log("[FuseDBG] dekunut_wait victim=%p id=0x%04X reason=invincible next=%d\n", (void*)victim,
+            FUSE_LOG_DBG("[FuseDBG] dekunut_wait victim=%p id=0x%04X reason=invincible next=%d\n", (void*)victim,
                       victim->id, request.applyNotBeforeFrame);
             ++i;
             continue;
@@ -3689,14 +3711,14 @@ void Fuse::ProcessPendingStuns(PlayState* play) {
 
         auto cooldownIt = sDekuStunCooldownUntil.find(victim);
         if (cooldownIt != sDekuStunCooldownUntil.end() && curFrame < cooldownIt->second) {
-            Fuse::Log("[FuseDBG] dekunut_skip_cooldown victim=%p id=0x%04X until=%d\n", (void*)victim, victim->id,
+            FUSE_LOG_DBG("[FuseDBG] dekunut_skip_cooldown victim=%p id=0x%04X until=%d\n", (void*)victim, victim->id,
                       cooldownIt->second);
             removeEntry(i);
             continue;
         }
 
         const char* srcLabel = GetStunSourceLabel(request.itemId);
-        Fuse::Log("[FuseDBG] dekunut_apply victim=%p id=0x%04X frame=%d src=%s\n", (void*)victim, victim->id, curFrame,
+        FUSE_LOG_DBG("[FuseDBG] dekunut_apply victim=%p id=0x%04X frame=%d src=%s\n", (void*)victim, victim->id, curFrame,
                   srcLabel);
         ApplyDekuNutStunVanilla(play, GET_PLAYER(play), victim, request.level, request.itemId);
         sDekuStunCooldownUntil[victim] = curFrame + kDekuStunCooldownFrames;
@@ -3734,12 +3756,12 @@ void Fuse::ProcessDeferredSwordFreezes(PlayState* play) {
             continue;
         }
         if (WasFreezeRecentlyShattered(play, request.victim)) {
-            Fuse::Log("[FuseDBG] FreezeSkip: reason=RecentlyShattered frame=%d victim=%p\n", curFrame,
+            FUSE_LOG_DBG("[FuseDBG] FreezeSkip: reason=RecentlyShattered frame=%d victim=%p\n", curFrame,
                       (void*)request.victim);
             continue;
         }
         if (IsFreezeReapplyBlocked(play, request.victim)) {
-            Fuse::Log("[FuseDBG] FreezeSkip: reason=NoReapplyWindow frame=%d victim=%p\n", curFrame,
+            FUSE_LOG_DBG("[FuseDBG] FreezeSkip: reason=NoReapplyWindow frame=%d victim=%p\n", curFrame,
                       (void*)request.victim);
             continue;
         }
@@ -3790,7 +3812,7 @@ static void LogDurabilityGate(const char* itemLabel, MaterialId materialId, int 
     if (materialId == MaterialId::None || durabilityCur > 0) {
         return;
     }
-    Fuse::Log("[FuseDBG] ModGate: item=%s mat=%d dura=%d/%d SKIP_REASON=durability_gate\n", itemLabel,
+    FUSE_LOG_DBG("[FuseDBG] ModGate: item=%s mat=%d dura=%d/%d SKIP_REASON=durability_gate\n", itemLabel,
               static_cast<int>(materialId), durabilityCur, durabilityMax);
 }
 
@@ -3815,13 +3837,13 @@ void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage,
     bool didExplode = false;
     if (explosionLevel > 0 && play && victim) {
         if (Fuse_IsExplosionImmuneVictim(victim)) {
-            Fuse::Log("[FuseDBG] ExplodeSkip: src=Sword victim=ACTOR_BOSS_DODONGO\n");
+            FUSE_LOG_DBG("[FuseDBG] ExplodeSkip: src=Sword victim=ACTOR_BOSS_DODONGO\n");
         } else if (FuseBash_IsEnemyActor(victim) || Fuse_IsBombableActorId(victim->id)) {
             const int bombable = Fuse_IsBombableActorId(victim->id) ? 1 : 0;
             if (bombable) {
                 Vec3f adjustedPos = Fuse_GetBombableAnchorPos(victim, 25.0f);
                 Fuse_AdjustExplosionPosForBombable(victim, player ? &player->actor : nullptr, &adjustedPos);
-                Fuse::Log("[FuseDBG] Explode: src=Sword kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n",
+                FUSE_LOG_DBG("[FuseDBG] Explode: src=Sword kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n",
                           adjustedPos.x, adjustedPos.y, adjustedPos.z, victim->id, bombable);
                 Fuse_TriggerExplosion(play, adjustedPos, FuseExplosionSelfMode::DamagePlayer,
                                       Fuse_GetExplosionParams(materialId, explosionLevel), "Sword");
@@ -3829,7 +3851,7 @@ void Fuse::OnSwordMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage,
             } else {
                 const Vec3f* explodePos = impactPos ? impactPos : &victim->focus.pos;
                 Vec3f adjustedPos = explodePos ? *explodePos : victim->world.pos;
-                Fuse::Log("[FuseDBG] Explode: src=Sword kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n",
+                FUSE_LOG_DBG("[FuseDBG] Explode: src=Sword kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n",
                           adjustedPos.x, adjustedPos.y, adjustedPos.z, victim->id, bombable);
                 Fuse_TriggerExplosion(play, adjustedPos, FuseExplosionSelfMode::DamagePlayer,
                                       Fuse_GetExplosionParams(materialId, explosionLevel), "Sword");
@@ -3873,7 +3895,7 @@ void Fuse::OnHammerMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage
         Fuse::GetMaterialModifierLevel(materialId, FuseItemType::Hammer, ModifierId::Explosion);
     if (explosionLevel > 0 && play && victim) {
         if (Fuse_IsExplosionImmuneVictim(victim)) {
-            Fuse::Log("[FuseDBG] ExplodeSkip: src=Hammer victim=ACTOR_BOSS_DODONGO\n");
+            FUSE_LOG_DBG("[FuseDBG] ExplodeSkip: src=Hammer victim=ACTOR_BOSS_DODONGO\n");
         } else if (FuseBash_IsEnemyActor(victim) || Fuse_IsBombableActorId(victim->id)) {
             const int bombable = Fuse_IsBombableActorId(victim->id) ? 1 : 0;
             const Vec3f* explodePos = impactPos ? impactPos : &victim->focus.pos;
@@ -3881,7 +3903,7 @@ void Fuse::OnHammerMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage
             if (bombable) {
                 Fuse_AdjustExplosionPosForBombable(victim, player ? &player->actor : nullptr, &adjustedPos);
             }
-            Fuse::Log("[FuseDBG] Explode: src=Hammer kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n",
+            FUSE_LOG_DBG("[FuseDBG] Explode: src=Hammer kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n",
                       adjustedPos.x, adjustedPos.y, adjustedPos.z, victim->id, bombable);
             Fuse_TriggerExplosion(play, adjustedPos, FuseExplosionSelfMode::DamagePlayer,
                                   Fuse_GetExplosionParams(materialId, explosionLevel), "Hammer");
