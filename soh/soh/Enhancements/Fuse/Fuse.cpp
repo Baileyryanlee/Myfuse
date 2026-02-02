@@ -130,10 +130,12 @@ static void Fuse_RegisterSeekCVars() {
     registered = true;
 
     // Console syntax reminder: use `set <name> <value>` (no '=' sign).
-    CVarRegisterFloat("gFuseSeekRadius", 900.0f);
-    CVarRegisterFloat("gFuseSeekDotMin", 0.65f);
-    CVarRegisterFloat("gFuseSeekMaxTurnDeg", 6.0f);
-    CVarRegisterFloat("gFuseSeekTurnScaleFar", 0.4f);
+    // Aggressive turning is safe thanks to behind-gate checks; extra turn scaling
+    // normalizes behavior for slower slingshot projectiles versus the bow.
+    CVarRegisterFloat("gFuseSeekRadius", 1500.0f);
+    CVarRegisterFloat("gFuseSeekDotMin", 0.60f);
+    CVarRegisterFloat("gFuseSeekMaxTurnDeg", 28.0f);
+    CVarRegisterFloat("gFuseSeekTurnScaleFar", 5.0f);
     CVarRegisterInteger("gFuseSeekAcquireDelay", 2);
     CVarRegisterInteger("gFuseSeekDebug", 0);
     CVarRegisterInteger("gFuseSeekDisableStop", 0);
@@ -3624,7 +3626,7 @@ void Fuse::TickRangedProjectileSeek(PlayState* play) {
 
     const float seekDotMin = std::clamp(CVarGetFloat("gFuseSeekDotMin", 0.65f), -1.0f, 1.0f);
     const float seekMaxTurnDeg = std::max(0.0f, CVarGetFloat("gFuseSeekMaxTurnDeg", 6.0f));
-    const float seekTurnScaleFar = std::clamp(CVarGetFloat("gFuseSeekTurnScaleFar", 0.4f), 0.0f, 1.0f);
+    const float seekTurnScaleFar = std::max(0.0f, CVarGetFloat("gFuseSeekTurnScaleFar", 0.4f));
     const int seekAcquireDelayFrames = std::max(0, CVarGetInteger("gFuseSeekAcquireDelay", 2));
     const bool seekDisableStop = CVarGetInteger("gFuseSeekDisableStop", 0) != 0;
     static bool loggedSeekCVars = false;
