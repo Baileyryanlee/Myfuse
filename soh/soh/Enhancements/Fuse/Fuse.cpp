@@ -3606,6 +3606,7 @@ void Fuse::TickRangedProjectileSeek(PlayState* play) {
     const float seekMaxTurnDeg = std::max(0.0f, CVarGetFloat("gFuseSeekMaxTurnDeg", 6.0f));
     const float seekTurnScaleFar = std::clamp(CVarGetFloat("gFuseSeekTurnScaleFar", 0.4f), 0.0f, 1.0f);
     const int seekAcquireDelayFrames = std::max(0, CVarGetInteger("gFuseSeekAcquireDelay", 2));
+    const bool seekDisableStop = CVarGetInteger("gFuseSeekDisableStop", 0) != 0;
 
     const int curFrame = play->gameplayFrames;
     const bool shouldCleanup = (curFrame >= 0) && (curFrame % 120 == 0);
@@ -3662,8 +3663,10 @@ void Fuse::TickRangedProjectileSeek(PlayState* play) {
             float dispSpeed = Fuse_Vec3fLength(move);
             const bool hasDispDir = dispSpeed > 0.01f;
             Vec3f projForward{ 0.0f, 0.0f, 0.0f };
+            Vec3f dispDir{ 0.0f, 0.0f, 0.0f };
             if (hasDispDir) {
-                projForward = Fuse_Vec3fNormalize(move);
+                dispDir = Fuse_Vec3fNormalize(move);
+                projForward = dispDir;
             } else {
                 const float speed = sqrtf((proj->speedXZ * proj->speedXZ) + (proj->velocity.y * proj->velocity.y));
                 const float denom = std::max(speed, 0.0001f);
@@ -3775,7 +3778,7 @@ void Fuse::TickRangedProjectileSeek(PlayState* play) {
                                   state.targetActor->focus.pos.y - proj->world.pos.y,
                                   state.targetActor->focus.pos.z - proj->world.pos.z };
             const float dist = Fuse_Vec3fLength(toTarget);
-            if (dist > seekRadius) {
+            if (dist > seekRadius && !seekDisableStop) {
                 stopSeeking(proj, state, "out_of_range");
                 state.prevPos = proj->world.pos;
                 proj = proj->next;
@@ -3791,30 +3794,43 @@ void Fuse::TickRangedProjectileSeek(PlayState* play) {
             if (hasDispDir || Fuse_Vec3fLength(projForward) > 0.0f) {
                 if (state.ticksSinceAcquire >= 2 && dotForward < -0.05f) {
                     logSeekStopCheck(dotForward, desiredDir);
-                    stopSeeking(proj, state, "behind");
-                    state.prevPos = proj->world.pos;
-                    proj = proj->next;
-                    continue;
+                    if (!seekDisableStop) {
+                        stopSeeking(proj, state, "behind");
+                        state.prevPos = proj->world.pos;
+                        proj = proj->next;
+                        continue;
+                    }
                 }
                 if (dotForward < seekDotMin) {
                     logSeekStopCheck(dotForward, desiredDir);
-                    stopSeeking(proj, state, "out_of_cone");
-                    state.prevPos = proj->world.pos;
-                    proj = proj->next;
-                    continue;
+                    if (!seekDisableStop) {
+                        stopSeeking(proj, state, "out_of_cone");
+                        state.prevPos = proj->world.pos;
+                        proj = proj->next;
+                        continue;
+                    }
                 }
             }
 
-            float speed = 0.0f;
-            Vec3f currentDir = Fuse_GetArrowEffectiveDir(proj, &speed);
-            if (speed <= 0.01f) {
-                if (!hasDispDir) {
-                    state.prevPos = proj->world.pos;
-                    proj = proj->next;
-                    continue;
-                }
-                speed = dispSpeed;
-                currentDir = projForward;
+            float speedEff = 0.0f;
+            Vec3f effDir = Fuse_GetArrowEffectiveDir(proj, &speedEff);
+
+            Vec3f currentDir;
+            float speedForSteer = 0.0f;
+            const char* basis = hasDispDir ? "disp" : "eff";
+
+            if (hasDispDir) {
+                currentDir = dispDir;
+                speedForSteer = (speedEff > 0.01f) ? speedEff : dispSpeed;
+            } else {
+                currentDir = effDir;
+                speedForSteer = speedEff;
+            }
+
+            if (speedForSteer <= 0.01f) {
+                state.prevPos = proj->world.pos;
+                proj = proj->next;
+                continue;
             }
 
             const float dot = Fuse_Vec3fDot(currentDir, desiredDir);
@@ -3834,19 +3850,22 @@ void Fuse::TickRangedProjectileSeek(PlayState* play) {
 
             if (Fuse_Vec3fLength(newDir) > 0.0f) {
                 const float horiz = sqrtf((newDir.x * newDir.x) + (newDir.z * newDir.z));
-                const float speedXZ = speed * horiz;
-                const float velY = speed * newDir.y;
+                const float speedXZ = speedForSteer * horiz;
+                const float velY = speedForSteer * newDir.y;
                 const s16 yawS = Math_Atan2S(newDir.x, newDir.z);
                 const s16 pitchS = (horiz <= 0.0001f) ? 0 : Math_Atan2S(-newDir.y, horiz);
 
-                Fuse_ApplyArrowSteer(proj, newDir, speed);
+                Fuse_ApplyArrowSteer(proj, newDir, speedForSteer);
 
                 if (Fuse_SeekDebugEnabled() && !state.loggedSteer) {
                     Fuse::Log(
-                        "[FuseDBG] SeekSteer proj=%p dot=%.2f yaw=%d pitch=%d speedXZ=%.2f velY=%.2f dir=(%.2f %.2f %.2f) "
-                        "dispSpeed=%.2f projF=(%.2f %.2f %.2f) dotF=%.2f\n",
-                        proj, dot, yawS, pitchS, speedXZ, velY, newDir.x, newDir.y, newDir.z, dispSpeed,
-                        projForward.x, projForward.y, projForward.z, dotForward);
+                        "[FuseDBG] SeekSteer proj=%p basis=%s dist=%.1f dot=%.2f yaw=%d pitch=%d speedXZ=%.2f velY=%.2f "
+                        "dir=(%.2f %.2f %.2f) desiredDir=(%.2f %.2f %.2f) toTarget=(%.2f %.2f %.2f) "
+                        "dispDir=(%.2f %.2f %.2f) effDir=(%.2f %.2f %.2f) dispSpeed=%.2f projF=(%.2f %.2f %.2f) dotF=%.2f\n",
+                        proj, basis, dist, dot, yawS, pitchS, speedXZ, velY, newDir.x, newDir.y, newDir.z,
+                        desiredDir.x, desiredDir.y, desiredDir.z, toTarget.x, toTarget.y, toTarget.z, dispDir.x,
+                        dispDir.y, dispDir.z, effDir.x, effDir.y, effDir.z, dispSpeed, projForward.x, projForward.y,
+                        projForward.z, dotForward);
                     state.loggedSteer = true;
                 }
             }
