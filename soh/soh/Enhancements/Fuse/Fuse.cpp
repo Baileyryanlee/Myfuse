@@ -154,7 +154,7 @@ static inline void Fuse_ApplyArrowSteer(Actor* proj, const Vec3f& newDir, float 
     const float horiz = sqrtf((newDir.x * newDir.x) + (newDir.z * newDir.z));
     const float newSpeedXZ = speed * horiz;
     const float newVelY = speed * newDir.y;
-    const s16 yawS = Math_Atan2S(newDir.x, newDir.z);
+    const s16 yawS = Math_Atan2S(newDir.z, newDir.x);
     s16 pitchS = 0;
     if (horiz > 0.0001f) {
         pitchS = Math_Atan2S(-newDir.y, horiz);
@@ -3852,20 +3852,24 @@ void Fuse::TickRangedProjectileSeek(PlayState* play) {
                 const float horiz = sqrtf((newDir.x * newDir.x) + (newDir.z * newDir.z));
                 const float speedXZ = speedForSteer * horiz;
                 const float velY = speedForSteer * newDir.y;
-                const s16 yawS = Math_Atan2S(newDir.x, newDir.z);
+                const s16 yawS = Math_Atan2S(newDir.z, newDir.x);
                 const s16 pitchS = (horiz <= 0.0001f) ? 0 : Math_Atan2S(-newDir.y, horiz);
 
                 Fuse_ApplyArrowSteer(proj, newDir, speedForSteer);
 
                 if (Fuse_SeekDebugEnabled() && !state.loggedSteer) {
+                    const float forwardXZDenom = std::max(proj->speedXZ, 0.0001f);
+                    const float forwardXZx = proj->velocity.x / forwardXZDenom;
+                    const float forwardXZz = proj->velocity.z / forwardXZDenom;
                     Fuse::Log(
                         "[FuseDBG] SeekSteer proj=%p basis=%s dist=%.1f dot=%.2f yaw=%d pitch=%d speedXZ=%.2f velY=%.2f "
                         "dir=(%.2f %.2f %.2f) desiredDir=(%.2f %.2f %.2f) toTarget=(%.2f %.2f %.2f) "
-                        "dispDir=(%.2f %.2f %.2f) effDir=(%.2f %.2f %.2f) dispSpeed=%.2f projF=(%.2f %.2f %.2f) dotF=%.2f\n",
+                        "dispDir=(%.2f %.2f %.2f) effDir=(%.2f %.2f %.2f) dispSpeed=%.2f projF=(%.2f %.2f %.2f) "
+                        "forwardXZ=(%.2f %.2f) dotF=%.2f\n",
                         proj, basis, dist, dot, yawS, pitchS, speedXZ, velY, newDir.x, newDir.y, newDir.z,
                         desiredDir.x, desiredDir.y, desiredDir.z, toTarget.x, toTarget.y, toTarget.z, dispDir.x,
                         dispDir.y, dispDir.z, effDir.x, effDir.y, effDir.z, dispSpeed, projForward.x, projForward.y,
-                        projForward.z, dotForward);
+                        projForward.z, forwardXZx, forwardXZz, dotForward);
                     state.loggedSteer = true;
                 }
             }
