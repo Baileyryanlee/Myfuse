@@ -3657,6 +3657,31 @@ void Fuse::TickRangedProjectileSeek(PlayState* play) {
                 state.hasPrevPos = true;
             }
 
+            Vec3f move{ proj->world.pos.x - state.prevPos.x, proj->world.pos.y - state.prevPos.y,
+                        proj->world.pos.z - state.prevPos.z };
+            float dispSpeed = Fuse_Vec3fLength(move);
+            const bool hasDispDir = dispSpeed > 0.01f;
+            Vec3f projForward{ 0.0f, 0.0f, 0.0f };
+            if (hasDispDir) {
+                projForward = Fuse_Vec3fNormalize(move);
+            } else {
+                const float speed = sqrtf((proj->speedXZ * proj->speedXZ) + (proj->velocity.y * proj->velocity.y));
+                const float denom = std::max(speed, 0.0001f);
+                projForward.x = Math_SinS(proj->world.rot.y);
+                projForward.z = Math_CosS(proj->world.rot.y);
+                projForward.y = proj->velocity.y / denom;
+                projForward = Fuse_Vec3fNormalize(projForward);
+            }
+
+            auto logSeekStopCheck = [&](float dot, const Vec3f& desiredDir) {
+                if (Fuse_SeekDebugEnabled()) {
+                    Fuse::Log(
+                        "[FuseDBG] SeekStopCheck proj=%p dot=%.3f projF=(%.2f %.2f %.2f) tgtD=(%.2f %.2f %.2f)\n",
+                        proj, dot, projForward.x, projForward.y, projForward.z, desiredDir.x, desiredDir.y,
+                        desiredDir.z);
+                }
+            };
+
             if (!state.hasAcquired) {
                 if (state.acquireDelayFramesRemaining > 0) {
                     --state.acquireDelayFramesRemaining;
@@ -3666,7 +3691,7 @@ void Fuse::TickRangedProjectileSeek(PlayState* play) {
                 }
 
                 float speed = 0.0f;
-                const Vec3f currentDir = Fuse_GetArrowEffectiveDir(proj, &speed);
+                Fuse_GetArrowEffectiveDir(proj, &speed);
                 if (speed <= 0.01f) {
                     state.hasAcquired = true;
                     state.isSeekingActive = false;
@@ -3697,7 +3722,7 @@ void Fuse::TickRangedProjectileSeek(PlayState* play) {
                     }
 
                     const Vec3f desiredDir = Fuse_Vec3fNormalize(toTarget);
-                    const float dot = Fuse_Vec3fDot(currentDir, desiredDir);
+                    const float dot = Fuse_Vec3fDot(projForward, desiredDir);
                     if (dot < seekDotMin) {
                         actor = actor->next;
                         continue;
@@ -3762,22 +3787,17 @@ void Fuse::TickRangedProjectileSeek(PlayState* play) {
                 ++state.ticksSinceAcquire;
             }
 
-            Vec3f move{ proj->world.pos.x - state.prevPos.x, proj->world.pos.y - state.prevPos.y,
-                        proj->world.pos.z - state.prevPos.z };
-            float dispSpeed = Fuse_Vec3fLength(move);
-            bool hasDispDir = dispSpeed > 0.01f;
-            Vec3f dispDir{ 0.0f, 0.0f, 0.0f };
-            float dotDisp = 0.0f;
-            if (hasDispDir) {
-                dispDir = Fuse_Vec3fNormalize(move);
-                dotDisp = Fuse_Vec3fDot(dispDir, desiredDir);
-                if (state.ticksSinceAcquire >= 2 && dotDisp < -0.05f) {
+            float dotForward = Fuse_Vec3fDot(projForward, desiredDir);
+            if (hasDispDir || Fuse_Vec3fLength(projForward) > 0.0f) {
+                if (state.ticksSinceAcquire >= 2 && dotForward < -0.05f) {
+                    logSeekStopCheck(dotForward, desiredDir);
                     stopSeeking(proj, state, "behind");
                     state.prevPos = proj->world.pos;
                     proj = proj->next;
                     continue;
                 }
-                if (dotDisp < seekDotMin) {
+                if (dotForward < seekDotMin) {
+                    logSeekStopCheck(dotForward, desiredDir);
                     stopSeeking(proj, state, "out_of_cone");
                     state.prevPos = proj->world.pos;
                     proj = proj->next;
@@ -3794,7 +3814,7 @@ void Fuse::TickRangedProjectileSeek(PlayState* play) {
                     continue;
                 }
                 speed = dispSpeed;
-                currentDir = dispDir;
+                currentDir = projForward;
             }
 
             const float dot = Fuse_Vec3fDot(currentDir, desiredDir);
@@ -3824,9 +3844,9 @@ void Fuse::TickRangedProjectileSeek(PlayState* play) {
                 if (Fuse_SeekDebugEnabled() && !state.loggedSteer) {
                     Fuse::Log(
                         "[FuseDBG] SeekSteer proj=%p dot=%.2f yaw=%d pitch=%d speedXZ=%.2f velY=%.2f dir=(%.2f %.2f %.2f) "
-                        "dispSpeed=%.2f dispDir=(%.2f %.2f %.2f) dotDisp=%.2f\n",
-                        proj, dot, yawS, pitchS, speedXZ, velY, newDir.x, newDir.y, newDir.z, dispSpeed, dispDir.x,
-                        dispDir.y, dispDir.z, dotDisp);
+                        "dispSpeed=%.2f projF=(%.2f %.2f %.2f) dotF=%.2f\n",
+                        proj, dot, yawS, pitchS, speedXZ, velY, newDir.x, newDir.y, newDir.z, dispSpeed,
+                        projForward.x, projForward.y, projForward.z, dotForward);
                     state.loggedSteer = true;
                 }
             }
