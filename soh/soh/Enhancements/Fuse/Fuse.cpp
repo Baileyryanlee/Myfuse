@@ -122,6 +122,54 @@ static inline bool Fuse_SeekDebugEnabled() {
     return CVarGetInteger("gFuseSeekDebug", 0) != 0;
 }
 
+static void Fuse_EnsureSeekCVarsInitialized() {
+    static bool initialized = false;
+    if (initialized) {
+        return;
+    }
+    initialized = true;
+
+    const char* radius = CVarGetString("gFuseSeekRadius", "");
+    if (radius == nullptr || radius[0] == '\0') {
+        CVarSetInteger("gFuseSeekRadius", 900);
+    }
+
+    const char* dotMin = CVarGetString("gFuseSeekDotMin", "");
+    if (dotMin == nullptr || dotMin[0] == '\0') {
+        CVarSetFloat("gFuseSeekDotMin", 0.65f);
+    }
+
+    const char* maxTurn = CVarGetString("gFuseSeekMaxTurnDeg", "");
+    if (maxTurn == nullptr || maxTurn[0] == '\0') {
+        CVarSetFloat("gFuseSeekMaxTurnDeg", 6.0f);
+    }
+
+    const char* turnScaleFar = CVarGetString("gFuseSeekTurnScaleFar", "");
+    if (turnScaleFar == nullptr || turnScaleFar[0] == '\0') {
+        CVarSetFloat("gFuseSeekTurnScaleFar", 0.4f);
+    }
+
+    const char* acquireDelay = CVarGetString("gFuseSeekAcquireDelay", "");
+    if (acquireDelay == nullptr || acquireDelay[0] == '\0') {
+        CVarSetInteger("gFuseSeekAcquireDelay", 2);
+    }
+
+    const char* seekDebug = CVarGetString("gFuseSeekDebug", "");
+    if (seekDebug == nullptr || seekDebug[0] == '\0') {
+        CVarSetInteger("gFuseSeekDebug", 0);
+    }
+
+    const char* disableStop = CVarGetString("gFuseSeekDisableStop", "");
+    if (disableStop == nullptr || disableStop[0] == '\0') {
+        CVarSetInteger("gFuseSeekDisableStop", 0);
+    }
+
+    const char* stopGrace = CVarGetString("gFuseSeekStopGraceTicks", "");
+    if (stopGrace == nullptr || stopGrace[0] == '\0') {
+        CVarSetInteger("gFuseSeekStopGraceTicks", 2);
+    }
+}
+
 static inline float Fuse_Vec3fLength(const Vec3f& value) {
     return sqrtf(value.x * value.x + value.y * value.y + value.z * value.z);
 }
@@ -3597,6 +3645,8 @@ void Fuse::TickRangedProjectileSeek(PlayState* play) {
         return;
     }
 
+    Fuse_EnsureSeekCVarsInitialized();
+
     const float seekRadius = CVarGetFloat("gFuseSeekRadius", 900.0f);
     if (seekRadius <= 1.0f) {
         return;
@@ -3607,6 +3657,13 @@ void Fuse::TickRangedProjectileSeek(PlayState* play) {
     const float seekTurnScaleFar = std::clamp(CVarGetFloat("gFuseSeekTurnScaleFar", 0.4f), 0.0f, 1.0f);
     const int seekAcquireDelayFrames = std::max(0, CVarGetInteger("gFuseSeekAcquireDelay", 2));
     const bool seekDisableStop = CVarGetInteger("gFuseSeekDisableStop", 0) != 0;
+    static bool loggedSeekCVars = false;
+    if (Fuse_SeekDebugEnabled() && !loggedSeekCVars) {
+        Fuse::Log("[FuseDBG] SeekCVars: radius=%d dotMin=%.2f maxTurnDeg=%.2f farScale=%.2f delay=%d stopDisable=%d\n",
+                  static_cast<int>(seekRadius), seekDotMin, seekMaxTurnDeg, seekTurnScaleFar, seekAcquireDelayFrames,
+                  seekDisableStop ? 1 : 0);
+        loggedSeekCVars = true;
+    }
 
     const int curFrame = play->gameplayFrames;
     const bool shouldCleanup = (curFrame >= 0) && (curFrame % 120 == 0);
