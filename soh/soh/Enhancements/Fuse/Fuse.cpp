@@ -80,6 +80,8 @@ static bool sUseDebugOverrides = false;
 static std::unordered_map<Actor*, s16> sFuseFrozenTimers;
 static std::unordered_map<Actor*, int> sFreezeAppliedFrame;
 static std::unordered_map<Actor*, int32_t> sFreezeShatterFrame;
+static Actor* sFreezeShatterDamageVictim = nullptr;
+static int32_t sFreezeShatterDamageFrame = -1;
 static std::unordered_map<Actor*, int32_t> sFreezeLastShatterFrame;
 static std::unordered_map<Actor*, int32_t> sFreezeNoReapplyUntilFrame;
 static std::unordered_map<Actor*, int> sShatterImpulseUntilFrame;
@@ -542,6 +544,8 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
     if (frame >= 0) {
         sFreezeShatterFrame[victim] = frame;
         sFreezeLastShatterFrame[victim] = frame;
+        sFreezeShatterDamageVictim = victim;
+        sFreezeShatterDamageFrame = frame;
     }
 
     FUSE_LOG_MVP("[FuseMVP] FreezeShatter: src=%s victim=%p item=%d mat=%d base=%d matAtk=%d mult=%.2f final=%d\n",
@@ -633,6 +637,14 @@ bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* att
 bool Fuse::TryFreezeShatter(PlayState* play, Actor* victim, Actor* attacker, const char* srcLabel) {
     const int baseWeaponDamage = victim ? std::max(0, static_cast<int>(victim->colChkInfo.damage)) : 0;
     return Fuse::TryFreezeShatterWithDamage(play, victim, attacker, 0, MaterialId::None, baseWeaponDamage, srcLabel);
+}
+
+bool Fuse::WasFreezeShatterDamageAppliedThisFrame(PlayState* play, Actor* victim) {
+    if (!play || !victim) {
+        return false;
+    }
+
+    return sFreezeShatterDamageVictim == victim && sFreezeShatterDamageFrame == play->gameplayFrames;
 }
 
 static void ResetSavedSwordFuseFields() {
@@ -2132,6 +2144,37 @@ extern "C" void Fuse_ShieldGuardDrain(PlayState* play) {
                  maxDurability);
 }
 
+extern "C" int16_t Fuse_GetShieldBashDamage(int shieldItemId, int* outMaterialId, int* outHasBashMod,
+                                            int* outMaterialAtk) {
+    if (outMaterialId) {
+        *outMaterialId = static_cast<int>(MaterialId::None);
+    }
+    if (outHasBashMod) {
+        *outHasBashMod = 0;
+    }
+    if (outMaterialAtk) {
+        *outMaterialAtk = 0;
+    }
+
+    const FuseSlot slot = Fuse::GetActiveShieldSlot();
+    if (outMaterialId) {
+        *outMaterialId = static_cast<int>(slot.materialId);
+    }
+
+    bool hasBashMod = false;
+    int materialAtk = 0;
+    const int16_t bashDamage = Fuse::GetShieldBashDamage(slot, shieldItemId, &hasBashMod, &materialAtk);
+
+    if (outHasBashMod) {
+        *outHasBashMod = hasBashMod ? 1 : 0;
+    }
+    if (outMaterialAtk) {
+        *outMaterialAtk = materialAtk;
+    }
+
+    return bashDamage;
+}
+
 void Fuse_GetRangedFuseStatus(RangedFuseSlot slot, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax) {
     if (outMaterialId) {
         *outMaterialId = static_cast<int>(MaterialId::None);
@@ -2167,6 +2210,45 @@ int Fuse::GetMaterialAttackBonus(MaterialId id) {
     }
 
     return base + Fuse::GetMaterialAttackBonusDelta(id);
+}
+
+int16_t Fuse::GetShieldBashDamage(const FuseSlot& slot, int shieldItemId, bool* outHasBashMod, int* outMaterialAtk) {
+    if (outHasBashMod) {
+        *outHasBashMod = false;
+    }
+    if (outMaterialAtk) {
+        *outMaterialAtk = 0;
+    }
+
+    if (slot.materialId == MaterialId::None || slot.durabilityCur <= 0) {
+        FUSE_LOG_DBG("[FuseDBG] BashDamage: shield=%d mat=%d atk=0 bash=0 mod=0\n", shieldItemId,
+                     static_cast<int>(slot.materialId));
+        return 0;
+    }
+
+    const MaterialDef* def = Fuse::GetMaterialDef(slot.materialId);
+    if (!def) {
+        FUSE_LOG_DBG("[FuseDBG] BashDamage: shield=%d mat=%d atk=0 bash=0 mod=0\n", shieldItemId,
+                     static_cast<int>(slot.materialId));
+        return 0;
+    }
+
+    const int materialAtk = Fuse::GetMaterialAttackBonus(slot.materialId);
+    uint8_t bashLevel = 0;
+    const bool hasBashMod =
+        HasModifier(def->modifiers, def->modifierCount, ModifierId::PoundUp, &bashLevel) && bashLevel > 0;
+    const int bashDamage = hasBashMod ? materialAtk : (materialAtk / 2);
+
+    if (outHasBashMod) {
+        *outHasBashMod = hasBashMod;
+    }
+    if (outMaterialAtk) {
+        *outMaterialAtk = materialAtk;
+    }
+
+    FUSE_LOG_DBG("[FuseDBG] BashDamage: shield=%d mat=%d atk=%d bash=%d mod=%d\n", shieldItemId,
+                 static_cast<int>(slot.materialId), materialAtk, bashDamage, hasBashMod ? 1 : 0);
+    return static_cast<int16_t>(bashDamage);
 }
 
 int Fuse::GetMaterialDurabilityOverride(MaterialId id) {
@@ -3452,6 +3534,8 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
     sFreezeAppliedFrame.clear();
     sFreezeShatterFrame.clear();
     sFreezeLastShatterFrame.clear();
+    sFreezeShatterDamageVictim = nullptr;
+    sFreezeShatterDamageFrame = -1;
     sFuseFrozenOrigGravity.clear();
     sFuseFrozenPos.clear();
     sFuseFrozenPinned.clear();

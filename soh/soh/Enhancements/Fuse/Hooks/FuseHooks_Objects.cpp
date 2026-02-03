@@ -464,6 +464,20 @@ extern "C" void FuseHooks_OnSwordATCollision(PlayState* play, Collider* atCollid
         } else {
             Fuse::OnSwordMeleeHit(play, victimActor, baseWeaponDamage, impactPosPtr);
         }
+
+        const int materialAtk = Fuse::GetMaterialAttackBonus(materialId);
+        if (materialAtk != 0) {
+            if (Fuse::WasFreezeShatterDamageAppliedThisFrame(play, victimActor)) {
+                Fuse::Log("[FuseDBG] AtkBonusSkip: reason=freezeShatter victim=%p\n", (void*)victimActor);
+            } else if (!acCollider || !(acCollider->acFlags & AC_HARD)) {
+                if (!acInfo || !(acInfo->bumperFlags & BUMP_NO_DAMAGE)) {
+                    const char* atkSrc = isHammerAttack ? "hammer" : "sword";
+                    victimActor->colChkInfo.damage += materialAtk;
+                    Fuse::Log("[FuseDBG] AtkBonus: src=%s item=%d mat=%d atk=%d victim=%p\n", atkSrc, itemId,
+                              static_cast<int>(materialId), materialAtk, (void*)victimActor);
+                }
+            }
+        }
     }
 
     const bool broke = isHammerAttack ? Fuse::DamageHammerFuseDurability(play, 1, "Hammer hit actor")

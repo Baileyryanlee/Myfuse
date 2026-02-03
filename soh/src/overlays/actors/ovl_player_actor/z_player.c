@@ -53,6 +53,7 @@ extern void Fuse_ShieldGuardDrain(PlayState* play);
 extern void Fuse_ShieldEnqueuePendingStun(Actor* victim, uint8_t level, int materialId, int itemId);
 extern void Fuse_ShieldTriggerMegaStun(PlayState* play, Player* player, int materialId, int itemId);
 extern void Fuse_ShieldApplyFreeze(PlayState* play, Actor* victim, uint8_t level);
+extern s16 Fuse_GetShieldBashDamage(int shieldItemId, int* outMaterialId, int* outHasBashMod, int* outMaterialAtk);
 extern bool Fuse_IsActorFuseFrozen(Actor* actor);
 
 // Some player animations are played at this reduced speed, for reasons yet unclear.
@@ -6544,11 +6545,20 @@ static void Player_ShieldBash_UpdateColliderAndHit(Player* this, PlayState* play
                 s16 pushYaw = Actor_WorldYawTowardActor(&this->actor, target);
                 const f32 knockback = 5.0f;
                 const f32 knockbackScaled = knockback * bashResult.scalar;
+                int materialId = 0;
+                const s16 bashDamage = Fuse_GetShieldBashDamage(this->currentShield, &materialId, NULL, NULL);
 
                 if (bashResult.allowed) {
                     target->world.pos.x += Math_SinS(pushYaw) * knockbackScaled;
                     target->world.pos.z += Math_CosS(pushYaw) * knockbackScaled;
                     target->speedXZ = knockbackScaled;
+                }
+
+                osSyncPrintf("[FuseDBG] BashHit: shield=%d mat=%d bash=%d victim=%p\n", this->currentShield,
+                             materialId, bashDamage, (void*)target);
+                if (bashDamage > 0) {
+                    target->colChkInfo.damage = bashDamage;
+                    Actor_ApplyDamage(target);
                 }
 
                 Actor_SetColorFilter(target, 0x4000, 0xFF, 0, 8);
