@@ -106,6 +106,9 @@ bool IsFuseFrozen(Actor* actor);
 bool TryFreezeShatter(PlayState* play, Actor* victim, Actor* attacker, const char* srcLabel);
 bool TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* attacker, int itemId, MaterialId materialId,
                                 int baseWeaponDamage, const char* srcLabel);
+bool WasFreezeShatterDamageAppliedThisFrame(PlayState* play, Actor* victim);
+int16_t GetShieldBashDamage(const FuseSlot& slot, int shieldItemId, bool* outHasBashMod = nullptr,
+                            int* outMaterialAtk = nullptr);
 
 // Core state
 bool IsEnabled();
