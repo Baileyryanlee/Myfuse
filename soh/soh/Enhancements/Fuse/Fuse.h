@@ -82,7 +82,9 @@ FuseWeaponView Fuse_GetEquippedSwordView(const PlayState* play);
 extern "C" int32_t Fuse_GetPlayerMeleeHammerizeLevel(PlayState* play);
 extern "C" bool Fuse_IsActorFuseFrozen(Actor* actor);
 extern "C" int32_t Fuse_GetRangedMaterialAttackBonus(int32_t slotId, int32_t* outMaterialId);
-extern "C" int32_t Fuse_GetBoomerangMaterialAttackBonus(int32_t* outMaterialId);
+extern "C" int32_t Fuse_GetArrowsMaterialAttackBonus(int32_t* outMaterialId);
+extern "C" int32_t Fuse_GetSlingshotMaterialAttackBonus(int32_t* outMaterialId);
+extern "C" int32_t Fuse_GetBoomerangMaterialAttackBonus(PlayState* play, int32_t* outMaterialId);
 
 namespace Fuse {
 

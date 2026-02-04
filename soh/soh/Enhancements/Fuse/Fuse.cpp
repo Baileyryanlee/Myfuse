@@ -2230,26 +2230,59 @@ extern "C" int32_t Fuse_GetRangedMaterialAttackBonus(int32_t slotId, int32_t* ou
     return Fuse::GetMaterialAttackBonus(active.materialId);
 }
 
-extern "C" int32_t Fuse_GetBoomerangMaterialAttackBonus(int32_t* outMaterialId) {
+extern "C" int32_t Fuse_GetArrowsMaterialAttackBonus(int32_t* outMaterialId) {
     if (outMaterialId) {
         *outMaterialId = static_cast<int32_t>(MaterialId::None);
     }
 
-    const FuseSlot& slot = gFuseSave.GetActiveBoomerangSlot(nullptr);
-    if (slot.materialId == MaterialId::None || slot.durabilityCur <= 0) {
-        return 0;
-    }
-
-    const MaterialDef* def = Fuse::GetMaterialDef(slot.materialId);
-    if (!def) {
-        return 0;
-    }
-
+    const RangedFuseState& active = GetRangedActive(RangedFuseSlot::Arrows);
+    int32_t materialId = static_cast<int32_t>(active.materialId);
+    const bool isValid = active.materialId != MaterialId::None && active.durabilityCur > 0;
+    const int32_t materialAtk = isValid ? Fuse::GetMaterialAttackBonus(active.materialId) : 0;
+    FUSE_LOG_DBG("[FuseDBG] RangedAtkQuery: slot=%s mat=%d dura=%d/%d atk=%d\n", RangedSlotName(RangedFuseSlot::Arrows),
+                 materialId, active.durabilityCur, active.durabilityMax, materialAtk);
     if (outMaterialId) {
-        *outMaterialId = static_cast<int32_t>(slot.materialId);
+        *outMaterialId = materialId;
     }
 
-    return Fuse::GetMaterialAttackBonus(slot.materialId);
+    return materialAtk;
+}
+
+extern "C" int32_t Fuse_GetSlingshotMaterialAttackBonus(int32_t* outMaterialId) {
+    if (outMaterialId) {
+        *outMaterialId = static_cast<int32_t>(MaterialId::None);
+    }
+
+    const RangedFuseState& active = GetRangedActive(RangedFuseSlot::Slingshot);
+    int32_t materialId = static_cast<int32_t>(active.materialId);
+    const bool isValid = active.materialId != MaterialId::None && active.durabilityCur > 0;
+    const int32_t materialAtk = isValid ? Fuse::GetMaterialAttackBonus(active.materialId) : 0;
+    FUSE_LOG_DBG("[FuseDBG] RangedAtkQuery: slot=%s mat=%d dura=%d/%d atk=%d\n",
+                 RangedSlotName(RangedFuseSlot::Slingshot), materialId, active.durabilityCur, active.durabilityMax,
+                 materialAtk);
+    if (outMaterialId) {
+        *outMaterialId = materialId;
+    }
+
+    return materialAtk;
+}
+
+extern "C" int32_t Fuse_GetBoomerangMaterialAttackBonus(PlayState* play, int32_t* outMaterialId) {
+    if (outMaterialId) {
+        *outMaterialId = static_cast<int32_t>(MaterialId::None);
+    }
+
+    const FuseSlot& slot = gFuseSave.GetActiveBoomerangSlot(play);
+    int32_t materialId = static_cast<int32_t>(slot.materialId);
+    const bool isValid = slot.materialId != MaterialId::None && slot.durabilityCur > 0;
+    const int32_t materialAtk = isValid ? Fuse::GetMaterialAttackBonus(slot.materialId) : 0;
+    FUSE_LOG_DBG("[FuseDBG] BoomAtkQuery: mat=%d dura=%d/%d atk=%d play=%p\n", materialId, slot.durabilityCur,
+                 slot.durabilityMax, materialAtk, (void*)play);
+    if (outMaterialId) {
+        *outMaterialId = materialId;
+    }
+
+    return materialAtk;
 }
 
 static int GetMaterialBaseAttackBonus(MaterialId id) {
