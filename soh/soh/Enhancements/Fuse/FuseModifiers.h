@@ -18,6 +18,7 @@ enum class ModifierId : uint16_t {
     WideRange = 9,
     Explosion = 10,
     Seek = 11,
+    BashAttack = 12,
 };
 
 struct ModifierSpec {

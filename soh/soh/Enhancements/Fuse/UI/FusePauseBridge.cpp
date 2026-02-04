@@ -354,6 +354,8 @@ static const char* ModifierName(ModifierId id) {
             return "Range Up";
         case ModifierId::WideRange:
             return "Wide Range";
+        case ModifierId::BashAttack:
+            return "Bash Attack";
         default:
             return "Unknown";
     }
