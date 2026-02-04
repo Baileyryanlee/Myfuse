@@ -2198,6 +2198,60 @@ void Fuse_GetRangedFuseStatus(RangedFuseSlot slot, int* outMaterialId, int* outD
     }
 }
 
+extern "C" int32_t Fuse_GetRangedMaterialAttackBonus(int32_t slotId, int32_t* outMaterialId) {
+    if (outMaterialId) {
+        *outMaterialId = static_cast<int32_t>(MaterialId::None);
+    }
+
+    if (slotId < static_cast<int32_t>(RangedFuseSlot::Arrows) ||
+        slotId > static_cast<int32_t>(RangedFuseSlot::Hookshot)) {
+        return 0;
+    }
+
+    const RangedFuseSlot slot = static_cast<RangedFuseSlot>(slotId);
+    if (slot == RangedFuseSlot::Hookshot) {
+        return 0;
+    }
+
+    const RangedFuseState& active = GetRangedActive(slot);
+    if (active.materialId == MaterialId::None || active.durabilityCur <= 0) {
+        return 0;
+    }
+
+    const MaterialDef* def = Fuse::GetMaterialDef(active.materialId);
+    if (!def) {
+        return 0;
+    }
+
+    if (outMaterialId) {
+        *outMaterialId = static_cast<int32_t>(active.materialId);
+    }
+
+    return Fuse::GetMaterialAttackBonus(active.materialId);
+}
+
+extern "C" int32_t Fuse_GetBoomerangMaterialAttackBonus(int32_t* outMaterialId) {
+    if (outMaterialId) {
+        *outMaterialId = static_cast<int32_t>(MaterialId::None);
+    }
+
+    const FuseSlot& slot = gFuseSave.GetActiveBoomerangSlot(nullptr);
+    if (slot.materialId == MaterialId::None || slot.durabilityCur <= 0) {
+        return 0;
+    }
+
+    const MaterialDef* def = Fuse::GetMaterialDef(slot.materialId);
+    if (!def) {
+        return 0;
+    }
+
+    if (outMaterialId) {
+        *outMaterialId = static_cast<int32_t>(slot.materialId);
+    }
+
+    return Fuse::GetMaterialAttackBonus(slot.materialId);
+}
+
 static int GetMaterialBaseAttackBonus(MaterialId id) {
     const MaterialDef* def = Fuse::GetMaterialDef(id);
     return def ? def->attackBonus : 0;
