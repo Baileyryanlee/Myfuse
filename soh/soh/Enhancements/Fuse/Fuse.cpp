@@ -2237,7 +2237,7 @@ int16_t Fuse::GetShieldBashDamage(const FuseSlot& slot, int shieldItemId, bool* 
     uint8_t bashLevel = 0;
     const bool hasBashMod =
         HasModifier(def->modifiers, def->modifierCount, ModifierId::PoundUp, &bashLevel) && bashLevel > 0;
-    const int bashDamage = hasBashMod ? materialAtk : (materialAtk / 2);
+    const int bashDamage = hasBashMod ? (materialAtk / 2) : 0;
 
     if (outHasBashMod) {
         *outHasBashMod = hasBashMod;
