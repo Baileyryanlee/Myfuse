@@ -11,9 +11,6 @@
 
 #define FLAGS (ACTOR_FLAG_UPDATE_CULLING_DISABLED | ACTOR_FLAG_DRAW_CULLING_DISABLED)
 
-extern int32_t Fuse_GetArrowsMaterialAttackBonus(int32_t* outMaterialId);
-extern int32_t Fuse_GetSlingshotMaterialAttackBonus(int32_t* outMaterialId);
-
 void EnArrow_Init(Actor* thisx, PlayState* play);
 void EnArrow_Destroy(Actor* thisx, PlayState* play);
 void EnArrow_Update(Actor* thisx, PlayState* play);
@@ -63,33 +60,6 @@ static InitChainEntry sInitChain[] = {
 
 void EnArrow_SetupAction(EnArrow* this, EnArrowActionFunc actionFunc) {
     this->actionFunc = actionFunc;
-}
-
-static void EnArrow_ApplyFuseAttackBonus(EnArrow* this, Actor* hitActor, s32 isSeed) {
-    const int baseToucherDamage = this->collider.info.toucher.damage;
-    osSyncPrintf(
-        "[FuseDBG] AtkProbe: src=%s toucherDmg=%d dmgFlags=0x%08X atFlags=0x%X hitActor=%p\n",
-        isSeed ? "seed" : "arrow", baseToucherDamage, this->collider.info.toucher.dmgFlags,
-        this->collider.base.atFlags, (void*)hitActor);
-    if ((hitActor == NULL) || (hitActor->update == NULL)) {
-        return;
-    }
-
-    int32_t materialId = 0;
-    const int32_t materialAtk =
-        isSeed ? Fuse_GetSlingshotMaterialAttackBonus(&materialId) : Fuse_GetArrowsMaterialAttackBonus(&materialId);
-    osSyncPrintf("[FuseDBG] AtkProbe: src=%s mat=%d atk=%d\n", isSeed ? "seed" : "arrow", materialId, materialAtk);
-    if (materialAtk <= 0) {
-        return;
-    }
-
-    const int finalToucherDamage = baseToucherDamage + materialAtk;
-    osSyncPrintf("[FuseDBG] AtkBonus: src=%s mat=%d atk=%d baseT=%d finalT=%d victim=%p dmgFlags=0x%08X\n",
-                 isSeed ? "seed" : "arrow", materialId, materialAtk, baseToucherDamage, finalToucherDamage,
-                 (void*)hitActor, this->collider.info.toucher.dmgFlags);
-    if (baseToucherDamage > 0) {
-        this->collider.info.toucher.damage = finalToucherDamage;
-    }
 }
 
 Actor* EnArrow_TriggerDekuNutEffect(PlayState* play, const Vec3f* pos) {
@@ -369,7 +339,6 @@ void EnArrow_Fly(EnArrow* this, PlayState* play) {
                 this->actor.world.pos.z = (this->actor.world.pos.z + this->actor.prevPos.z) * 0.5f;
 
                 hitActor = this->collider.base.at;
-                EnArrow_ApplyFuseAttackBonus(this, hitActor, true);
                 if ((hitActor != NULL) && (hitActor->category == ACTORCAT_ENEMY) && !this->fuseHitApplied) {
                     Vec3f impactPos;
                     Vec3f* impactPosPtr = NULL;
@@ -405,7 +374,6 @@ void EnArrow_Fly(EnArrow* this, PlayState* play) {
 
             if (atTouched && (this->collider.info.atHitInfo->elemType != ELEMTYPE_UNK4)) {
                 hitActor = this->collider.base.at;
-                EnArrow_ApplyFuseAttackBonus(this, hitActor, false);
                 if ((hitActor != NULL) && (hitActor->category == ACTORCAT_ENEMY) && !this->fuseHitApplied) {
                     Vec3f impactPos;
                     Vec3f* impactPosPtr = NULL;

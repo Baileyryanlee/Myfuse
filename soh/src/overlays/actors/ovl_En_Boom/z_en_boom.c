@@ -12,7 +12,6 @@
 
 extern float Fuse_GetBoomerangWideRangeScale(int32_t* outLevel);
 extern void Fuse_LogBoomerangWideRange(int level, float scale);
-extern int32_t Fuse_GetBoomerangMaterialAttackBonus(PlayState* play, int32_t* outMaterialId);
 
 void EnBoom_Init(Actor* thisx, PlayState* play);
 void EnBoom_Destroy(Actor* thisx, PlayState* play);
@@ -61,31 +60,6 @@ static InitChainEntry sInitChain[] = {
 
 void EnBoom_SetupAction(EnBoom* this, EnBoomActionFunc actionFunc) {
     this->actionFunc = actionFunc;
-}
-
-static void EnBoom_ApplyFuseAttackBonus(EnBoom* this, PlayState* play, Actor* hitActor) {
-    const int baseToucherDamage = this->collider.info.toucher.damage;
-    osSyncPrintf("[FuseDBG] AtkProbe: src=boomerang toucherDmg=%d dmgFlags=0x%08X atFlags=0x%X hitActor=%p\n",
-                 baseToucherDamage, this->collider.info.toucher.dmgFlags,
-                 this->collider.base.atFlags, (void*)hitActor);
-    if ((hitActor == NULL) || (hitActor->update == NULL)) {
-        return;
-    }
-
-    int32_t materialId = 0;
-    const int32_t materialAtk = Fuse_GetBoomerangMaterialAttackBonus(play, &materialId);
-    osSyncPrintf("[FuseDBG] AtkProbe: src=boomerang mat=%d atk=%d\n", materialId, materialAtk);
-    if (materialAtk <= 0) {
-        return;
-    }
-
-    const int finalToucherDamage = baseToucherDamage + materialAtk;
-    osSyncPrintf("[FuseDBG] AtkBonus: src=boomerang mat=%d atk=%d baseT=%d finalT=%d victim=%p dmgFlags=0x%08X\n",
-                 materialId, materialAtk, baseToucherDamage, finalToucherDamage, (void*)hitActor,
-                 this->collider.info.toucher.dmgFlags);
-    if (baseToucherDamage > 0) {
-        this->collider.info.toucher.damage = finalToucherDamage;
-    }
 }
 
 void EnBoom_Init(Actor* thisx, PlayState* play) {
@@ -196,7 +170,6 @@ void EnBoom_Fly(EnBoom* this, PlayState* play) {
     if (collided) {
         Actor* hitActor = this->collider.base.at;
         if (hitActor != NULL && hitActor->id != ACTOR_EN_ITEM00 && hitActor->id != ACTOR_EN_SI) {
-            EnBoom_ApplyFuseAttackBonus(this, play, hitActor);
             Vec3f impactPos;
             Vec3f* impactPosPtr = NULL;
             if (this->collider.info.atHitInfo != NULL) {
