@@ -64,10 +64,9 @@ void EnBoom_SetupAction(EnBoom* this, EnBoomActionFunc actionFunc) {
 }
 
 static void EnBoom_ApplyFuseAttackBonus(EnBoom* this, PlayState* play, Actor* hitActor) {
-    const int baseColDamage = hitActor ? hitActor->colChkInfo.damage : 0;
     const int baseToucherDamage = this->collider.info.toucher.damage;
-    osSyncPrintf("[FuseDBG] AtkProbe: src=boomerang baseCol=%d toucherDmg=%d dmgFlags=0x%08X atFlags=0x%X hitActor=%p\n",
-                 baseColDamage, baseToucherDamage, this->collider.info.toucher.dmgFlags,
+    osSyncPrintf("[FuseDBG] AtkProbe: src=boomerang toucherDmg=%d dmgFlags=0x%08X atFlags=0x%X hitActor=%p\n",
+                 baseToucherDamage, this->collider.info.toucher.dmgFlags,
                  this->collider.base.atFlags, (void*)hitActor);
     if ((hitActor == NULL) || (hitActor->update == NULL)) {
         return;
@@ -80,18 +79,12 @@ static void EnBoom_ApplyFuseAttackBonus(EnBoom* this, PlayState* play, Actor* hi
         return;
     }
 
+    const int finalToucherDamage = baseToucherDamage + materialAtk;
+    osSyncPrintf("[FuseDBG] AtkBonus: src=boomerang mat=%d atk=%d baseT=%d finalT=%d victim=%p dmgFlags=0x%08X\n",
+                 materialId, materialAtk, baseToucherDamage, finalToucherDamage, (void*)hitActor,
+                 this->collider.info.toucher.dmgFlags);
     if (baseToucherDamage > 0) {
-        const int finalToucherDamage = baseToucherDamage + materialAtk;
         this->collider.info.toucher.damage = finalToucherDamage;
-        osSyncPrintf("[FuseDBG] AtkBonus: src=boomerang mat=%d atk=%d baseT=%d finalT=%d victim=%p dmgFlags=0x%08X\n",
-                     materialId, materialAtk, baseToucherDamage, finalToucherDamage, (void*)hitActor,
-                     this->collider.info.toucher.dmgFlags);
-    } else if (baseColDamage > 0) {
-        const int finalColDamage = baseColDamage + materialAtk;
-        hitActor->colChkInfo.damage = finalColDamage;
-        osSyncPrintf("[FuseDBG] AtkBonus: src=boomerang mat=%d atk=%d baseCol=%d finalCol=%d victim=%p dmgFlags=0x%08X\n",
-                     materialId, materialAtk, baseColDamage, finalColDamage, (void*)hitActor,
-                     this->collider.info.toucher.dmgFlags);
     }
 }
 
