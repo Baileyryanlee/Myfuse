@@ -71,7 +71,7 @@ static void EnArrow_ApplyFuseAttackBonus(EnArrow* this, Actor* hitActor, s32 isS
     osSyncPrintf(
         "[FuseDBG] AtkProbe: src=%s baseCol=%d toucherDmg=%d dmgFlags=0x%08X atFlags=0x%X hitActor=%p\n",
         isSeed ? "seed" : "arrow", baseColDamage, baseToucherDamage, this->collider.info.toucher.dmgFlags,
-        this->collider.info.toucher.atFlags, (void*)hitActor);
+        this->collider.base.atFlags, (void*)hitActor);
     if ((hitActor == NULL) || (hitActor->update == NULL)) {
         return;
     }

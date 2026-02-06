@@ -68,7 +68,7 @@ static void EnBoom_ApplyFuseAttackBonus(EnBoom* this, PlayState* play, Actor* hi
     const int baseToucherDamage = this->collider.info.toucher.damage;
     osSyncPrintf("[FuseDBG] AtkProbe: src=boomerang baseCol=%d toucherDmg=%d dmgFlags=0x%08X atFlags=0x%X hitActor=%p\n",
                  baseColDamage, baseToucherDamage, this->collider.info.toucher.dmgFlags,
-                 this->collider.info.toucher.atFlags, (void*)hitActor);
+                 this->collider.base.atFlags, (void*)hitActor);
     if ((hitActor == NULL) || (hitActor->update == NULL)) {
         return;
     }
