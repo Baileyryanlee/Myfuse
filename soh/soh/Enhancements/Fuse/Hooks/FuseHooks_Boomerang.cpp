@@ -76,15 +76,30 @@ extern "C" void FuseHooks_OnBoomerangHitActor(PlayState* play, Actor* victim, co
                 Fuse::GetMaterialModifierLevel(materialId, FuseItemType::Boomerang, ModifierId::Explosion);
         }
 
+        const int curDurability = Fuse::GetBoomerangFuseDurability();
+        const int maxDurability = Fuse::GetBoomerangFuseMaxDurability();
         Fuse::Log("[FuseDBG] BoomerangHit: item=boomerang mat=%d lvl=%u victim=%p dura=%d/%d event=hit\n",
                   static_cast<int>(materialId), static_cast<unsigned int>(knockbackLevel), (void*)victim,
-                  Fuse::GetBoomerangFuseDurability(), Fuse::GetBoomerangFuseMaxDurability());
+                  curDurability, maxDurability);
+
+        if (curDurability > 0) {
+            const int bonus = Fuse::GetMaterialAttackBonus(materialId);
+            if (bonus > 0) {
+                const int base = victim->colChkInfo.damage;
+                const int prevDamage = victim->colChkInfo.damage;
+                victim->colChkInfo.damage = bonus;
+                Actor_ApplyDamage(victim);
+                victim->colChkInfo.damage = prevDamage;
+                Fuse::Log("[FuseDBG] AtkBonusApply: src=boomerang mat=%d bonus=%d base=%d hpAfter=%d\n",
+                          static_cast<int>(materialId), bonus, base, victim->colChkInfo.health);
+            }
+        }
 
         Player* player = GET_PLAYER(play);
         if (def && explosionLevel > 0) {
             Fuse::Log("[FuseDBG] ExplosionProc: item=Boomerang mat=%d lvl=%u victim=%p dura=%d/%d\n",
                       static_cast<int>(materialId), static_cast<unsigned int>(explosionLevel), (void*)victim,
-                      Fuse::GetBoomerangFuseDurability(), Fuse::GetBoomerangFuseMaxDurability());
+                      curDurability, maxDurability);
             if (Fuse_IsExplosionImmuneVictim(victim)) {
                 Fuse::Log("[FuseDBG] ExplodeSkip: src=Boomerang victim=ACTOR_BOSS_DODONGO\n");
             } else if (FuseBash_IsEnemyActor(victim) || Fuse_IsBombableActorId(victim->id)) {

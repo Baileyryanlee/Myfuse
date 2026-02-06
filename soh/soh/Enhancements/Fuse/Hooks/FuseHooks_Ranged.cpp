@@ -171,6 +171,19 @@ extern "C" void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Ac
         return;
     }
 
+    if (slot != RANGED_FUSE_SLOT_HOOKSHOT) {
+        const int bonus = Fuse::GetMaterialAttackBonus(materialId);
+        if (bonus > 0) {
+            const int base = victim->colChkInfo.damage;
+            const int prevDamage = victim->colChkInfo.damage;
+            victim->colChkInfo.damage = bonus;
+            Actor_ApplyDamage(victim);
+            victim->colChkInfo.damage = prevDamage;
+            Fuse::Log("[FuseDBG] AtkBonusApply: src=ranged slot=%s mat=%d bonus=%d base=%d hpAfter=%d\n",
+                      RangedSlotLabel(slot), materialIdRaw, bonus, base, victim->colChkInfo.health);
+        }
+    }
+
     const uint8_t explosionLevel =
         Fuse::GetMaterialModifierLevel(materialId, RangedSlotItemType(slot), ModifierId::Explosion);
     if (explosionLevel > 0) {
