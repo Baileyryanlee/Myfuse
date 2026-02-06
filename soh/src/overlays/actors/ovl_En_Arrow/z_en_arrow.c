@@ -11,7 +11,8 @@
 
 #define FLAGS (ACTOR_FLAG_UPDATE_CULLING_DISABLED | ACTOR_FLAG_DRAW_CULLING_DISABLED)
 
-extern int32_t Fuse_GetRangedMaterialAttackBonus(int32_t slotId, int32_t* outMaterialId);
+extern int32_t Fuse_GetArrowsMaterialAttackBonus(int32_t* outMaterialId);
+extern int32_t Fuse_GetSlingshotMaterialAttackBonus(int32_t* outMaterialId);
 
 void EnArrow_Init(Actor* thisx, PlayState* play);
 void EnArrow_Destroy(Actor* thisx, PlayState* play);
@@ -65,27 +66,37 @@ void EnArrow_SetupAction(EnArrow* this, EnArrowActionFunc actionFunc) {
 }
 
 static void EnArrow_ApplyFuseAttackBonus(EnArrow* this, Actor* hitActor, s32 isSeed) {
+    const int baseColDamage = hitActor ? hitActor->colChkInfo.damage : 0;
+    const int baseToucherDamage = this->collider.info.toucher.damage;
+    osSyncPrintf(
+        "[FuseDBG] AtkProbe: src=%s baseCol=%d toucherDmg=%d dmgFlags=0x%08X atFlags=0x%X hitActor=%p\n",
+        isSeed ? "seed" : "arrow", baseColDamage, baseToucherDamage, this->collider.info.toucher.dmgFlags,
+        this->collider.info.toucher.atFlags, (void*)hitActor);
     if ((hitActor == NULL) || (hitActor->update == NULL)) {
         return;
     }
 
-    const int baseDamage = hitActor->colChkInfo.damage;
-    if (baseDamage <= 0) {
-        return;
-    }
-
-    const int32_t slotId = isSeed ? RANGED_FUSE_SLOT_SLINGSHOT : RANGED_FUSE_SLOT_ARROWS;
     int32_t materialId = 0;
-    const int32_t materialAtk = Fuse_GetRangedMaterialAttackBonus(slotId, &materialId);
+    const int32_t materialAtk =
+        isSeed ? Fuse_GetSlingshotMaterialAttackBonus(&materialId) : Fuse_GetArrowsMaterialAttackBonus(&materialId);
+    osSyncPrintf("[FuseDBG] AtkProbe: src=%s mat=%d atk=%d\n", isSeed ? "seed" : "arrow", materialId, materialAtk);
     if (materialAtk <= 0) {
         return;
     }
 
-    const int finalDamage = baseDamage + materialAtk;
-    hitActor->colChkInfo.damage = finalDamage;
-    osSyncPrintf("[FuseDBG] AtkBonus: src=%s mat=%d atk=%d base=%d final=%d victim=%p dmgFlags=0x%08X\n",
-                 isSeed ? "seed" : "arrow", materialId, materialAtk, baseDamage, finalDamage, (void*)hitActor,
-                 this->collider.info.toucher.dmgFlags);
+    if (baseToucherDamage > 0) {
+        const int finalToucherDamage = baseToucherDamage + materialAtk;
+        this->collider.info.toucher.damage = finalToucherDamage;
+        osSyncPrintf("[FuseDBG] AtkBonus: src=%s mat=%d atk=%d baseT=%d finalT=%d victim=%p dmgFlags=0x%08X\n",
+                     isSeed ? "seed" : "arrow", materialId, materialAtk, baseToucherDamage, finalToucherDamage,
+                     (void*)hitActor, this->collider.info.toucher.dmgFlags);
+    } else if (baseColDamage > 0) {
+        const int finalColDamage = baseColDamage + materialAtk;
+        hitActor->colChkInfo.damage = finalColDamage;
+        osSyncPrintf("[FuseDBG] AtkBonus: src=%s mat=%d atk=%d baseCol=%d finalCol=%d victim=%p dmgFlags=0x%08X\n",
+                     isSeed ? "seed" : "arrow", materialId, materialAtk, baseColDamage, finalColDamage,
+                     (void*)hitActor, this->collider.info.toucher.dmgFlags);
+    }
 }
 
 Actor* EnArrow_TriggerDekuNutEffect(PlayState* play, const Vec3f* pos) {
