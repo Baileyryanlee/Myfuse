@@ -66,11 +66,10 @@ void EnArrow_SetupAction(EnArrow* this, EnArrowActionFunc actionFunc) {
 }
 
 static void EnArrow_ApplyFuseAttackBonus(EnArrow* this, Actor* hitActor, s32 isSeed) {
-    const int baseColDamage = hitActor ? hitActor->colChkInfo.damage : 0;
     const int baseToucherDamage = this->collider.info.toucher.damage;
     osSyncPrintf(
-        "[FuseDBG] AtkProbe: src=%s baseCol=%d toucherDmg=%d dmgFlags=0x%08X atFlags=0x%X hitActor=%p\n",
-        isSeed ? "seed" : "arrow", baseColDamage, baseToucherDamage, this->collider.info.toucher.dmgFlags,
+        "[FuseDBG] AtkProbe: src=%s toucherDmg=%d dmgFlags=0x%08X atFlags=0x%X hitActor=%p\n",
+        isSeed ? "seed" : "arrow", baseToucherDamage, this->collider.info.toucher.dmgFlags,
         this->collider.base.atFlags, (void*)hitActor);
     if ((hitActor == NULL) || (hitActor->update == NULL)) {
         return;
@@ -84,18 +83,12 @@ static void EnArrow_ApplyFuseAttackBonus(EnArrow* this, Actor* hitActor, s32 isS
         return;
     }
 
+    const int finalToucherDamage = baseToucherDamage + materialAtk;
+    osSyncPrintf("[FuseDBG] AtkBonus: src=%s mat=%d atk=%d baseT=%d finalT=%d victim=%p dmgFlags=0x%08X\n",
+                 isSeed ? "seed" : "arrow", materialId, materialAtk, baseToucherDamage, finalToucherDamage,
+                 (void*)hitActor, this->collider.info.toucher.dmgFlags);
     if (baseToucherDamage > 0) {
-        const int finalToucherDamage = baseToucherDamage + materialAtk;
         this->collider.info.toucher.damage = finalToucherDamage;
-        osSyncPrintf("[FuseDBG] AtkBonus: src=%s mat=%d atk=%d baseT=%d finalT=%d victim=%p dmgFlags=0x%08X\n",
-                     isSeed ? "seed" : "arrow", materialId, materialAtk, baseToucherDamage, finalToucherDamage,
-                     (void*)hitActor, this->collider.info.toucher.dmgFlags);
-    } else if (baseColDamage > 0) {
-        const int finalColDamage = baseColDamage + materialAtk;
-        hitActor->colChkInfo.damage = finalColDamage;
-        osSyncPrintf("[FuseDBG] AtkBonus: src=%s mat=%d atk=%d baseCol=%d finalCol=%d victim=%p dmgFlags=0x%08X\n",
-                     isSeed ? "seed" : "arrow", materialId, materialAtk, baseColDamage, finalColDamage,
-                     (void*)hitActor, this->collider.info.toucher.dmgFlags);
     }
 }
 
