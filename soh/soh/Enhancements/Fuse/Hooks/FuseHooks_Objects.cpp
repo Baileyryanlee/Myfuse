@@ -154,6 +154,10 @@ static Vec3f GetPlayerImpactPos(Player* player, float forward, float up) {
     return pos;
 }
 
+static bool IsZeroishPos(const Vec3f& pos) {
+    return std::fabs(pos.x) < 0.01f && std::fabs(pos.y) < 0.01f && std::fabs(pos.z) < 0.01f;
+}
+
 static bool IsPlayerHammerAttack(const Player* player) {
     return player && (player->heldItemAction == PLAYER_IA_HAMMER || player->itemAction == PLAYER_IA_HAMMER);
 }
@@ -690,6 +694,62 @@ void OnPlayerUpdate(PlayState* play) {
             Fuse::SetHammerDrainedThisSwing(true);
             Fuse::Log("[FuseMVP] Hammer GROUND impact DRAIN frame=%d durability=%d->%d%s\n",
                       play ? play->gameplayFrames : -1, before, after, broke ? " (broke)" : "");
+        }
+    }
+
+    if (isHammerAttacking && !Fuse::HammerDrainedThisSwing()) {
+        const char* reason = "unknown";
+        if (SwordHadImpactFlags(player, &reason) && !Fuse::HammerHitActorThisSwing()) {
+            const bool fused = Fuse::IsHammerFused();
+            const int before = Fuse::GetHammerFuseDurability();
+            const MaterialId materialId = Fuse::GetHammerMaterial();
+            const MaterialDef* def = Fuse::GetMaterialDef(materialId);
+            const uint8_t explosionLevel =
+                Fuse::GetMaterialModifierLevel(materialId, FuseItemType::Hammer, ModifierId::Explosion);
+
+            Vec3f from = player->meleeWeaponInfo[0].base;
+            Vec3f to = player->meleeWeaponInfo[0].tip;
+            if (IsZeroishPos(from) || IsZeroishPos(to)) {
+                from = GetPlayerImpactPos(player, 10.0f, 14.0f);
+                to = GetPlayerImpactPos(player, 40.0f, 14.0f);
+            }
+
+            Vec3f hitPos{ 0.0f, 0.0f, 0.0f };
+            CollisionPoly* hitPoly = nullptr;
+            s32 bgId = -1;
+            const bool hasHit =
+                BgCheck_EntityLineTest1(&play->colCtx, &from, &to, &hitPos, &hitPoly, true, true, true, true, &bgId);
+
+            const float normalY = hitPoly ? COLPOLY_GET_NORMAL(hitPoly->normal.y) : 0.0f;
+            const uint16_t polyType = hitPoly ? hitPoly->type : 0;
+
+            FUSE_LOG_DBG(
+                "[FuseDBG] HammerHit: kind=bg reason=%s mat=%d(%s) explosion=%u hit=%d pos=(%.2f %.2f %.2f) "
+                "normalY=%.3f poly=0x%04X bgId=%d\n",
+                reason, static_cast<int>(materialId), def ? def->name : "unknown",
+                static_cast<unsigned int>(explosionLevel), hasHit ? 1 : 0, hitPos.x, hitPos.y, hitPos.z, normalY,
+                polyType, bgId);
+
+            if (fused && explosionLevel > 0) {
+                Vec3f explodePos = hasHit ? hitPos : GetPlayerImpactPos(player, 28.0f, 18.0f);
+                explodePos.y += 6.0f;
+                const Actor* bombable = Fuse_FindNearbyBombable(play, &explodePos, 120.0f);
+                if (bombable) {
+                    explodePos = Fuse_GetBombableAnchorPos(bombable, 25.0f);
+                    Fuse_AdjustExplosionPosForBombable(bombable, &player->actor, &explodePos);
+                }
+                FUSE_LOG_DBG("[FuseDBG] ExplodeCall: src=Hammer kind=bg reason=%s\n", reason);
+                Fuse_TriggerExplosion(play, explodePos, FuseExplosionSelfMode::DamagePlayer,
+                                      Fuse_GetExplosionParams(materialId, explosionLevel), "HammerBG");
+            }
+
+            if (!Fuse::HammerDrainedThisSwing() && fused && before > 0) {
+                const bool broke = Fuse::DamageHammerFuseDurability(play, 1, reason);
+                const int after = Fuse::GetHammerFuseDurability();
+                Fuse::SetHammerDrainedThisSwing(true);
+                Fuse::Log("[FuseMVP] Hammer BG impact DRAIN frame=%d durability=%d->%d%s\n",
+                          play ? play->gameplayFrames : -1, before, after, broke ? " (broke)" : "");
+            }
         }
     }
 
