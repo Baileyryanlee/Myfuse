@@ -4440,16 +4440,19 @@ void Fuse::OnHammerMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage
             if (bombable) {
                 Vec3f adjustedPos = Fuse_GetBombableAnchorPos(victim, 25.0f);
                 Fuse_AdjustExplosionPosForBombable(victim, player ? &player->actor : nullptr, &adjustedPos);
-                FUSE_LOG_DBG("[FuseDBG] Explode: src=Hammer kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n",
-                             adjustedPos.x, adjustedPos.y, adjustedPos.z, victim->id, bombable);
+                FUSE_LOG_DBG(
+                    "[FuseDBG] Explode: src=Hammer kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n",
+                    adjustedPos.x, adjustedPos.y, adjustedPos.z, victim->id, bombable);
+                Fuse::SetHammerHitActorThisSwing(true);
                 Fuse_TriggerExplosion(play, adjustedPos, FuseExplosionSelfMode::DamagePlayer,
                                       Fuse_GetExplosionParams(materialId, explosionLevel), "Hammer");
                 didExplode = true;
             } else {
                 const Vec3f* explodePos = impactPos ? impactPos : &victim->focus.pos;
                 Vec3f adjustedPos = explodePos ? *explodePos : victim->world.pos;
-                FUSE_LOG_DBG("[FuseDBG] Explode: src=Hammer kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n",
-                             adjustedPos.x, adjustedPos.y, adjustedPos.z, victim->id, bombable);
+                FUSE_LOG_DBG(
+                    "[FuseDBG] Explode: src=Hammer kind=actor pos=(%.2f %.2f %.2f) victim=0x%04X bombable=%d\n",
+                    adjustedPos.x, adjustedPos.y, adjustedPos.z, victim->id, bombable);
                 Fuse_TriggerExplosion(play, adjustedPos, FuseExplosionSelfMode::DamagePlayer,
                                       Fuse_GetExplosionParams(materialId, explosionLevel), "Hammer");
                 didExplode = true;
