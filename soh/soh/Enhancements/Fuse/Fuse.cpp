@@ -228,8 +228,8 @@ static bool Fuse_IsBurnImmuneVictim(const Actor* victim) {
 
     // TODO: Expand burn immunity list for additional fire-based enemies.
     switch (victim->id) {
-        case ACTOR_EN_BW:       // Torch Slug
-        case ACTOR_EN_FIREFLY:  // Fire Keese
+        case ACTOR_EN_BW:      // Torch Slug
+        case ACTOR_EN_FIREFLY: // Fire Keese
             return true;
         default:
             return false;
@@ -1443,24 +1443,6 @@ bool HeldItemActionToSlot(int32_t heldAction, RangedFuseSlot* outSlot) {
         default:
             return false;
     }
-}
-
-static bool IsActorAliveInPlay(PlayState* play, Actor* target) {
-    if (!play || !target) {
-        return false;
-    }
-
-    for (int i = 0; i < ACTORCAT_MAX; ++i) {
-        Actor* a = play->actorCtx.actorLists[i].head;
-        while (a != nullptr) {
-            if (a == target) {
-                return true;
-            }
-            a = a->next;
-        }
-    }
-
-    return false;
 }
 
 static void TickFuseFrozenTimers(PlayState* play) {
@@ -4566,8 +4548,7 @@ void Fuse::OnHammerMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage
                 Vec3f adjustedPos = Fuse_GetBombableAnchorPos(victim, 25.0f);
                 Fuse_AdjustExplosionPosForBombable(victim, player ? &player->actor : nullptr, &adjustedPos);
                 if (isZeroishPos(adjustedPos)) {
-                    FUSE_LOG_DBG(
-                        "[FuseDBG] HammerExplodePosFallback: using victim->world.pos (chosen was zero-ish)\n");
+                    FUSE_LOG_DBG("[FuseDBG] HammerExplodePosFallback: using victim->world.pos (chosen was zero-ish)\n");
                     adjustedPos = victim->world.pos;
                 }
                 FUSE_LOG_DBG(
@@ -4580,8 +4561,7 @@ void Fuse::OnHammerMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage
                 const Vec3f* explodePos = impactPos ? impactPos : &victim->focus.pos;
                 Vec3f adjustedPos = explodePos ? *explodePos : victim->world.pos;
                 if (isZeroishPos(adjustedPos)) {
-                    FUSE_LOG_DBG(
-                        "[FuseDBG] HammerExplodePosFallback: using victim->world.pos (chosen was zero-ish)\n");
+                    FUSE_LOG_DBG("[FuseDBG] HammerExplodePosFallback: using victim->world.pos (chosen was zero-ish)\n");
                     adjustedPos = victim->world.pos;
                 }
                 FUSE_LOG_DBG(
@@ -4603,4 +4583,8 @@ void Fuse::OnHammerMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage
 
     ApplyMeleeHitMaterialEffects(play, victim, player ? &player->actor : nullptr, materialId, ITEM_HAMMER,
                                  baseWeaponDamage, "hammer", false);
+}
+
+bool IsActorAliveInPlay(PlayState* play, Actor* target) {
+    return false;
 }
