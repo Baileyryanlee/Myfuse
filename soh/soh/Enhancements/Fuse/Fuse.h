@@ -107,6 +107,8 @@ bool TryFreezeShatter(PlayState* play, Actor* victim, Actor* attacker, const cha
 bool TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* attacker, int itemId, MaterialId materialId,
                                 int baseWeaponDamage, const char* srcLabel);
 bool WasFreezeShatterDamageAppliedThisFrame(PlayState* play, Actor* victim);
+void ApplyBurn(PlayState* play, Actor* victim, uint8_t level, MaterialId materialId, const char* srcLabel,
+               const char* slotLabel);
 int16_t GetShieldBashDamage(const FuseSlot& slot, int shieldItemId, bool* outHasBashMod = nullptr,
                             int* outMaterialAtk = nullptr);
 

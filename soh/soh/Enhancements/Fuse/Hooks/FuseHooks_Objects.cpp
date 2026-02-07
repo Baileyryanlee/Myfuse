@@ -13,6 +13,7 @@
 
 // Liftable rock actor
 static constexpr int16_t kLiftableRockActorId = ACTOR_EN_ISHI;
+static constexpr int16_t kTorchSlugActorId = ACTOR_EN_BW;
 
 // Thrown-rock acquisition timing
 static constexpr int kFramesAfterThrowToCheck = 18;
@@ -34,6 +35,7 @@ static int gSwordATVictimCooldownFrame = -1;
 static bool gWasHammerAttacking = false;
 static std::unordered_set<void*> gSwordATVictimCooldown;
 static std::unordered_set<void*> gAwardedFrozenShards;
+static std::unordered_set<void*> gAwardedFireJellies;
 static uint32_t gSwordBaseDmgFlags[4];
 static bool gSwordBaseValid = false;
 
@@ -251,6 +253,23 @@ static void CleanupAwardedFreezards(PlayState* play) {
     }
 }
 
+static void CleanupAwardedFireJellies(PlayState* play) {
+    if (!play) {
+        gAwardedFireJellies.clear();
+        return;
+    }
+
+    for (auto it = gAwardedFireJellies.begin(); it != gAwardedFireJellies.end();) {
+        Actor* tracked = static_cast<Actor*>(*it);
+
+        if (!IsActorStillInLists(play, tracked)) {
+            it = gAwardedFireJellies.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
 static void MaybeAwardFrozenShard(PlayState* play) {
     if (!play) {
         return;
@@ -288,6 +307,43 @@ static void MaybeAwardFrozenShard(PlayState* play) {
                 Fuse::Log("[FuseDBG] MatGain: mat=%d qty=%d actor=%p pos=(%.2f,%.2f,%.2f) reason=%s\n",
                           static_cast<int>(MaterialId::FrozenShard), newCount, actor, actor->world.pos.x,
                           actor->world.pos.y, actor->world.pos.z, reason);
+            }
+        }
+    }
+}
+
+static void MaybeAwardFireJelly(PlayState* play) {
+    if (!play) {
+        return;
+    }
+
+    CleanupAwardedFireJellies(play);
+
+    ActorContext* actorCtx = &play->actorCtx;
+
+    for (int cat = 0; cat < ACTORCAT_MAX; cat++) {
+        for (Actor* actor = actorCtx->actorLists[cat].head; actor; actor = actor->next) {
+            if (actor->id != kTorchSlugActorId) {
+                continue;
+            }
+
+            if (gAwardedFireJellies.count(actor) > 0) {
+                continue;
+            }
+
+            if (actor->colChkInfo.health != 0) {
+                continue;
+            }
+
+            gAwardedFireJellies.insert(actor);
+
+            if (Rand_ZeroOne() < 0.60f) {
+                Fuse::AddMaterial(MaterialId::FireJelly, 1);
+                const int newCount = Fuse::GetMaterialCount(MaterialId::FireJelly);
+
+                Fuse::Log("[FuseDBG] MatGain: mat=%d qty=%d actor=%p pos=(%.2f,%.2f,%.2f) reason=health0\n",
+                          static_cast<int>(MaterialId::FireJelly), newCount, actor, actor->world.pos.x,
+                          actor->world.pos.y, actor->world.pos.z);
             }
         }
     }
@@ -579,6 +635,7 @@ void OnLoadGame_RestoreObjects() {
     gWasHammerAttacking = false;
     gSwordATVictimCooldown.clear();
     gAwardedFrozenShards.clear();
+    gAwardedFireJellies.clear();
     gSwordBaseValid = false;
     Fuse::ResetSwordFreezeQueue();
 }
@@ -604,6 +661,7 @@ void OnFrame_Objects_Pre(PlayState* play) {
 
     UpdateThrownRockAcquisition(play, player);
     MaybeAwardFrozenShard(play);
+    MaybeAwardFireJelly(play);
 
     // Rock-breaking behavior (works): apply hammer flags only when rocks are nearby and fuse is active
     const uint8_t hammerLevel = Fuse::GetSwordModifierLevel(ModifierId::Hammerize);

@@ -56,6 +56,12 @@ struct FuseSeekState {
     int ticksSinceAcquire = 0;
 };
 
+struct FuseBurnState {
+    int endFrame = -1;
+    int nextTickFrame = -1;
+    int ticksRemaining = 0;
+};
+
 static FuseSaveData gFuseSave; // persistent-ready (not serialized yet)
 static FuseRuntimeState gFuseRuntime;
 static bool sSwordSlotsLoadedFromSaveManager = false;
@@ -72,6 +78,10 @@ static constexpr s16 kFreezeDurationFramesBase = 120;
 static constexpr float kFreezeShatterDamageMult = 1.5f;
 static constexpr float kFreezeShatterKnockbackSpeed = 18.0f;
 static constexpr float kFreezeShatterKnockbackYBoost = 3.0f;
+static constexpr int kBurnDurationFrames = 60;
+static constexpr int kBurnTickIntervalFrames = 15;
+static constexpr int kBurnTotalTicks = 4;
+static constexpr int kBurnTickDamage = 1;
 static constexpr int kShatterImpulseFrames = 5;
 static constexpr float kShatterImpulseStep = 3.5f;
 static constexpr float kShatterImpulseY = 0.0f;
@@ -89,6 +99,7 @@ static std::unordered_map<Actor*, Vec3f> sShatterImpulseDir;
 static std::unordered_map<Actor*, s16> sShatterImpulseYaw;
 static std::unordered_set<Actor*> sShatterImpulseFlipped;
 static std::unordered_map<Actor*, float> sFuseFrozenOrigGravity;
+static std::unordered_map<Actor*, FuseBurnState> sBurnStates;
 static std::unordered_set<Actor*> sHpOverrideApplied;
 static constexpr int32_t kFreezeNoReapplyFrames = 12;
 static std::unordered_map<Actor*, Vec3f> sFuseFrozenPos;
@@ -208,6 +219,21 @@ bool Fuse_IsBombableActorId(s16 id) {
 
 bool Fuse_IsExplosionImmuneVictim(const Actor* victim) {
     return victim && victim->id == ACTOR_BOSS_DODONGO;
+}
+
+static bool Fuse_IsBurnImmuneVictim(const Actor* victim) {
+    if (!victim) {
+        return false;
+    }
+
+    // TODO: Expand burn immunity list for additional fire-based enemies.
+    switch (victim->id) {
+        case ACTOR_EN_BW:       // Torch Slug
+        case ACTOR_EN_FIREFLY:  // Fire Keese
+            return true;
+        default:
+            return false;
+    }
 }
 
 Actor* Fuse_FindNearbyBombable(PlayState* play, const Vec3f* pos, float radius) {
@@ -484,6 +510,50 @@ static void ClearFuseFreeze(Actor* actor) {
     actor->colorFilterTimer = 0;
 }
 
+static bool IsActorAliveInPlay(PlayState* play, Actor* target);
+
+static void TickBurnTimers(PlayState* play) {
+    if (!play) {
+        sBurnStates.clear();
+        return;
+    }
+
+    const int curFrame = play->gameplayFrames;
+    if (curFrame < 0) {
+        return;
+    }
+
+    for (auto it = sBurnStates.begin(); it != sBurnStates.end();) {
+        Actor* victim = it->first;
+        FuseBurnState& state = it->second;
+
+        if (!IsActorAliveInPlay(play, victim)) {
+            it = sBurnStates.erase(it);
+            continue;
+        }
+
+        if (curFrame >= state.endFrame || state.ticksRemaining <= 0) {
+            it = sBurnStates.erase(it);
+            continue;
+        }
+
+        if (curFrame >= state.nextTickFrame && state.ticksRemaining > 0) {
+            const int prevDamage = victim->colChkInfo.damage;
+            victim->colChkInfo.damage = kBurnTickDamage;
+            Actor_ApplyDamage(victim);
+            victim->colChkInfo.damage = prevDamage;
+
+            state.ticksRemaining--;
+            state.nextTickFrame = curFrame + kBurnTickIntervalFrames;
+
+            FUSE_LOG_DBG("[FuseDBG] BurnTick: victim=%p id=0x%04X dmg=%d ticksLeft=%d\n", (void*)victim, victim->id,
+                         kBurnTickDamage, state.ticksRemaining);
+        }
+
+        ++it;
+    }
+}
+
 bool Fuse::TryFreezeShatterWithDamage(PlayState* play, Actor* victim, Actor* attacker, int itemId,
                                       MaterialId materialId, int baseWeaponDamage, const char* srcLabel) {
     if (!victim) {
@@ -645,6 +715,42 @@ bool Fuse::WasFreezeShatterDamageAppliedThisFrame(PlayState* play, Actor* victim
     }
 
     return sFreezeShatterDamageVictim == victim && sFreezeShatterDamageFrame == play->gameplayFrames;
+}
+
+void Fuse::ApplyBurn(PlayState* play, Actor* victim, uint8_t level, MaterialId materialId, const char* srcLabel,
+                     const char* slotLabel) {
+    if (!play || !victim) {
+        return;
+    }
+
+    if (!FuseBash_IsEnemyActor(victim)) {
+        return;
+    }
+
+    const int curFrame = play->gameplayFrames;
+    if (curFrame < 0) {
+        return;
+    }
+
+    const int durationFrames = kBurnDurationFrames;
+    const int totalTicks = kBurnTotalTicks;
+    const bool immune = Fuse_IsBurnImmuneVictim(victim);
+    FUSE_LOG_DBG("[FuseDBG] BurnApply: src=%s slot=%s victim=%p id=0x%04X durFrames=%d ticks=%d immune=%d\n",
+                 srcLabel ? srcLabel : "unknown", slotLabel ? slotLabel : "unknown", (void*)victim, victim->id,
+                 durationFrames, totalTicks, immune ? 1 : 0);
+
+    if (immune) {
+        return;
+    }
+
+    (void)level;
+    (void)materialId;
+
+    FuseBurnState state{};
+    state.endFrame = curFrame + durationFrames;
+    state.nextTickFrame = curFrame + kBurnTickIntervalFrames;
+    state.ticksRemaining = totalTicks;
+    sBurnStates[victim] = state;
 }
 
 static void ResetSavedSwordFuseFields() {
@@ -1141,7 +1247,7 @@ static inline int RangedSlotToIndex(RangedFuseSlot slot) {
 
 static bool IsMaterialIdInRange(MaterialId id) {
     const int value = static_cast<int>(id);
-    return value >= static_cast<int>(MaterialId::None) && value <= static_cast<int>(MaterialId::KeeseEye);
+    return value >= static_cast<int>(MaterialId::None) && value <= static_cast<int>(MaterialId::FireJelly);
 }
 
 #ifndef NDEBUG
@@ -2412,6 +2518,11 @@ static bool Fuse_ModifierAppliesForItem(ModifierId id, FuseItemType itemType) {
                    itemType == FuseItemType::Hookshot;
         case ModifierId::Seek:
             return itemType == FuseItemType::Arrows || itemType == FuseItemType::Slingshot;
+        case ModifierId::Burn:
+            return itemType == FuseItemType::Sword || itemType == FuseItemType::Shield ||
+                   itemType == FuseItemType::Boomerang || itemType == FuseItemType::Hammer ||
+                   itemType == FuseItemType::Arrows || itemType == FuseItemType::Slingshot ||
+                   itemType == FuseItemType::Hookshot;
         default:
             return true;
     }
@@ -3539,6 +3650,7 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
     sFuseFrozenOrigGravity.clear();
     sFuseFrozenPos.clear();
     sFuseFrozenPinned.clear();
+    sBurnStates.clear();
     sSeekStates.clear();
     sShatterImpulseUntilFrame.clear();
     sShatterImpulseDir.clear();
@@ -4146,6 +4258,7 @@ void Fuse::TickRangedProjectileBombableProximity(PlayState* play) {
 
 void Fuse::OnGameFrameUpdate(PlayState* play) {
     TickFuseFrozenTimers(play);
+    TickBurnTimers(play);
     TickShatterImpulse(play);
     ProcessPendingStuns(play);
     UpdateRangedFuseLifecycle(play);
@@ -4330,6 +4443,12 @@ static void ApplyMeleeHitMaterialEffects(PlayState* play, Actor* victim, Actor* 
     uint8_t stunLevel = 0;
     if (allowStun && HasModifier(def->modifiers, def->modifierCount, ModifierId::Stun, &stunLevel) && stunLevel > 0) {
         Fuse_EnqueuePendingStun(victim, stunLevel, materialId, itemId);
+    }
+
+    uint8_t burnLevel = 0;
+    if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Burn, &burnLevel) && burnLevel > 0) {
+        const char* slotLabel = (itemId == ITEM_HAMMER) ? "Hammer" : "Sword";
+        Fuse::ApplyBurn(play, victim, burnLevel, materialId, srcLabel, slotLabel);
     }
 
     uint8_t freezeLevel = 0;

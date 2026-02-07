@@ -67,11 +67,13 @@ extern "C" void FuseHooks_OnBoomerangHitActor(PlayState* play, Actor* victim, co
         uint8_t knockbackLevel = 0;
         uint8_t stunLevel = 0;
         uint8_t freezeLevel = 0;
+        uint8_t burnLevel = 0;
         uint8_t explosionLevel = 0;
         if (def) {
             HasModifier(def->modifiers, def->modifierCount, ModifierId::Knockback, &knockbackLevel);
             HasModifier(def->modifiers, def->modifierCount, ModifierId::Stun, &stunLevel);
             HasModifier(def->modifiers, def->modifierCount, ModifierId::Freeze, &freezeLevel);
+            HasModifier(def->modifiers, def->modifierCount, ModifierId::Burn, &burnLevel);
             explosionLevel =
                 Fuse::GetMaterialModifierLevel(materialId, FuseItemType::Boomerang, ModifierId::Explosion);
         }
@@ -133,6 +135,10 @@ extern "C" void FuseHooks_OnBoomerangHitActor(PlayState* play, Actor* victim, co
 
         if (def && stunLevel > 0 && FuseBash_IsEnemyActor(victim)) {
             Fuse_EnqueuePendingStun(victim, stunLevel, materialId, ITEM_BOOMERANG);
+        }
+
+        if (def && burnLevel > 0) {
+            Fuse::ApplyBurn(play, victim, burnLevel, materialId, "boomerang", "Boomerang");
         }
 
         if (Fuse::IsFuseFrozen(victim) || victim->freezeTimer > 0) {

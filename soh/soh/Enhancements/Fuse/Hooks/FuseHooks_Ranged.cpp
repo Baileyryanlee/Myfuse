@@ -140,6 +140,9 @@ static void HandleRangedSurfaceHit(PlayState* play, RangedFuseSlot slot, const V
         Fuse_TriggerExplosion(play, explodePos, FuseExplosionSelfMode::DamagePlayer, params,
                               RangedSlotLabel(static_cast<RangedFuseSlotId>(slot)));
     }
+
+    // TODO: Burn-fused projectiles lighting torches (OBJ_SYOKUDAI) could reuse vanilla Fire Arrow/Din's Fire ignite
+    //       logic, but no safe shared path found yet (searched: OBJ_SYOKUDAI, torch, ignite, Fire Arrow, DMG_FIRE).
 }
 
 extern "C" void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Actor* victim,
@@ -238,6 +241,11 @@ extern "C" void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Ac
     uint8_t freezeLevel = 0;
     if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Freeze, &freezeLevel) && freezeLevel > 0) {
         Fuse::QueueSwordFreeze(play, victim, freezeLevel, "ranged", RangedSlotLabel(slot), materialId);
+    }
+
+    uint8_t burnLevel = 0;
+    if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Burn, &burnLevel) && burnLevel > 0) {
+        Fuse::ApplyBurn(play, victim, burnLevel, materialId, "ranged", RangedSlotLabel(slot));
     }
 
     Fuse::MarkRangedHitResolved(static_cast<RangedFuseSlot>(slot), "HitSuccess");

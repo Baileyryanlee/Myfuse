@@ -51,7 +51,7 @@ void NormalizeSlot(SwordFuseSlot& slot) {
 
 bool IsNoneMaterialId(int matId) {
     constexpr int kMaterialIdMin = static_cast<int>(MaterialId::None);
-    constexpr int kMaterialIdMax = static_cast<int>(MaterialId::Bomb);
+    constexpr int kMaterialIdMax = static_cast<int>(MaterialId::FireJelly);
 
     if (matId == kMaterialIdMin || matId == -1) {
         return true;
