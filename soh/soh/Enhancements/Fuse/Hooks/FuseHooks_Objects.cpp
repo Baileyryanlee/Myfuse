@@ -723,7 +723,7 @@ void OnPlayerUpdate(PlayState* play) {
             const float normalY = hitPoly ? COLPOLY_GET_NORMAL(hitPoly->normal.y) : 0.0f;
             const uint16_t polyType = hitPoly ? hitPoly->type : 0;
 
-            FUSE_LOG_DBG(
+            Fuse::Log(
                 "[FuseDBG] HammerHit: kind=bg reason=%s mat=%d(%s) explosion=%u hit=%d pos=(%.2f %.2f %.2f) "
                 "normalY=%.3f poly=0x%04X bgId=%d\n",
                 reason, static_cast<int>(materialId), def ? def->name : "unknown",
@@ -738,7 +738,7 @@ void OnPlayerUpdate(PlayState* play) {
                     explodePos = Fuse_GetBombableAnchorPos(bombable, 25.0f);
                     Fuse_AdjustExplosionPosForBombable(bombable, &player->actor, &explodePos);
                 }
-                FUSE_LOG_DBG("[FuseDBG] ExplodeCall: src=Hammer kind=bg reason=%s\n", reason);
+                Fuse::Log("[FuseDBG] ExplodeCall: src=Hammer kind=bg reason=%s\n", reason);
                 Fuse_TriggerExplosion(play, explodePos, FuseExplosionSelfMode::DamagePlayer,
                                       Fuse_GetExplosionParams(materialId, explosionLevel), "HammerBG");
             }
