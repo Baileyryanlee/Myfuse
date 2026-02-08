@@ -6,10 +6,9 @@
 
 extern "C" {
 #include "z64.h"
+#include "src/overlays/actors/ovl_En_Arrow/z_en_arrow.h"
+int EnArrow_SetLitByFire(EnArrow* thisx);
 }
-
-struct EnArrow;
-extern "C" int EnArrow_SetLitByFire(struct EnArrow* arrow);
 
 void Fuse_GetRangedFuseStatus(RangedFuseSlot slot, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax);
 
