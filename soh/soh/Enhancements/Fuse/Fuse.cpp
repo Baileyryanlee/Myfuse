@@ -2414,6 +2414,30 @@ void Fuse_GetRangedFuseStatus(RangedFuseSlot slot, int* outMaterialId, int* outD
     }
 }
 
+extern "C" void Fuse_GetRangedQueuedStatus(RangedFuseSlot slot, int* outMaterialId, int* outDurabilityCur,
+                                           int* outDurabilityMax) {
+    if (outMaterialId) {
+        *outMaterialId = static_cast<int>(MaterialId::None);
+    }
+    if (outDurabilityCur) {
+        *outDurabilityCur = 0;
+    }
+    if (outDurabilityMax) {
+        *outDurabilityMax = 0;
+    }
+
+    const RangedFuseState& queued = GetRangedQueued(slot);
+    if (outMaterialId) {
+        *outMaterialId = static_cast<int>(queued.materialId);
+    }
+    if (outDurabilityCur) {
+        *outDurabilityCur = queued.durabilityCur;
+    }
+    if (outDurabilityMax) {
+        *outDurabilityMax = queued.durabilityMax;
+    }
+}
+
 static int GetMaterialBaseAttackBonus(MaterialId id) {
     const MaterialDef* def = Fuse::GetMaterialDef(id);
     return def ? def->attackBonus : 0;
