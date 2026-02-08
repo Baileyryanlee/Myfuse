@@ -47,12 +47,15 @@ extern bool Fuse_ShieldHasStun(PlayState* play, int* outMaterialId, int* outDura
                                uint8_t* outLevel);
 extern bool Fuse_ShieldHasFreeze(PlayState* play, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax,
                                  uint8_t* outLevel);
+extern bool Fuse_ShieldHasBurn(PlayState* play, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax,
+                               uint8_t* outLevel);
 extern bool Fuse_ShieldHasMegaStun(PlayState* play, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax,
                                    uint8_t* outLevel);
 extern void Fuse_ShieldGuardDrain(PlayState* play);
 extern void Fuse_ShieldEnqueuePendingStun(Actor* victim, uint8_t level, int materialId, int itemId);
 extern void Fuse_ShieldTriggerMegaStun(PlayState* play, Player* player, int materialId, int itemId);
 extern void Fuse_ShieldApplyFreeze(PlayState* play, Actor* victim, uint8_t level);
+extern void Fuse_ShieldApplyBurn(PlayState* play, Actor* victim, uint8_t level, int materialId);
 extern s16 Fuse_GetShieldBashDamage(int shieldItemId, int* outMaterialId, int* outHasBashMod, int* outMaterialAtk);
 extern bool Fuse_IsActorFuseFrozen(Actor* actor);
 
@@ -4955,6 +4958,15 @@ s32 func_808382DC(Player* this, PlayState* play) {
                             osSyncPrintf("[FuseDBG] FreezeApply: src=shield attacker=%p lvl=%u mat=%d\n",
                                          (void*)attacker, freezeLevel, freezeMatId);
                             Fuse_ShieldApplyFreeze(play, attacker, freezeLevel);
+                        }
+
+                        uint8_t burnLevel = 0;
+                        int burnMatId = 0;
+                        int burnDurabilityCur = 0;
+                        int burnDurabilityMax = 0;
+                        if (Fuse_ShieldHasBurn(play, &burnMatId, &burnDurabilityCur, &burnDurabilityMax, &burnLevel) &&
+                            burnLevel > 0) {
+                            Fuse_ShieldApplyBurn(play, attacker, burnLevel, burnMatId);
                         }
                     }
 

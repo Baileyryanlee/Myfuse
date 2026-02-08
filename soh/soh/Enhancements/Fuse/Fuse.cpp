@@ -2148,6 +2148,11 @@ extern "C" bool Fuse_ShieldHasFreeze(PlayState* play, int* outMaterialId, int* o
                                   outLevel);
 }
 
+extern "C" bool Fuse_ShieldHasBurn(PlayState* play, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax,
+                                   uint8_t* outLevel) {
+    return Fuse_ShieldHasModifier(play, ModifierId::Burn, outMaterialId, outDurabilityCur, outDurabilityMax, outLevel);
+}
+
 extern "C" bool Fuse_ShieldHasMegaStun(PlayState* play, int* outMaterialId, int* outDurabilityCur,
                                        int* outDurabilityMax, uint8_t* outLevel) {
     return Fuse_ShieldHasModifier(play, ModifierId::MegaStun, outMaterialId, outDurabilityCur, outDurabilityMax,
@@ -2236,6 +2241,14 @@ extern "C" void Fuse_ShieldApplyFreeze(PlayState* play, Actor* victim, uint8_t l
     }
 
     ApplyIceArrowFreeze(play, victim, level);
+}
+
+extern "C" void Fuse_ShieldApplyBurn(PlayState* play, Actor* victim, uint8_t level, int materialId) {
+    if (!victim) {
+        return;
+    }
+
+    Fuse::ApplyBurn(play, victim, level, static_cast<MaterialId>(materialId), "shield", "Shield");
 }
 
 extern "C" void Fuse_ShieldGuardDrain(PlayState* play) {
