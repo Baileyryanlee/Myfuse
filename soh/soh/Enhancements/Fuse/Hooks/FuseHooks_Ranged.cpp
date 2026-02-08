@@ -11,6 +11,7 @@ int EnArrow_SetLitByFire(EnArrow* thisx);
 }
 
 void Fuse_GetRangedFuseStatus(RangedFuseSlot slot, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax);
+void Fuse_GetRangedQueuedStatus(RangedFuseSlot slot, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax);
 
 static constexpr float kBombableAssistRadius = 120.0f;
 
@@ -283,6 +284,16 @@ static void LogRangedKnockbackStatus(const char* itemLabel, RangedFuseSlot slot,
 extern "C" void FuseHooks_OnArrowProjectileFired(PlayState* play, int32_t isSeed) {
     (void)play;
     if (isSeed) {
+        int queuedMat = static_cast<int>(MaterialId::None);
+        int queuedCur = 0;
+        int queuedMax = 0;
+        Fuse_GetRangedQueuedStatus(RangedFuseSlot::Slingshot, &queuedMat, &queuedCur, &queuedMax);
+        (void)queuedMax;
+        if (queuedMat == static_cast<int>(MaterialId::None) || queuedCur <= 0) {
+            Fuse::ClearActiveRangedFuse(RangedFuseSlot::Slingshot, "NoQueuedOnFire");
+            return;
+        }
+
         Fuse::CommitQueuedRangedFuse(RangedFuseSlot::Slingshot, "ArrowProjectileFired");
         LogRangedKnockbackStatus("slingshot", RangedFuseSlot::Slingshot, "fired");
         return;
