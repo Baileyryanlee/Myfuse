@@ -60,6 +60,12 @@ struct FuseBurnState {
     int endFrame = -1;
     int nextTickFrame = -1;
     int ticksRemaining = 0;
+    bool burnVfxActive = false;
+    s16 burnVfxColorFlag = 0;
+    s16 burnVfxIntensity = 0;
+    s16 burnVfxXlu = 0;
+    s16 burnVfxDuration = 0;
+    u16 burnVfxParams = 0;
 };
 
 static FuseSaveData gFuseSave; // persistent-ready (not serialized yet)
@@ -83,6 +89,10 @@ static constexpr int kBurnDurationFrames = 120;
 static constexpr int kBurnTickIntervalFrames = 30;
 static constexpr int kBurnTotalTicks = 4;
 static constexpr int kBurnTickDamage = 1;
+static constexpr s16 kBurnVfxColorFlag = 0x4000;
+static constexpr s16 kBurnVfxIntensity = 200;
+static constexpr s16 kBurnVfxXlu = 0;
+static constexpr s16 kBurnVfxDurationFrames = 30;
 static constexpr int kShatterImpulseFrames = 5;
 static constexpr float kShatterImpulseStep = 3.5f;
 static constexpr float kShatterImpulseY = 0.0f;
@@ -202,6 +212,10 @@ static inline void Fuse_ApplyArrowSteer(Actor* proj, const Vec3f& newDir, float 
     proj->velocity.y = newVelY;
     proj->velocity.x = Math_SinS(yawS) * newSpeedXZ;
     proj->velocity.z = Math_CosS(yawS) * newSpeedXZ;
+}
+
+static inline u16 Fuse_MakeColorFilterParams(s16 colorFlag, s16 colorIntensityMax, s16 xluFlag, s16 duration) {
+    return static_cast<u16>(colorFlag | xluFlag | ((colorIntensityMax & 0xF8) << 5) | (duration & 0xFF));
 }
 
 bool Fuse_IsBombableActorId(s16 id) {
@@ -519,6 +533,38 @@ void Fuse::TickStatusEffects(PlayState* play) {
     TickBurnTimers(play);
 }
 
+static void Fuse_BurnTryApplyVfx(Actor* victim, int frames) {
+    if (!victim) {
+        return;
+    }
+
+    const auto it = sBurnStates.find(victim);
+    if (it == sBurnStates.end()) {
+        return;
+    }
+
+    FuseBurnState& state = it->second;
+    const s16 duration = static_cast<s16>(std::clamp(frames, 1, 255));
+    const u16 desiredParams =
+        Fuse_MakeColorFilterParams(kBurnVfxColorFlag, kBurnVfxIntensity, kBurnVfxXlu, duration);
+
+    if (victim->colorFilterTimer > 0) {
+        const bool matchesBurn = state.burnVfxActive && (victim->colorFilterParams == state.burnVfxParams);
+        if (!matchesBurn) {
+            FUSE_LOG_DBG("[FuseDBG] BurnVfxSkip: victim=%p reason=other-filter\n", (void*)victim);
+            return;
+        }
+    }
+
+    Actor_SetColorFilter(victim, kBurnVfxColorFlag, kBurnVfxIntensity, kBurnVfxXlu, duration);
+    state.burnVfxActive = true;
+    state.burnVfxColorFlag = kBurnVfxColorFlag;
+    state.burnVfxIntensity = kBurnVfxIntensity;
+    state.burnVfxXlu = kBurnVfxXlu;
+    state.burnVfxDuration = duration;
+    state.burnVfxParams = desiredParams;
+}
+
 static void TickBurnTimers(PlayState* play) {
     if (!play) {
         sBurnStates.clear();
@@ -560,6 +606,7 @@ static void TickBurnTimers(PlayState* play) {
                 victim->colChkInfo.health = static_cast<uint8_t>(adjustedHealth);
             }
 
+            Fuse_BurnTryApplyVfx(victim, kBurnVfxDurationFrames);
             FUSE_LOG_DBG("[FuseDBG] BurnTick: victim=%p id=0x%04X dmg=%d ticksLeft=%d\n", (void*)victim, victim->id,
                          kBurnTickDamage, state.ticksRemaining);
         }
@@ -770,7 +817,7 @@ void Fuse::ApplyBurn(PlayState* play, Actor* victim, uint8_t level, MaterialId m
         state.nextTickFrame = curFrame + kBurnTickIntervalFrames;
         state.ticksRemaining = totalTicks;
         sBurnStates[victim] = state;
-        Actor_SetColorFilter(victim, 0x4000, 200, 0, durationFrames);
+        Fuse_BurnTryApplyVfx(victim, kBurnVfxDurationFrames);
         FUSE_LOG_DBG("[FuseDBG] BurnApplySet: victim=%p end=%d next=%d ticks=%d\n", (void*)victim, state.endFrame,
                      state.nextTickFrame, state.ticksRemaining);
         return;
@@ -781,7 +828,7 @@ void Fuse::ApplyBurn(PlayState* play, Actor* victim, uint8_t level, MaterialId m
     if (state.nextTickFrame < curFrame) {
         state.nextTickFrame = curFrame + kBurnTickIntervalFrames;
     }
-    Actor_SetColorFilter(victim, 0x4000, 200, 0, durationFrames);
+    Fuse_BurnTryApplyVfx(victim, kBurnVfxDurationFrames);
     FUSE_LOG_DBG("[FuseDBG] BurnApplySet: victim=%p end=%d next=%d ticks=%d\n", (void*)victim, state.endFrame,
                  state.nextTickFrame, state.ticksRemaining);
 }
@@ -1335,6 +1382,38 @@ static RangedFuseState& GetRangedActive(RangedFuseSlot slot) {
     DebugAssertRangedIndex(idx);
 #endif
     return gRangedActive[static_cast<size_t>(idx)];
+}
+
+static bool Fuse_RangedHasBurnModifier(RangedFuseSlot slot, MaterialId* outMaterialId) {
+    const RangedFuseState& active = GetRangedActive(slot);
+    if (active.materialId == MaterialId::None || active.durabilityCur <= 0) {
+        return false;
+    }
+
+    const MaterialDef* def = Fuse::GetMaterialDef(active.materialId);
+    if (!def) {
+        return false;
+    }
+
+    uint8_t burnLevel = 0;
+    if (!HasModifier(def->modifiers, def->modifierCount, ModifierId::Burn, &burnLevel) || burnLevel == 0) {
+        return false;
+    }
+
+    if (outMaterialId) {
+        *outMaterialId = active.materialId;
+    }
+
+    return true;
+}
+
+static void Fuse_RangedMarkProjectileAsFire(Actor* projectile) {
+    if (!projectile || projectile->id != ACTOR_EN_ARROW) {
+        return;
+    }
+
+    EnArrow* arrow = reinterpret_cast<EnArrow*>(projectile);
+    arrow->collider.info.toucher.dmgFlags = DMG_ARROW_FIRE;
 }
 
 const char* RangedSlotName(RangedFuseSlot slot) {
@@ -3479,6 +3558,27 @@ void Fuse::MarkRangedHitResolved(RangedFuseSlot slot, const char* reason) {
     state.pendingRefundMaterial = MaterialId::None;
     state.pendingRefundFrame = -1;
     (void)reason;
+}
+
+bool Fuse::TryMarkRangedProjectileAsFire(RangedFuseSlot slot, Actor* projectile, Actor* target, const char* hitKind) {
+    if (!projectile) {
+        return false;
+    }
+
+    if (target && target->id == ACTOR_BG_ICE_SHELTER) {
+        FUSE_LOG_DBG("[FuseDBG] BurnFireSkip: target=BG_ICE_SHELTER\n");
+        return false;
+    }
+
+    MaterialId materialId = MaterialId::None;
+    if (!Fuse_RangedHasBurnModifier(slot, &materialId)) {
+        return false;
+    }
+
+    Fuse_RangedMarkProjectileAsFire(projectile);
+    FUSE_LOG_DBG("[FuseDBG] BurnFireHit: proj=0x%04X kind=%s target=0x%04X mat=%d\n", projectile->id,
+                 hitKind ? hitKind : "unknown", target ? target->id : 0, static_cast<int>(materialId));
+    return true;
 }
 
 void Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot slot, const char* reason) {

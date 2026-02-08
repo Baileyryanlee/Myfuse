@@ -352,12 +352,12 @@ void EnArrow_Fly(EnArrow* this, PlayState* play) {
                         impactPosPtr = &impactPos;
                     }
                     this->fuseHitApplied = 1;
-                    FuseHooks_OnRangedProjectileHit(play, hitActor, impactPosPtr, true);
+                    FuseHooks_OnRangedProjectileHit(play, &this->actor, hitActor, impactPosPtr, true);
                 }
             }
             if (this->touchedPoly && !this->fuseHitApplied) {
                 this->fuseHitApplied = 1;
-                FuseHooks_OnRangedProjectileHitSurface(play, &this->actor.world.pos, true);
+                FuseHooks_OnRangedProjectileHitSurface(play, &this->actor, &this->actor.world.pos, true);
             }
 
             if (this->actor.params == ARROW_NUT) {
@@ -387,7 +387,7 @@ void EnArrow_Fly(EnArrow* this, PlayState* play) {
                         impactPosPtr = &impactPos;
                     }
                     this->fuseHitApplied = 1;
-                    FuseHooks_OnRangedProjectileHit(play, hitActor, impactPosPtr, false);
+                    FuseHooks_OnRangedProjectileHit(play, &this->actor, hitActor, impactPosPtr, false);
                 }
 
                 if ((hitActor->update != NULL) && (!(this->collider.base.atFlags & AT_BOUNCED)) &&
@@ -415,7 +415,7 @@ void EnArrow_Fly(EnArrow* this, PlayState* play) {
             } else if (this->touchedPoly) {
                 if (!this->fuseHitApplied) {
                     this->fuseHitApplied = 1;
-                    FuseHooks_OnRangedProjectileHitSurface(play, &this->actor.world.pos, false);
+                    FuseHooks_OnRangedProjectileHitSurface(play, &this->actor, &this->actor.world.pos, false);
                 }
                 EnArrow_SetupAction(this, func_809B45E0);
                 Animation_PlayOnce(&this->skelAnime, &gArrow2Anim);

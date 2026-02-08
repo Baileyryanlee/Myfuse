@@ -15,8 +15,10 @@ extern "C" {
 	void Fuse_OnRangedHitActor(struct PlayState* play, RangedFuseSlotId slot, struct Actor* victim,
 	                           const Vec3f* impactPos);
 	void FuseHooks_OnArrowProjectileFired(struct PlayState* play, int32_t isSeed);
-	void FuseHooks_OnRangedProjectileHit(struct PlayState* play, struct Actor* victim, Vec3f* impactPos, int32_t isSeed);
-	void FuseHooks_OnRangedProjectileHitSurface(struct PlayState* play, Vec3f* impactPos, int32_t isSeed);
+	void FuseHooks_OnRangedProjectileHit(struct PlayState* play, struct Actor* projectile, struct Actor* victim,
+	                                     Vec3f* impactPos, int32_t isSeed);
+	void FuseHooks_OnRangedProjectileHitSurface(struct PlayState* play, struct Actor* projectile, Vec3f* impactPos,
+	                                            int32_t isSeed);
 	void FuseHooks_OnHookshotShotStarted(PlayState* play);
 	void FuseHooks_OnHookshotEnemyHit(PlayState* play, struct Actor* victim, Vec3f* impactPos);
 	void FuseHooks_OnHookshotSurfaceHit(PlayState* play, Vec3f* impactPos);

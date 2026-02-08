@@ -231,6 +231,7 @@ void CancelQueuedRangedFuse_Refund(RangedFuseSlot slot, const char* reason);
 void ClearActiveRangedFuse(RangedFuseSlot slot, const char* reason);
 void MarkRangedHitResolved(RangedFuseSlot slot, const char* reason);
 void OnRangedProjectileHitFinalize(RangedFuseSlot slot, const char* reason);
+bool TryMarkRangedProjectileAsFire(RangedFuseSlot slot, Actor* projectile, Actor* target, const char* hitKind);
 void OnHookshotShotStarted(const char* reason);
 void OnHookshotRetractedOrKilled(const char* reason);
 
