@@ -78,6 +78,26 @@ int EnArrow_SetLitByFire(EnArrow* this) {
     return 1;
 }
 
+int Fuse_RangedSuppressLitArrowEnemyBonus(Actor* projectile) {
+    static u32 dmgFlags[] = {
+        0x00000800, 0x00000020, 0x00000020, 0x00000800, 0x00001000,
+        0x00002000, 0x00010000, 0x00004000, 0x00008000, 0x00000004,
+    };
+
+    if (projectile == NULL || projectile->id != ACTOR_EN_ARROW) {
+        return 0;
+    }
+
+    EnArrow* arrow = (EnArrow*)projectile;
+
+    if (arrow->actor.params >= 0 && arrow->actor.params <= ARROW_SEED) {
+        arrow->collider.info.toucher.dmgFlags = dmgFlags[arrow->actor.params];
+        return 1;
+    }
+
+    return 0;
+}
+
 Actor* EnArrow_TriggerDekuNutEffect(PlayState* play, const Vec3f* pos) {
     Actor* flashActor;
 
