@@ -92,6 +92,7 @@ struct MaterialDebugOverride {
 // Call once on load / init and every frame.
 void OnLoadGame(int32_t fileNum);
 void OnGameFrameUpdate(PlayState* play);
+void TickStatusEffects(PlayState* play);
 void TickSwordBgExplosions(PlayState* play);
 void TickRangedProjectileSeek(PlayState* play);
 void TickRangedProjectileBombableProximity(PlayState* play);

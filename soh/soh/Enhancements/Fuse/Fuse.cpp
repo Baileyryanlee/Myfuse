@@ -512,6 +512,9 @@ static void ClearFuseFreeze(Actor* actor) {
 }
 
 static bool IsActorAliveInPlay(PlayState* play, Actor* target);
+void Fuse::TickStatusEffects(PlayState* play) {
+    TickBurnTimers(play);
+}
 
 static void TickBurnTimers(PlayState* play) {
     if (!play) {
@@ -522,12 +525,6 @@ static void TickBurnTimers(PlayState* play) {
     const int curFrame = play->gameplayFrames;
     if (curFrame < 0) {
         return;
-    }
-
-    static int sBurnUpdateLogFrame = -999999;
-    if (Fuse_LogDbgEnabled() && (curFrame - sBurnUpdateLogFrame) >= 20) {
-        FUSE_LOG_DBG("[FuseDBG] BurnUpdate: frame=%d active=%zu\n", curFrame, sBurnStates.size());
-        sBurnUpdateLogFrame = curFrame;
     }
 
     for (auto it = sBurnStates.begin(); it != sBurnStates.end();) {
@@ -555,23 +552,13 @@ static void TickBurnTimers(PlayState* play) {
             state.ticksRemaining--;
             state.nextTickFrame = curFrame + kBurnTickIntervalFrames;
 
-            if (hpAfter == hpBefore && hpBefore > 0) {
-                if (victim->category == ACTORCAT_BOSS) {
-                    FUSE_LOG_DBG("[FuseDBG] BurnTickSkip: reason=BossNoDirectDamage victim=%p id=0x%04X\n",
-                                 (void*)victim, victim->id);
-                } else {
-                    const int adjustedHealth = std::max(0, hpBefore - kBurnTickDamage);
-                    victim->colChkInfo.health = static_cast<uint8_t>(adjustedHealth);
-                }
+            if (hpAfter == hpBefore && hpBefore > 0 && victim->category != ACTORCAT_BOSS) {
+                const int adjustedHealth = std::max(0, hpBefore - kBurnTickDamage);
+                victim->colChkInfo.health = static_cast<uint8_t>(adjustedHealth);
             }
 
-            Actor_SetColorFilter(victim, 0x4000, 200, 0, kBurnTickIntervalFrames);
-            FUSE_LOG_DBG("[FuseDBG] BurnTick: frame=%d victim=%p id=0x%04X dmg=%d ticksLeft=%d\n", curFrame,
-                         (void*)victim, victim->id, kBurnTickDamage, state.ticksRemaining);
-            if (CVarGetInteger("gFuse.DebugEnemyHpOverride.Enable", 0) != 0 &&
-                CVarGetInteger("gFuse.DebugEnemyHpOverride.Sticky", 0) != 0) {
-                FUSE_LOG_DBG("[FuseDBG] BurnNote: EnemyHpOverride enabled/sticky may mask HP change\n");
-            }
+            FUSE_LOG_DBG("[FuseDBG] BurnTick: victim=%p id=0x%04X dmg=%d ticksLeft=%d\n", (void*)victim, victim->id,
+                         kBurnTickDamage, state.ticksRemaining);
         }
 
         ++it;
@@ -780,10 +767,9 @@ void Fuse::ApplyBurn(PlayState* play, Actor* victim, uint8_t level, MaterialId m
         state.nextTickFrame = curFrame + kBurnTickIntervalFrames;
         state.ticksRemaining = totalTicks;
         sBurnStates[victim] = state;
-        Actor_SetColorFilter(victim, 0x4000, 200, 0, kBurnTickIntervalFrames);
-        FUSE_LOG_DBG("[FuseDBG] BurnApplyNew: victim=%p id=0x%04X endFrame=%d ticks=%d\n", (void*)victim, victim->id,
-                     state.endFrame, state.ticksRemaining);
-        FUSE_LOG_DBG("[FuseDBG] BurnVfx: apply colorfilter\n");
+        Actor_SetColorFilter(victim, 0x4000, 200, 0, durationFrames);
+        FUSE_LOG_DBG("[FuseDBG] BurnApplySet: victim=%p end=%d next=%d ticks=%d\n", (void*)victim, state.endFrame,
+                     state.nextTickFrame, state.ticksRemaining);
         return;
     }
 
@@ -792,8 +778,9 @@ void Fuse::ApplyBurn(PlayState* play, Actor* victim, uint8_t level, MaterialId m
     if (state.nextTickFrame < curFrame) {
         state.nextTickFrame = curFrame + kBurnTickIntervalFrames;
     }
-    FUSE_LOG_DBG("[FuseDBG] BurnApplyRefresh: victim=%p id=0x%04X endFrame=%d ticksLeft=%d\n", (void*)victim,
-                 victim->id, state.endFrame, state.ticksRemaining);
+    Actor_SetColorFilter(victim, 0x4000, 200, 0, durationFrames);
+    FUSE_LOG_DBG("[FuseDBG] BurnApplySet: victim=%p end=%d next=%d ticks=%d\n", (void*)victim, state.endFrame,
+                 state.nextTickFrame, state.ticksRemaining);
 }
 
 static void ResetSavedSwordFuseFields() {
@@ -1667,7 +1654,7 @@ static void TryApplyEnemyHpOverride(Actor* actor) {
     }
 
     const bool sticky = CVarGetInteger("gFuse.DebugEnemyHpOverride.Sticky", 0) != 0;
-    if (!sticky && sHpOverrideApplied.find(actor) != sHpOverrideApplied.end()) {
+    if (sHpOverrideApplied.find(actor) != sHpOverrideApplied.end()) {
         return;
     }
 
@@ -1679,10 +1666,8 @@ static void TryApplyEnemyHpOverride(Actor* actor) {
     overrideHp = std::clamp(overrideHp, 1, 255);
     const int before = static_cast<int>(actor->colChkInfo.health);
     actor->colChkInfo.health = static_cast<uint8_t>(overrideHp);
-    if (!sticky) {
-        sHpOverrideApplied.insert(actor);
-    }
-    if (!sticky || before != overrideHp) {
+    const bool inserted = sHpOverrideApplied.insert(actor).second;
+    if (before != overrideHp || (sticky && inserted)) {
         FUSE_LOG_DBG("[FuseDBG] EnemyHpOverride: id=%d actor=%p hp=%d->%d key=%s\n", static_cast<int>(actor->id),
                      static_cast<void*>(actor), before, overrideHp, key);
     }
@@ -4293,7 +4278,7 @@ void Fuse::OnGameFrameUpdate(PlayState* play) {
     }
 
     TickFuseFrozenTimers(play);
-    TickBurnTimers(play);
+    TickStatusEffects(play);
     TickShatterImpulse(play);
     ProcessPendingStuns(play);
     UpdateRangedFuseLifecycle(play);
@@ -4302,6 +4287,12 @@ void Fuse::OnGameFrameUpdate(PlayState* play) {
     TickRangedProjectileBombableProximity(play);
 
     if (play != nullptr) {
+        const bool hpOverrideEnabled = CVarGetInteger("gFuse.DebugEnemyHpOverride.Enable", 0) != 0;
+        if (!hpOverrideEnabled) {
+            sHpOverrideApplied.clear();
+            return;
+        }
+
         CleanupEnemyHpOverrides(play);
         for (int i = 0; i < ACTORCAT_MAX; ++i) {
             Actor* actor = play->actorCtx.actorLists[i].head;
@@ -4638,6 +4629,23 @@ void Fuse::OnHammerMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage
                                  baseWeaponDamage, "hammer", false);
 }
 
-bool IsActorAliveInPlay(PlayState* play, Actor* target) {
+static bool IsActorAliveInPlay(PlayState* play, Actor* target) {
+    if (!play || !target) {
+        return false;
+    }
+
+    if (target->update == nullptr) {
+        return false;
+    }
+
+    for (int i = 0; i < ACTORCAT_MAX; ++i) {
+        Actor* actor = play->actorCtx.actorLists[i].head;
+        while (actor != nullptr) {
+            if (actor == target) {
+                return true;
+            }
+            actor = actor->next;
+        }
+    }
     return false;
 }
