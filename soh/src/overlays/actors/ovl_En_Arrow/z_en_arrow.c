@@ -365,8 +365,7 @@ void EnArrow_Fly(EnArrow* this, PlayState* play) {
         this->actor.gravity = -0.4f;
     }
 
-    atTouched = (this->actor.params != ARROW_NORMAL_LIT) && (this->actor.params <= ARROW_SEED) &&
-                (this->collider.base.atFlags & AT_HIT);
+    atTouched = (this->actor.params <= ARROW_SEED) && (this->collider.base.atFlags & AT_HIT);
 
     if (atTouched || this->touchedPoly) {
         if (this->actor.params >= ARROW_SEED) {
