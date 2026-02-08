@@ -1623,12 +1623,12 @@ static void TryApplyEnemyHpOverride(Actor* actor) {
         return;
     }
 
-    if (sHpOverrideApplied.find(actor) != sHpOverrideApplied.end()) {
+    const bool sticky = CVarGetInteger("gFuse.DebugEnemyHpOverride.Sticky", 0) != 0;
+    if (!sticky && sHpOverrideApplied.find(actor) != sHpOverrideApplied.end()) {
         return;
     }
 
     int overrideHp = CVarGetInteger(key, 0);
-    sHpOverrideApplied.insert(actor);
     if (overrideHp <= 0) {
         return;
     }
@@ -1636,8 +1636,13 @@ static void TryApplyEnemyHpOverride(Actor* actor) {
     overrideHp = std::clamp(overrideHp, 1, 255);
     const int before = static_cast<int>(actor->colChkInfo.health);
     actor->colChkInfo.health = static_cast<uint8_t>(overrideHp);
-    FUSE_LOG_DBG("[FuseDBG] EnemyHpOverride: id=%d actor=%p hp=%d->%d key=%s\n", static_cast<int>(actor->id),
-                 static_cast<void*>(actor), before, overrideHp, key);
+    if (!sticky) {
+        sHpOverrideApplied.insert(actor);
+    }
+    if (!sticky || before != overrideHp) {
+        FUSE_LOG_DBG("[FuseDBG] EnemyHpOverride: id=%d actor=%p hp=%d->%d key=%s\n", static_cast<int>(actor->id),
+                     static_cast<void*>(actor), before, overrideHp, key);
+    }
 }
 
 static void CleanupEnemyHpOverrides(PlayState* play) {
@@ -4239,6 +4244,11 @@ void Fuse::TickRangedProjectileBombableProximity(PlayState* play) {
 }
 
 void Fuse::OnGameFrameUpdate(PlayState* play) {
+    if (CVarGetInteger("gFuse.DebugEnemyHpOverride.Reset", 0) != 0) {
+        sHpOverrideApplied.clear();
+        CVarSetInteger("gFuse.DebugEnemyHpOverride.Reset", 0);
+    }
+
     TickFuseFrozenTimers(play);
     TickBurnTimers(play);
     TickShatterImpulse(play);

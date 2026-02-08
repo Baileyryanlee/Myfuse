@@ -194,6 +194,8 @@ struct EnemyHpOverrideRow {
 };
 
 static constexpr const char* kEnemyHpOverrideEnableCVar = "gFuse.DebugEnemyHpOverride.Enable";
+static constexpr const char* kEnemyHpOverrideStickyCVar = "gFuse.DebugEnemyHpOverride.Sticky";
+static constexpr const char* kEnemyHpOverrideResetCVar = "gFuse.DebugEnemyHpOverride.Reset";
 
 static const std::array<EnemyHpOverrideRow, 10> kEnemyHpOverrideRows = { {
     { "Keese", "gFuse.DebugEnemyHpOverride.Keese" },
@@ -743,6 +745,15 @@ void FuseMenuWindow::DrawElement() {
                 CVarSetInteger(kEnemyHpOverrideEnableCVar, hpOverridesEnabled ? 1 : 0);
             }
 
+            bool hpOverridesSticky = CVarGetInteger(kEnemyHpOverrideStickyCVar, 0) != 0;
+            if (ImGui::Checkbox("Sticky (apply every frame)", &hpOverridesSticky)) {
+                CVarSetInteger(kEnemyHpOverrideStickyCVar, hpOverridesSticky ? 1 : 0);
+            }
+
+            if (ImGui::Button("Reapply Overrides")) {
+                CVarSetInteger(kEnemyHpOverrideResetCVar, 1);
+            }
+
             ImGui::TextUnformatted("0 = default (vanilla), 1..255 = override at spawn");
 
             if (ImGui::BeginTable("EnemyHpOverridesTable", 2, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg)) {
@@ -783,7 +794,7 @@ void FuseMenuWindow::DrawElement() {
                 ImGui::TableHeadersRow();
 
                 const MaterialId inventoryMaterials[] = { MaterialId::Rock, MaterialId::Stick, MaterialId::FrozenShard,
-                                                          MaterialId::KeeseEye };
+                                                          MaterialId::KeeseEye, MaterialId::FireJelly };
                 const size_t inventoryMaterialCount = sizeof(inventoryMaterials) / sizeof(inventoryMaterials[0]);
                 for (size_t index = 0; index < inventoryMaterialCount; index++) {
                     const MaterialId id = inventoryMaterials[index];
