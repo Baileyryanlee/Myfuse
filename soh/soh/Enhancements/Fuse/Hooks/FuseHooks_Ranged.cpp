@@ -8,6 +8,9 @@ extern "C" {
 #include "z64.h"
 }
 
+struct EnArrow;
+extern "C" int EnArrow_SetLitByFire(struct EnArrow* arrow);
+
 void Fuse_GetRangedFuseStatus(RangedFuseSlot slot, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax);
 
 static constexpr float kBombableAssistRadius = 120.0f;
@@ -287,6 +290,39 @@ extern "C" void FuseHooks_OnArrowProjectileFired(PlayState* play, int32_t isSeed
     }
     Fuse::CommitQueuedRangedFuse(RangedFuseSlot::Arrows, "ArrowProjectileFired");
     LogRangedKnockbackStatus("arrows", RangedFuseSlot::Arrows, "fired");
+}
+
+extern "C" void FuseHooks_OnArrowProjectileSpawned(PlayState* play, Actor* projectile, int32_t isSeed) {
+    (void)play;
+    if (!projectile || projectile->id != ACTOR_EN_ARROW) {
+        return;
+    }
+
+    const RangedFuseSlot slot = isSeed ? RangedFuseSlot::Slingshot : RangedFuseSlot::Arrows;
+    int materialIdRaw = static_cast<int>(MaterialId::None);
+    int curDurability = 0;
+    int maxDurability = 0;
+    Fuse_GetRangedFuseStatus(slot, &materialIdRaw, &curDurability, &maxDurability);
+
+    if (materialIdRaw == static_cast<int>(MaterialId::None) || curDurability <= 0) {
+        return;
+    }
+
+    const MaterialId materialId = static_cast<MaterialId>(materialIdRaw);
+    const MaterialDef* def = Fuse::GetMaterialDef(materialId);
+    if (!def) {
+        return;
+    }
+
+    uint8_t burnLevel = 0;
+    if (!HasModifier(def->modifiers, def->modifierCount, ModifierId::Burn, &burnLevel) || burnLevel == 0) {
+        return;
+    }
+
+    if (EnArrow_SetLitByFire(reinterpret_cast<EnArrow*>(projectile))) {
+        Fuse::Log("[FuseDBG] BurnLitArrow: slot=%s proj=0x%04X mat=%d\n", RangedSlotLabel(static_cast<RangedFuseSlotId>(slot)),
+                  projectile->id, materialIdRaw);
+    }
 }
 
 extern "C" void FuseHooks_OnRangedProjectileHit(PlayState* play, Actor* projectile, Actor* victim, Vec3f* impactPos,
