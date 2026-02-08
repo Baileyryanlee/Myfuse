@@ -78,8 +78,9 @@ static constexpr s16 kFreezeDurationFramesBase = 120;
 static constexpr float kFreezeShatterDamageMult = 1.5f;
 static constexpr float kFreezeShatterKnockbackSpeed = 18.0f;
 static constexpr float kFreezeShatterKnockbackYBoost = 3.0f;
-static constexpr int kBurnDurationFrames = 60;
-static constexpr int kBurnTickIntervalFrames = 15;
+// TODO: revert burn duration to 60 frames after validation.
+static constexpr int kBurnDurationFrames = 120;
+static constexpr int kBurnTickIntervalFrames = 30;
 static constexpr int kBurnTotalTicks = 4;
 static constexpr int kBurnTickDamage = 1;
 static constexpr int kShatterImpulseFrames = 5;
@@ -523,6 +524,12 @@ static void TickBurnTimers(PlayState* play) {
         return;
     }
 
+    static int sBurnUpdateLogFrame = -999999;
+    if (Fuse_LogDbgEnabled() && (curFrame - sBurnUpdateLogFrame) >= 20) {
+        FUSE_LOG_DBG("[FuseDBG] BurnUpdate: frame=%d active=%zu\n", curFrame, sBurnStates.size());
+        sBurnUpdateLogFrame = curFrame;
+    }
+
     for (auto it = sBurnStates.begin(); it != sBurnStates.end();) {
         Actor* victim = it->first;
         FuseBurnState& state = it->second;
@@ -539,15 +546,32 @@ static void TickBurnTimers(PlayState* play) {
 
         if (curFrame >= state.nextTickFrame && state.ticksRemaining > 0) {
             const int prevDamage = victim->colChkInfo.damage;
+            const int hpBefore = victim->colChkInfo.health;
             victim->colChkInfo.damage = kBurnTickDamage;
             Actor_ApplyDamage(victim);
             victim->colChkInfo.damage = prevDamage;
+            const int hpAfter = victim->colChkInfo.health;
 
             state.ticksRemaining--;
             state.nextTickFrame = curFrame + kBurnTickIntervalFrames;
 
-            FUSE_LOG_DBG("[FuseDBG] BurnTick: victim=%p id=0x%04X dmg=%d ticksLeft=%d\n", (void*)victim, victim->id,
-                         kBurnTickDamage, state.ticksRemaining);
+            if (hpAfter == hpBefore && hpBefore > 0) {
+                if (victim->category == ACTORCAT_BOSS) {
+                    FUSE_LOG_DBG("[FuseDBG] BurnTickSkip: reason=BossNoDirectDamage victim=%p id=0x%04X\n",
+                                 (void*)victim, victim->id);
+                } else {
+                    const int adjustedHealth = std::max(0, hpBefore - kBurnTickDamage);
+                    victim->colChkInfo.health = static_cast<uint8_t>(adjustedHealth);
+                }
+            }
+
+            Actor_SetColorFilter(victim, 0x4000, 200, 0, kBurnTickIntervalFrames);
+            FUSE_LOG_DBG("[FuseDBG] BurnTick: frame=%d victim=%p id=0x%04X dmg=%d ticksLeft=%d\n", curFrame,
+                         (void*)victim, victim->id, kBurnTickDamage, state.ticksRemaining);
+            if (CVarGetInteger("gFuse.DebugEnemyHpOverride.Enable", 0) != 0 &&
+                CVarGetInteger("gFuse.DebugEnemyHpOverride.Sticky", 0) != 0) {
+                FUSE_LOG_DBG("[FuseDBG] BurnNote: EnemyHpOverride enabled/sticky may mask HP change\n");
+            }
         }
 
         ++it;
@@ -746,11 +770,30 @@ void Fuse::ApplyBurn(PlayState* play, Actor* victim, uint8_t level, MaterialId m
     (void)level;
     (void)materialId;
 
-    FuseBurnState state{};
+    auto stateIt = sBurnStates.find(victim);
+    const bool hasState = stateIt != sBurnStates.end();
+    const bool isActive = hasState && stateIt->second.ticksRemaining > 0 && curFrame < stateIt->second.endFrame;
+
+    if (!isActive) {
+        FuseBurnState state{};
+        state.endFrame = curFrame + durationFrames;
+        state.nextTickFrame = curFrame + kBurnTickIntervalFrames;
+        state.ticksRemaining = totalTicks;
+        sBurnStates[victim] = state;
+        Actor_SetColorFilter(victim, 0x4000, 200, 0, kBurnTickIntervalFrames);
+        FUSE_LOG_DBG("[FuseDBG] BurnApplyNew: victim=%p id=0x%04X endFrame=%d ticks=%d\n", (void*)victim, victim->id,
+                     state.endFrame, state.ticksRemaining);
+        FUSE_LOG_DBG("[FuseDBG] BurnVfx: apply colorfilter\n");
+        return;
+    }
+
+    FuseBurnState& state = stateIt->second;
     state.endFrame = curFrame + durationFrames;
-    state.nextTickFrame = curFrame + kBurnTickIntervalFrames;
-    state.ticksRemaining = totalTicks;
-    sBurnStates[victim] = state;
+    if (state.nextTickFrame < curFrame) {
+        state.nextTickFrame = curFrame + kBurnTickIntervalFrames;
+    }
+    FUSE_LOG_DBG("[FuseDBG] BurnApplyRefresh: victim=%p id=0x%04X endFrame=%d ticksLeft=%d\n", (void*)victim,
+                 victim->id, state.endFrame, state.ticksRemaining);
 }
 
 static void ResetSavedSwordFuseFields() {
