@@ -12,7 +12,7 @@ int EnArrow_SetLitByFire(EnArrow* thisx);
 
 void Fuse_GetRangedFuseStatus(RangedFuseSlot slot, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax);
 void Fuse_GetRangedQueuedStatus(RangedFuseSlot slot, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax);
-bool Fuse_RangedSuppressLitArrowEnemyBonus(Actor* projectile);
+extern "C" int Fuse_RangedSuppressLitArrowEnemyBonus(Actor* projectile);
 
 static constexpr float kBombableAssistRadius = 120.0f;
 
