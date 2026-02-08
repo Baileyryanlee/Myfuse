@@ -3589,13 +3589,19 @@ bool Fuse::TryMarkRangedProjectileAsFire(RangedFuseSlot slot, Actor* projectile,
         return false;
     }
 
+    MaterialId materialId = MaterialId::None;
+    if (!Fuse_RangedHasBurnModifier(slot, &materialId)) {
+        return false;
+    }
+
     if (target && target->id == ACTOR_BG_ICE_SHELTER) {
         FUSE_LOG_DBG("[FuseDBG] BurnFireSkip: target=BG_ICE_SHELTER\n");
         return false;
     }
 
-    MaterialId materialId = MaterialId::None;
-    if (!Fuse_RangedHasBurnModifier(slot, &materialId)) {
+    if (target && FuseBash_IsEnemyActor(target)) {
+        FUSE_LOG_DBG("[FuseDBG] BurnFireSkip: proj=0x%04X kind=%s target=enemy id=0x%04X mat=%d\n", projectile->id,
+                     hitKind ? hitKind : "unknown", target->id, static_cast<int>(materialId));
         return false;
     }
 

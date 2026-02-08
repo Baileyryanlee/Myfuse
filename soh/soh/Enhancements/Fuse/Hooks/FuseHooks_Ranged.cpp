@@ -328,11 +328,6 @@ extern "C" void FuseHooks_OnArrowProjectileSpawned(PlayState* play, Actor* proje
     if (!HasModifier(def->modifiers, def->modifierCount, ModifierId::Burn, &burnLevel) || burnLevel == 0) {
         return;
     }
-
-    if (EnArrow_SetLitByFire(reinterpret_cast<EnArrow*>(projectile))) {
-        Fuse::Log("[FuseDBG] BurnLitArrow: slot=%s proj=0x%04X mat=%d\n", RangedSlotLabel(static_cast<RangedFuseSlotId>(slot)),
-                  projectile->id, materialIdRaw);
-    }
 }
 
 extern "C" void FuseHooks_OnRangedProjectileHit(PlayState* play, Actor* projectile, Actor* victim, Vec3f* impactPos,
