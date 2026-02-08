@@ -21,6 +21,8 @@ void EnArrow_Fly(EnArrow* this, PlayState* play);
 void func_809B45E0(EnArrow* this, PlayState* play);
 void func_809B4640(EnArrow* this, PlayState* play);
 
+extern void FuseHooks_OnArrowProjectileSpawned(PlayState* play, Actor* projectile, int32_t isSeed);
+
 const ActorInit En_Arrow_InitVars = {
     ACTOR_EN_ARROW,
     ACTORCAT_ITEMACTION,
@@ -60,6 +62,20 @@ static InitChainEntry sInitChain[] = {
 
 void EnArrow_SetupAction(EnArrow* this, EnArrowActionFunc actionFunc) {
     this->actionFunc = actionFunc;
+}
+
+int EnArrow_SetLitByFire(EnArrow* this) {
+    if (this == NULL) {
+        return 0;
+    }
+
+    if ((this->actor.params == ARROW_FIRE) || (this->actor.params == ARROW_ICE) || (this->actor.params == ARROW_LIGHT)) {
+        return 0;
+    }
+
+    this->actor.params = ARROW_NORMAL_LIT;
+    this->collider.info.toucher.dmgFlags = DMG_ARROW_FIRE;
+    return 1;
 }
 
 Actor* EnArrow_TriggerDekuNutEffect(PlayState* play, const Vec3f* pos) {
@@ -249,6 +265,7 @@ void EnArrow_Shoot(EnArrow* this, PlayState* play) {
         }
 
         FuseHooks_OnArrowProjectileFired(play, (this->actor.params == ARROW_SEED));
+        FuseHooks_OnArrowProjectileSpawned(play, &this->actor, (this->actor.params == ARROW_SEED));
         EnArrow_SetupAction(this, EnArrow_Fly);
         Math_Vec3f_Copy(&this->unk_210, &this->actor.world.pos);
 
