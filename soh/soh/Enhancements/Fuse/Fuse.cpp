@@ -2414,8 +2414,8 @@ void Fuse_GetRangedFuseStatus(RangedFuseSlot slot, int* outMaterialId, int* outD
     }
 }
 
-extern "C" void Fuse_GetRangedQueuedStatus(RangedFuseSlot slot, int* outMaterialId, int* outDurabilityCur,
-                                           int* outDurabilityMax) {
+void Fuse_GetRangedQueuedStatus(RangedFuseSlot slot, int* outMaterialId, int* outDurabilityCur,
+                                int* outDurabilityMax) {
     if (outMaterialId) {
         *outMaterialId = static_cast<int>(MaterialId::None);
     }
