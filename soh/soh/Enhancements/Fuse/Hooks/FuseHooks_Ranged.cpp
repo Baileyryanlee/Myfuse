@@ -141,8 +141,6 @@ static void HandleRangedSurfaceHit(PlayState* play, RangedFuseSlot slot, const V
                               RangedSlotLabel(static_cast<RangedFuseSlotId>(slot)));
     }
 
-    // TODO: Burn-fused projectiles lighting torches (OBJ_SYOKUDAI) could reuse vanilla Fire Arrow/Din's Fire ignite
-    //       logic, but no safe shared path found yet (searched: OBJ_SYOKUDAI, torch, ignite, Fire Arrow, DMG_FIRE).
 }
 
 extern "C" void Fuse_OnRangedHitActor(PlayState* play, RangedFuseSlotId slot, Actor* victim,
@@ -291,24 +289,29 @@ extern "C" void FuseHooks_OnArrowProjectileFired(PlayState* play, int32_t isSeed
     LogRangedKnockbackStatus("arrows", RangedFuseSlot::Arrows, "fired");
 }
 
-extern "C" void FuseHooks_OnRangedProjectileHit(PlayState* play, Actor* victim, Vec3f* impactPos, int32_t isSeed) {
+extern "C" void FuseHooks_OnRangedProjectileHit(PlayState* play, Actor* projectile, Actor* victim, Vec3f* impactPos,
+                                                int32_t isSeed) {
     if (isSeed) {
+        Fuse::TryMarkRangedProjectileAsFire(RangedFuseSlot::Slingshot, projectile, victim, "actor");
         Fuse_OnRangedHitActor(play, RANGED_FUSE_SLOT_SLINGSHOT, victim, impactPos);
         Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot::Slingshot, "ProjectileHit");
         return;
     }
 
+    Fuse::TryMarkRangedProjectileAsFire(RangedFuseSlot::Arrows, projectile, victim, "actor");
     Fuse_OnRangedHitActor(play, RANGED_FUSE_SLOT_ARROWS, victim, impactPos);
     Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot::Arrows, "ProjectileHit");
 }
 
-extern "C" void FuseHooks_OnRangedProjectileHitSurface(PlayState* play, Vec3f* impactPos, int32_t isSeed) {
+extern "C" void FuseHooks_OnRangedProjectileHitSurface(PlayState* play, Actor* projectile, Vec3f* impactPos,
+                                                       int32_t isSeed) {
     if (!play || !impactPos) {
         return;
     }
 
     const RangedFuseSlot slot = isSeed ? RangedFuseSlot::Slingshot : RangedFuseSlot::Arrows;
     Fuse::CommitQueuedRangedFuse(slot, "ProjectileSurfaceHit");
+    Fuse::TryMarkRangedProjectileAsFire(slot, projectile, nullptr, "bg");
     HandleRangedSurfaceHit(play, slot, impactPos, "ProjectileSurfaceHit");
     Fuse::MarkRangedHitResolved(slot, "ProjectileSurfaceHit");
     Fuse::OnRangedProjectileHitFinalize(slot, "ProjectileSurfaceHit");
