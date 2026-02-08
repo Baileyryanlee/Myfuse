@@ -512,6 +512,9 @@ static void ClearFuseFreeze(Actor* actor) {
 }
 
 static bool IsActorAliveInPlay(PlayState* play, Actor* target);
+
+void TickBurnTimers(PlayState* play);
+
 void Fuse::TickStatusEffects(PlayState* play) {
     TickBurnTimers(play);
 }
