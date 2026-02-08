@@ -12,6 +12,7 @@ int EnArrow_SetLitByFire(EnArrow* thisx);
 
 void Fuse_GetRangedFuseStatus(RangedFuseSlot slot, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax);
 void Fuse_GetRangedQueuedStatus(RangedFuseSlot slot, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax);
+bool Fuse_RangedSuppressLitArrowEnemyBonus(Actor* projectile);
 
 static constexpr float kBombableAssistRadius = 120.0f;
 
@@ -89,6 +90,26 @@ static bool Fuse_ShouldTriggerExplosionOnActor(const Actor* actor) {
     }
 
     return false;
+}
+
+static bool Fuse_RangedSlotHasBurn(RangedFuseSlot slot) {
+    int materialIdRaw = static_cast<int>(MaterialId::None);
+    int curDurability = 0;
+    int maxDurability = 0;
+    Fuse_GetRangedFuseStatus(slot, &materialIdRaw, &curDurability, &maxDurability);
+    (void)maxDurability;
+
+    if (materialIdRaw == static_cast<int>(MaterialId::None) || curDurability <= 0) {
+        return false;
+    }
+
+    const MaterialDef* def = Fuse::GetMaterialDef(static_cast<MaterialId>(materialIdRaw));
+    if (!def) {
+        return false;
+    }
+
+    uint8_t burnLevel = 0;
+    return HasModifier(def->modifiers, def->modifierCount, ModifierId::Burn, &burnLevel) && burnLevel > 0;
 }
 
 static void HandleRangedSurfaceHit(PlayState* play, RangedFuseSlot slot, const Vec3f* impactPos, const char* reason) {
@@ -328,18 +349,29 @@ extern "C" void FuseHooks_OnArrowProjectileSpawned(PlayState* play, Actor* proje
     if (!HasModifier(def->modifiers, def->modifierCount, ModifierId::Burn, &burnLevel) || burnLevel == 0) {
         return;
     }
+
+    if (EnArrow_SetLitByFire(reinterpret_cast<EnArrow*>(projectile))) {
+        Fuse::Log("[FuseDBG] BurnLitArrow: slot=%s proj=0x%04X mat=%d\n",
+                  RangedSlotLabel(static_cast<RangedFuseSlotId>(slot)), projectile->id, materialIdRaw);
+    }
 }
 
 extern "C" void FuseHooks_OnRangedProjectileHit(PlayState* play, Actor* projectile, Actor* victim, Vec3f* impactPos,
                                                 int32_t isSeed) {
     if (isSeed) {
         Fuse::TryMarkRangedProjectileAsFire(RangedFuseSlot::Slingshot, projectile, victim, "actor");
+        if (victim && FuseBash_IsEnemyActor(victim) && Fuse_RangedSlotHasBurn(RangedFuseSlot::Slingshot)) {
+            Fuse_RangedSuppressLitArrowEnemyBonus(projectile);
+        }
         Fuse_OnRangedHitActor(play, RANGED_FUSE_SLOT_SLINGSHOT, victim, impactPos);
         Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot::Slingshot, "ProjectileHit");
         return;
     }
 
     Fuse::TryMarkRangedProjectileAsFire(RangedFuseSlot::Arrows, projectile, victim, "actor");
+    if (victim && FuseBash_IsEnemyActor(victim) && Fuse_RangedSlotHasBurn(RangedFuseSlot::Arrows)) {
+        Fuse_RangedSuppressLitArrowEnemyBonus(projectile);
+    }
     Fuse_OnRangedHitActor(play, RANGED_FUSE_SLOT_ARROWS, victim, impactPos);
     Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot::Arrows, "ProjectileHit");
 }

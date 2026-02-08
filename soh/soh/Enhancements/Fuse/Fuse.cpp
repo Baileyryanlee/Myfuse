@@ -1416,6 +1416,25 @@ static void Fuse_RangedMarkProjectileAsFire(Actor* projectile) {
     arrow->collider.info.toucher.dmgFlags = DMG_ARROW_FIRE;
 }
 
+bool Fuse_RangedSuppressLitArrowEnemyBonus(Actor* projectile) {
+    if (!projectile || projectile->id != ACTOR_EN_ARROW) {
+        return false;
+    }
+
+    EnArrow* arrow = reinterpret_cast<EnArrow*>(projectile);
+    if (arrow->actor.params != ARROW_NORMAL_LIT) {
+        return false;
+    }
+
+    if ((arrow->collider.info.toucher.dmgFlags & DMG_ARROW_FIRE) == 0) {
+        return false;
+    }
+
+    arrow->collider.info.toucher.dmgFlags = DMG_ARROW_NORMAL;
+    FUSE_LOG_DBG("[FuseDBG] BurnEnemyBonusSuppressed: proj=0x%04X\n", projectile->id);
+    return true;
+}
+
 const char* RangedSlotName(RangedFuseSlot slot) {
     switch (slot) {
         case RangedFuseSlot::Arrows:
