@@ -4885,148 +4885,196 @@ s32 func_808382DC(Player* this, PlayState* play) {
             // This behavior was later fixed in MM, most likely by removing both the `atHit` and `atFlags` checks.
             if (sp64 || ((this->invincibilityTimer < 0) && (this->cylinder.base.acFlags & AC_HIT) &&
                          (this->cylinder.info.atHit != NULL) && (this->cylinder.info.atHit->atFlags & 0x20000000))) {
-
-                Player_RequestRumble(this, 180, 20, 100, 0);
+                bool guardBreak = false;
+                int guardBase = 0;
+                int guardBonus = 0;
+                int guardMatId = 0;
+                int incomingPower = -1;
+                int effectiveGuard = 0;
 
                 if (sp64) {
-                    s32 explosionMatId = 0;
-                    u8 explosionLevel = 0;
                     Actor* attacker = this->shieldQuad.base.ac;
-                    Vec3f explosionPos = this->actor.world.pos;
-                    if ((this->shieldQuad.info.bumper.hitPos.x != 0) || (this->shieldQuad.info.bumper.hitPos.y != 0) ||
-                        (this->shieldQuad.info.bumper.hitPos.z != 0)) {
-                        explosionPos.x = this->shieldQuad.info.bumper.hitPos.x;
-                        explosionPos.y = this->shieldQuad.info.bumper.hitPos.y;
-                        explosionPos.z = this->shieldQuad.info.bumper.hitPos.z;
-                    } else if (attacker != NULL) {
-                        explosionPos = attacker->world.pos;
+                    effectiveGuard = Fuse_GetShieldEffectiveGuard(this, &guardBase, &guardBonus, &guardMatId);
+                    incomingPower = Fuse_GetIncomingHitPowerFromCollision(this);
+                    if (incomingPower >= 0) {
+                        guardBreak = incomingPower > effectiveGuard;
+                        if (CVarGetInteger("gFuseDbgShieldGuardStrength", 0) != 0) {
+                            const int equipValue = CUR_EQUIP_VALUE(EQUIP_TYPE_SHIELD);
+                            const char* shieldName = "None";
+
+                            switch (equipValue) {
+                                case EQUIP_VALUE_SHIELD_DEKU:
+                                    shieldName = "Deku";
+                                    break;
+                                case EQUIP_VALUE_SHIELD_HYLIAN:
+                                    shieldName = "Hylian";
+                                    break;
+                                case EQUIP_VALUE_SHIELD_MIRROR:
+                                    shieldName = "Mirror";
+                                    break;
+                                default:
+                                    shieldName = "None";
+                                    break;
+                            }
+
+                            osSyncPrintf(
+                                "[FuseDBG] ShieldGuardCheck shield=%s base=%d bonus=%d eff=%d incoming=%d mat=%d "
+                                "result=%s srcActor=%04X\n",
+                                shieldName, guardBase, guardBonus, effectiveGuard, incomingPower, guardMatId,
+                                guardBreak ? "BREAK" : "HOLD", attacker ? attacker->id : 0);
+                        }
                     }
-                    const bool shouldExplode =
-                        Fuse_ShieldHasExplosion(play, &explosionMatId, NULL, NULL, &explosionLevel) &&
-                        (explosionLevel > 0);
+                }
 
-                    if (shouldExplode) {
-                        Fuse_ShieldTriggerExplosion(play, explosionMatId, explosionLevel, &explosionPos);
-                    }
+                if (guardBreak) {
+                    this->shieldQuad.base.acFlags &= ~AC_BOUNCED;
+                } else {
+                    Player_RequestRumble(this, 180, 20, 100, 0);
 
-                    if (attacker != NULL && FuseBash_IsEnemyActor(attacker)) {
-                        int shieldMatId = 0;
-                        int shieldDurabilityCur = 0;
-                        int shieldDurabilityMax = 0;
-                        uint8_t stunLevel = 0;
-                        const int32_t equipValue = CUR_EQUIP_VALUE(EQUIP_TYPE_SHIELD);
-                        int shieldItemId = ITEM_NONE;
+                    if (sp64) {
+                        s32 explosionMatId = 0;
+                        u8 explosionLevel = 0;
+                        Actor* attacker = this->shieldQuad.base.ac;
+                        Vec3f explosionPos = this->actor.world.pos;
+                        if ((this->shieldQuad.info.bumper.hitPos.x != 0) ||
+                            (this->shieldQuad.info.bumper.hitPos.y != 0) ||
+                            (this->shieldQuad.info.bumper.hitPos.z != 0)) {
+                            explosionPos.x = this->shieldQuad.info.bumper.hitPos.x;
+                            explosionPos.y = this->shieldQuad.info.bumper.hitPos.y;
+                            explosionPos.z = this->shieldQuad.info.bumper.hitPos.z;
+                        } else if (attacker != NULL) {
+                            explosionPos = attacker->world.pos;
+                        }
+                        const bool shouldExplode =
+                            Fuse_ShieldHasExplosion(play, &explosionMatId, NULL, NULL, &explosionLevel) &&
+                            (explosionLevel > 0);
 
-                        switch (equipValue) {
-                            case EQUIP_VALUE_SHIELD_DEKU:
-                                shieldItemId = ITEM_SHIELD_DEKU;
-                                break;
-                            case EQUIP_VALUE_SHIELD_HYLIAN:
-                                shieldItemId = ITEM_SHIELD_HYLIAN;
-                                break;
-                            case EQUIP_VALUE_SHIELD_MIRROR:
-                                shieldItemId = ITEM_SHIELD_MIRROR;
-                                break;
-                            default:
-                                shieldItemId = ITEM_NONE;
-                                break;
+                        if (shouldExplode) {
+                            Fuse_ShieldTriggerExplosion(play, explosionMatId, explosionLevel, &explosionPos);
                         }
 
-                        if (Player_IsChildWithHylianShield(this)) {
-                            if (Fuse_ShieldHasMegaStun(play, &shieldMatId, &shieldDurabilityCur,
-                                                       &shieldDurabilityMax, &stunLevel) &&
-                                stunLevel > 0) {
+                        if (attacker != NULL && FuseBash_IsEnemyActor(attacker)) {
+                            int shieldMatId = 0;
+                            int shieldDurabilityCur = 0;
+                            int shieldDurabilityMax = 0;
+                            uint8_t stunLevel = 0;
+                            const int32_t equipValue = CUR_EQUIP_VALUE(EQUIP_TYPE_SHIELD);
+                            int shieldItemId = ITEM_NONE;
+
+                            switch (equipValue) {
+                                case EQUIP_VALUE_SHIELD_DEKU:
+                                    shieldItemId = ITEM_SHIELD_DEKU;
+                                    break;
+                                case EQUIP_VALUE_SHIELD_HYLIAN:
+                                    shieldItemId = ITEM_SHIELD_HYLIAN;
+                                    break;
+                                case EQUIP_VALUE_SHIELD_MIRROR:
+                                    shieldItemId = ITEM_SHIELD_MIRROR;
+                                    break;
+                                default:
+                                    shieldItemId = ITEM_NONE;
+                                    break;
+                            }
+
+                            if (Player_IsChildWithHylianShield(this)) {
+                                if (Fuse_ShieldHasMegaStun(play, &shieldMatId, &shieldDurabilityCur,
+                                                           &shieldDurabilityMax, &stunLevel) &&
+                                    stunLevel > 0) {
+                                    osSyncPrintf(
+                                        "[FuseDBG] shield_stun_trigger shield=%d attacker=%p attackerId=0x%04X\n",
+                                        equipValue, (void*)attacker, attacker->id);
+                                    Fuse_ShieldTriggerMegaStun(play, this, shieldMatId, shieldItemId);
+                                }
+                            } else if (Fuse_ShieldHasStun(play, &shieldMatId, &shieldDurabilityCur,
+                                                          &shieldDurabilityMax, &stunLevel) &&
+                                       stunLevel > 0) {
                                 osSyncPrintf("[FuseDBG] shield_stun_trigger shield=%d attacker=%p attackerId=0x%04X\n",
                                              equipValue, (void*)attacker, attacker->id);
-                                Fuse_ShieldTriggerMegaStun(play, this, shieldMatId, shieldItemId);
+                                Fuse_ShieldEnqueuePendingStun(attacker, stunLevel, shieldMatId, shieldItemId);
                             }
-                        } else if (Fuse_ShieldHasStun(play, &shieldMatId, &shieldDurabilityCur, &shieldDurabilityMax,
-                                                      &stunLevel) &&
-                                   stunLevel > 0) {
-                            osSyncPrintf("[FuseDBG] shield_stun_trigger shield=%d attacker=%p attackerId=0x%04X\n",
-                                         equipValue, (void*)attacker, attacker->id);
-                            Fuse_ShieldEnqueuePendingStun(attacker, stunLevel, shieldMatId, shieldItemId);
+
+                            uint8_t freezeLevel = 0;
+                            int freezeMatId = 0;
+                            int freezeDurabilityCur = 0;
+                            int freezeDurabilityMax = 0;
+                            if (Fuse_ShieldHasFreeze(play, &freezeMatId, &freezeDurabilityCur, &freezeDurabilityMax,
+                                                     &freezeLevel) &&
+                                freezeLevel > 0 && attacker->freezeTimer == 0) {
+                                osSyncPrintf("[FuseDBG] FreezeApply: src=shield attacker=%p lvl=%u mat=%d\n",
+                                             (void*)attacker, freezeLevel, freezeMatId);
+                                Fuse_ShieldApplyFreeze(play, attacker, freezeLevel);
+                            }
+
+                            uint8_t burnLevel = 0;
+                            int burnMatId = 0;
+                            int burnDurabilityCur = 0;
+                            int burnDurabilityMax = 0;
+                            if (Fuse_ShieldHasBurn(play, &burnMatId, &burnDurabilityCur, &burnDurabilityMax,
+                                                   &burnLevel) &&
+                                burnLevel > 0) {
+                                Fuse_ShieldApplyBurn(play, attacker, burnLevel, burnMatId);
+                            }
                         }
 
-                        uint8_t freezeLevel = 0;
-                        int freezeMatId = 0;
-                        int freezeDurabilityCur = 0;
-                        int freezeDurabilityMax = 0;
-                        if (Fuse_ShieldHasFreeze(play, &freezeMatId, &freezeDurabilityCur, &freezeDurabilityMax,
-                                                 &freezeLevel) &&
-                            freezeLevel > 0 && attacker->freezeTimer == 0) {
-                            osSyncPrintf("[FuseDBG] FreezeApply: src=shield attacker=%p lvl=%u mat=%d\n",
-                                         (void*)attacker, freezeLevel, freezeMatId);
-                            Fuse_ShieldApplyFreeze(play, attacker, freezeLevel);
-                        }
-
-                        uint8_t burnLevel = 0;
-                        int burnMatId = 0;
-                        int burnDurabilityCur = 0;
-                        int burnDurabilityMax = 0;
-                        if (Fuse_ShieldHasBurn(play, &burnMatId, &burnDurabilityCur, &burnDurabilityMax, &burnLevel) &&
-                            burnLevel > 0) {
-                            Fuse_ShieldApplyBurn(play, attacker, burnLevel, burnMatId);
-                        }
+                        Fuse_ShieldGuardDrain(play);
                     }
 
-                    Fuse_ShieldGuardDrain(play);
-                }
+                    if (!Player_IsChildWithHylianShield(this)) {
+                        if (this->invincibilityTimer >= 0) {
+                            LinkAnimationHeader* anim;
+                            s32 sp54 = Player_Action_80843188 == this->actionFunc;
 
-                if (!Player_IsChildWithHylianShield(this)) {
-                    if (this->invincibilityTimer >= 0) {
-                        LinkAnimationHeader* anim;
-                        s32 sp54 = Player_Action_80843188 == this->actionFunc;
+                            if (!func_808332B8(this)) {
+                                Player_SetupAction(play, this, Player_Action_808435C4, 0);
+                            }
 
-                        if (!func_808332B8(this)) {
-                            Player_SetupAction(play, this, Player_Action_808435C4, 0);
-                        }
+                            if (!(this->av1.actionVar1 = sp54)) {
+                                Player_SetUpperActionFunc(this, func_80834BD4);
 
-                        if (!(this->av1.actionVar1 = sp54)) {
-                            Player_SetUpperActionFunc(this, func_80834BD4);
-
-                            if (this->unk_870 < 0.5f) {
-                                anim = D_808543BC[Player_HoldsTwoHandedWeapon(this) &&
-                                                  !(CVarGetInteger(CVAR_CHEAT("ShieldTwoHanded"), 0) &&
-                                                    (this->heldItemAction != PLAYER_IA_DEKU_STICK))];
+                                if (this->unk_870 < 0.5f) {
+                                    anim = D_808543BC[Player_HoldsTwoHandedWeapon(this) &&
+                                                      !(CVarGetInteger(CVAR_CHEAT("ShieldTwoHanded"), 0) &&
+                                                        (this->heldItemAction != PLAYER_IA_DEKU_STICK))];
+                                } else {
+                                    anim = D_808543B4[Player_HoldsTwoHandedWeapon(this) &&
+                                                      !(CVarGetInteger(CVAR_CHEAT("ShieldTwoHanded"), 0) &&
+                                                        (this->heldItemAction != PLAYER_IA_DEKU_STICK))];
+                                }
+                                LinkAnimation_PlayOnce(play, &this->upperSkelAnime, anim);
                             } else {
-                                anim = D_808543B4[Player_HoldsTwoHandedWeapon(this) &&
-                                                  !(CVarGetInteger(CVAR_CHEAT("ShieldTwoHanded"), 0) &&
-                                                    (this->heldItemAction != PLAYER_IA_DEKU_STICK))];
+                                Player_AnimPlayOnce(
+                                    play, this,
+                                    D_808543C4[Player_HoldsTwoHandedWeapon(this) &&
+                                               !(CVarGetInteger(CVAR_CHEAT("ShieldTwoHanded"), 0) &&
+                                                 (this->heldItemAction != PLAYER_IA_DEKU_STICK))]);
                             }
-                            LinkAnimation_PlayOnce(play, &this->upperSkelAnime, anim);
-                        } else {
-                            Player_AnimPlayOnce(play, this,
-                                                D_808543C4[Player_HoldsTwoHandedWeapon(this) &&
-                                                           !(CVarGetInteger(CVAR_CHEAT("ShieldTwoHanded"), 0) &&
-                                                             (this->heldItemAction != PLAYER_IA_DEKU_STICK))]);
+                        }
+
+                        if (!(this->stateFlags1 & (PLAYER_STATE1_HANGING_OFF_LEDGE | PLAYER_STATE1_CLIMBING_LEDGE |
+                                                   PLAYER_STATE1_CLIMBING_LADDER))) {
+                            int fuseMatId = 0;
+                            int fuseDurabilityCur = 0;
+                            int fuseDurabilityMax = 0;
+                            uint8_t fuseLevel = 0;
+                            if (Fuse_ShieldHasNegateKnockback(play, &fuseMatId, &fuseDurabilityCur,
+                                                              &fuseDurabilityMax, &fuseLevel)) {
+                                osSyncPrintf(
+                                    "[FuseDBG] ShieldGuard: event=guard_cancel_knockback item=shield mat=%d lvl=%u "
+                                    "dura=%d/%d\n",
+                                    fuseMatId, fuseLevel, fuseDurabilityCur, fuseDurabilityMax);
+                            } else {
+                                this->linearVelocity = -18.0f;
+                                this->yaw = this->actor.shape.rot.y;
+                            }
                         }
                     }
 
-                    if (!(this->stateFlags1 & (PLAYER_STATE1_HANGING_OFF_LEDGE | PLAYER_STATE1_CLIMBING_LEDGE |
-                                               PLAYER_STATE1_CLIMBING_LADDER))) {
-                        int fuseMatId = 0;
-                        int fuseDurabilityCur = 0;
-                        int fuseDurabilityMax = 0;
-                        uint8_t fuseLevel = 0;
-                        if (Fuse_ShieldHasNegateKnockback(play, &fuseMatId, &fuseDurabilityCur, &fuseDurabilityMax,
-                                                          &fuseLevel)) {
-                            osSyncPrintf(
-                                "[FuseDBG] ShieldGuard: event=guard_cancel_knockback item=shield mat=%d lvl=%u "
-                                "dura=%d/%d\n",
-                                fuseMatId, fuseLevel, fuseDurabilityCur, fuseDurabilityMax);
-                        } else {
-                            this->linearVelocity = -18.0f;
-                            this->yaw = this->actor.shape.rot.y;
-                        }
+                    if (sp64 && (this->shieldQuad.info.acHitInfo->toucher.effect == 1)) {
+                        func_8083819C(this, play);
                     }
-                }
 
-                if (sp64 && (this->shieldQuad.info.acHitInfo->toucher.effect == 1)) {
-                    func_8083819C(this, play);
+                    return 0;
                 }
-
-                return 0;
             }
 
             if ((this->unk_A87 != 0) || (this->invincibilityTimer > 0) || (this->stateFlags1 & PLAYER_STATE1_DAMAGED) ||

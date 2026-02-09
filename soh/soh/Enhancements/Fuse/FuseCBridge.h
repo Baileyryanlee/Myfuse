@@ -23,6 +23,9 @@ s32 Fuse_ShieldHasExplosion(PlayState* play,
                             s32* outDurabilityMax,
                             u8* outLevel);
 
+int32_t Fuse_GetShieldEffectiveGuard(Player* player, int32_t* outBase, int32_t* outBonus, int32_t* outMaterialId);
+int32_t Fuse_GetIncomingHitPowerFromCollision(const Player* player);
+
 void Fuse_ShieldTriggerExplosion(PlayState* play,
                                  s32 materialId,
                                  u8 level,
