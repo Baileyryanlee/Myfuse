@@ -369,16 +369,28 @@ extern "C" void FuseHooks_OnArrowProjectileSpawned(PlayState* play, Actor* proje
 
 extern "C" void FuseHooks_OnRangedProjectileHit(PlayState* play, Actor* projectile, Actor* victim, Vec3f* impactPos,
                                                 int32_t isSeed) {
-    if (isSeed) {
-        Fuse::TryMarkRangedProjectileAsFire(RangedFuseSlot::Slingshot, projectile, victim, "actor");
-        Fuse_OnRangedHitActor(play, RANGED_FUSE_SLOT_SLINGSHOT, victim, impactPos);
-        Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot::Slingshot, "ProjectileHit");
-        return;
+    const RangedFuseSlotId slot = isSeed ? RANGED_FUSE_SLOT_SLINGSHOT : RANGED_FUSE_SLOT_ARROWS;
+    const RangedFuseSlot fuseSlot = isSeed ? RangedFuseSlot::Slingshot : RangedFuseSlot::Arrows;
+
+    if (victim && victim->category == ACTORCAT_ENEMY && projectile && projectile->id == ACTOR_EN_ARROW) {
+        const EnArrow* arrow = reinterpret_cast<const EnArrow*>(projectile);
+        if (((arrow->collider.info.toucher.dmgFlags & DMG_ARROW_FIRE) != 0) || (arrow->actor.params == ARROW_NORMAL_LIT)) {
+            const int hp = victim->colChkInfo.health;
+            const int dmg = victim->colChkInfo.damage;
+            int hpEst = hp - dmg;
+            if (hpEst < 0) {
+                hpEst = 0;
+            }
+            // TEMP: TODO remove after measurement.
+            Fuse::Log("[FuseDBG] ArrowHealthProbe: slot=%s projParams=%d dmgFlags=0x%08X victim=0x%04X hp=%d dmg=%d hpEst=%d\n",
+                      RangedSlotLabel(slot), arrow->actor.params, arrow->collider.info.toucher.dmgFlags, victim->id,
+                      hp, dmg, hpEst);
+        }
     }
 
-    Fuse::TryMarkRangedProjectileAsFire(RangedFuseSlot::Arrows, projectile, victim, "actor");
-    Fuse_OnRangedHitActor(play, RANGED_FUSE_SLOT_ARROWS, victim, impactPos);
-    Fuse::OnRangedProjectileHitFinalize(RangedFuseSlot::Arrows, "ProjectileHit");
+    Fuse::TryMarkRangedProjectileAsFire(fuseSlot, projectile, victim, "actor");
+    Fuse_OnRangedHitActor(play, slot, victim, impactPos);
+    Fuse::OnRangedProjectileHitFinalize(fuseSlot, "ProjectileHit");
 }
 
 extern "C" void FuseHooks_OnRangedProjectileHitSurface(PlayState* play, Actor* projectile, Vec3f* impactPos,
