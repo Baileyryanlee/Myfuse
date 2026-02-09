@@ -78,6 +78,44 @@ int EnArrow_SetLitByFire(EnArrow* this) {
     return 1;
 }
 
+int EnArrow_SetFireDmgFlagsOnly(EnArrow* this) {
+    if (this == NULL) {
+        return 0;
+    }
+
+    this->collider.info.toucher.dmgFlags = DMG_ARROW_FIRE;
+    return 1;
+}
+
+static void EnArrow_LogFireHealthProbe(EnArrow* this, Actor* victim) {
+    if (this == NULL || victim == NULL) {
+        return;
+    }
+
+    if (victim->category != ACTORCAT_ENEMY) {
+        return;
+    }
+
+    if (!CVarGetInteger("gFuseLogDbg", 0)) {
+        return;
+    }
+
+    if (((this->collider.info.toucher.dmgFlags & DMG_ARROW_FIRE) == 0) && (this->actor.params != ARROW_NORMAL_LIT)) {
+        return;
+    }
+
+    const int hpBefore = victim->colChkInfo.health;
+    int hpAfter = hpBefore;
+    if (victim->colChkInfo.damage >= hpBefore) {
+        hpAfter = 0;
+    } else {
+        hpAfter = hpBefore - victim->colChkInfo.damage;
+    }
+
+    osSyncPrintf("[FuseDBG] ArrowHealthProbe: params=%d dmgFlags=0x%08X victim=0x%04X hp=%d->%d\n",
+                 this->actor.params, this->collider.info.toucher.dmgFlags, victim->id, hpBefore, hpAfter);
+}
+
 int Fuse_RangedSuppressLitArrowEnemyBonus(Actor* projectile) {
     static u32 dmgFlags[] = {
         0x00000800, 0x00000020, 0x00000020, 0x00000800, 0x00001000,
@@ -387,6 +425,7 @@ void EnArrow_Fly(EnArrow* this, PlayState* play) {
                         impactPos = this->actor.world.pos;
                         impactPosPtr = &impactPos;
                     }
+                    EnArrow_LogFireHealthProbe(this, hitActor);
                     this->fuseHitApplied = 1;
                     FuseHooks_OnRangedProjectileHit(play, &this->actor, hitActor, impactPosPtr, true);
                 }
@@ -422,6 +461,7 @@ void EnArrow_Fly(EnArrow* this, PlayState* play) {
                         impactPos = this->actor.world.pos;
                         impactPosPtr = &impactPos;
                     }
+                    EnArrow_LogFireHealthProbe(this, hitActor);
                     this->fuseHitApplied = 1;
                     FuseHooks_OnRangedProjectileHit(play, &this->actor, hitActor, impactPosPtr, false);
                 }
