@@ -4927,7 +4927,17 @@ s32 func_808382DC(Player* this, PlayState* play) {
                 }
 
                 if (guardBreak) {
+                    Actor* attacker = this->shieldQuad.base.ac;
+
                     this->shieldQuad.base.acFlags &= ~AC_BOUNCED;
+                    this->cylinder.base.acFlags |= AC_HIT;
+                    this->cylinder.base.ac = attacker;
+                    this->actor.colChkInfo.damage = incomingPower;
+                    if (this->shieldQuad.info.acHitInfo != NULL) {
+                        this->actor.colChkInfo.acHitEffect = this->shieldQuad.info.acHitInfo->toucher.effect;
+                    } else {
+                        this->actor.colChkInfo.acHitEffect = 0;
+                    }
                 } else {
                     Player_RequestRumble(this, 180, 20, 100, 0);
 
