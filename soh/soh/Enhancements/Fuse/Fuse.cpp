@@ -148,6 +148,21 @@ static inline bool Fuse_SeekDebugEnabled() {
     return CVarGetInteger("gFuseSeekDebug", 0) != 0;
 }
 
+static void Fuse_RegisterShieldGuardCVars() {
+    static bool registered = false;
+    if (registered) {
+        return;
+    }
+    registered = true;
+
+    CVarRegisterInteger("gFuseShieldGuardBaseDeku", 4);
+    CVarRegisterInteger("gFuseShieldGuardBaseHylian", 6);
+    CVarRegisterInteger("gFuseShieldGuardBaseMirror", 8);
+    CVarRegisterFloat("gFuseShieldGuardFuseScale", 1.0f);
+    CVarRegisterInteger("gFuseShieldGuardMax", 99);
+    CVarRegisterInteger("gFuseDbgShieldGuardStrength", 0);
+}
+
 static void Fuse_RegisterSeekCVars() {
     static bool registered = false;
     if (registered) {
@@ -506,6 +521,98 @@ bool Fuse::IsFuseFrozen(Actor* actor) {
 
 extern "C" bool Fuse_IsActorFuseFrozen(Actor* actor) {
     return IsFuseFrozenInternal(actor);
+}
+
+extern "C" int32_t Fuse_GetShieldEffectiveGuard(Player* player, int32_t* outBase, int32_t* outBonus,
+                                                int32_t* outMaterialId) {
+    Fuse_RegisterShieldGuardCVars();
+    if (!player) {
+        if (outBase) {
+            *outBase = 0;
+        }
+        if (outBonus) {
+            *outBonus = 0;
+        }
+        if (outMaterialId) {
+            *outMaterialId = static_cast<int32_t>(MaterialId::None);
+        }
+        return 0;
+    }
+
+    const int32_t equipValue = CUR_EQUIP_VALUE(EQUIP_TYPE_SHIELD);
+    int32_t baseGuard = 0;
+    ShieldSlotKey shieldKey = ShieldSlotKey::Deku;
+    bool hasShield = true;
+
+    switch (equipValue) {
+        case EQUIP_VALUE_SHIELD_DEKU:
+            baseGuard = CVarGetInteger("gFuseShieldGuardBaseDeku", 4);
+            shieldKey = ShieldSlotKey::Deku;
+            break;
+        case EQUIP_VALUE_SHIELD_HYLIAN:
+            baseGuard = CVarGetInteger("gFuseShieldGuardBaseHylian", 6);
+            shieldKey = ShieldSlotKey::Hylian;
+            break;
+        case EQUIP_VALUE_SHIELD_MIRROR:
+            baseGuard = CVarGetInteger("gFuseShieldGuardBaseMirror", 8);
+            shieldKey = ShieldSlotKey::Mirror;
+            break;
+        default:
+            baseGuard = 0;
+            hasShield = false;
+            break;
+    }
+
+    int32_t bonusGuard = 0;
+    int32_t materialId = static_cast<int32_t>(MaterialId::None);
+    if (hasShield) {
+        const FuseSlot& slot = gFuseSave.GetShieldSlot(shieldKey);
+        if (slot.materialId != MaterialId::None && slot.durabilityCur > 0) {
+            materialId = static_cast<int32_t>(slot.materialId);
+            const int materialAtk = Fuse::GetMaterialAttackBonus(slot.materialId);
+            const float scale = CVarGetFloat("gFuseShieldGuardFuseScale", 1.0f);
+            bonusGuard = static_cast<int32_t>(lroundf(materialAtk * scale));
+        }
+    }
+
+    int32_t effectiveGuard = baseGuard + bonusGuard;
+    const int32_t guardMax = CVarGetInteger("gFuseShieldGuardMax", 99);
+    if (guardMax > 0 && effectiveGuard > guardMax) {
+        effectiveGuard = guardMax;
+    }
+
+    if (outBase) {
+        *outBase = baseGuard;
+    }
+    if (outBonus) {
+        *outBonus = bonusGuard;
+    }
+    if (outMaterialId) {
+        *outMaterialId = materialId;
+    }
+
+    return effectiveGuard;
+}
+
+extern "C" int32_t Fuse_GetIncomingHitPowerFromCollision(const Player* player) {
+    if (!player) {
+        return -1;
+    }
+    const ColliderInfo* hitInfo = player->shieldQuad.info.acHitInfo;
+    if (!hitInfo) {
+        return -1;
+    }
+    if (hitInfo->toucher.dmgFlags & DMG_UNBLOCKABLE) {
+        return -1;
+    }
+    int32_t damage = player->actor.colChkInfo.damage;
+    if (damage <= 0) {
+        damage = hitInfo->toucher.damage;
+    }
+    if (damage < 0) {
+        damage = 0;
+    }
+    return damage;
 }
 
 static void ClearFuseFreeze(Actor* actor) {
@@ -3858,6 +3965,7 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
     gLastSwordActorExplodeFrame = -999999;
 
     EnsureMaterialInventoryInitialized();
+    Fuse_RegisterShieldGuardCVars();
 
     if (!sSwordSlotsLoadedFromSaveManager) {
         gFuseSave = FuseSaveData{};
