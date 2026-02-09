@@ -60,6 +60,7 @@ struct FuseBurnState {
     int endFrame = -1;
     int nextTickFrame = -1;
     int ticksRemaining = 0;
+    int tickDamage = 0;
     bool burnVfxActive = false;
     s16 burnVfxColorFlag = 0;
     s16 burnVfxIntensity = 0;
@@ -87,8 +88,9 @@ static constexpr float kFreezeShatterKnockbackYBoost = 3.0f;
 // TODO: revert burn duration to 60 frames after validation.
 static constexpr int kBurnDurationFrames = 120;
 static constexpr int kBurnTickIntervalFrames = 30;
-static constexpr int kBurnTotalTicks = 4;
-static constexpr int kBurnTickDamage = 1;
+static constexpr int kBurnDefaultTicks = 3;
+static constexpr int kBurnRangedTicks = 2;
+static constexpr int kBurnTickDamage = 2;
 static constexpr s16 kBurnVfxColorFlag = 0x4000;
 static constexpr s16 kBurnVfxIntensity = 200;
 static constexpr s16 kBurnVfxXlu = 0;
@@ -593,7 +595,8 @@ static void TickBurnTimers(PlayState* play) {
         if (curFrame >= state.nextTickFrame && state.ticksRemaining > 0) {
             const int prevDamage = victim->colChkInfo.damage;
             const int hpBefore = victim->colChkInfo.health;
-            victim->colChkInfo.damage = kBurnTickDamage;
+            const int tickDamage = state.tickDamage > 0 ? state.tickDamage : kBurnTickDamage;
+            victim->colChkInfo.damage = tickDamage;
             Actor_ApplyDamage(victim);
             victim->colChkInfo.damage = prevDamage;
             const int hpAfter = victim->colChkInfo.health;
@@ -602,13 +605,13 @@ static void TickBurnTimers(PlayState* play) {
             state.nextTickFrame = curFrame + kBurnTickIntervalFrames;
 
             if (hpAfter == hpBefore && hpBefore > 0 && victim->category != ACTORCAT_BOSS) {
-                const int adjustedHealth = std::max(0, hpBefore - kBurnTickDamage);
+                const int adjustedHealth = std::max(0, hpBefore - tickDamage);
                 victim->colChkInfo.health = static_cast<uint8_t>(adjustedHealth);
             }
 
             Fuse_BurnTryApplyVfx(victim, kBurnVfxDurationFrames);
             FUSE_LOG_DBG("[FuseDBG] BurnTick: victim=%p id=0x%04X dmg=%d ticksLeft=%d\n", (void*)victim, victim->id,
-                         kBurnTickDamage, state.ticksRemaining);
+                         tickDamage, state.ticksRemaining);
         }
 
         ++it;
@@ -794,11 +797,23 @@ void Fuse::ApplyBurn(PlayState* play, Actor* victim, uint8_t level, MaterialId m
     }
 
     const int durationFrames = kBurnDurationFrames;
-    const int totalTicks = kBurnTotalTicks;
+    const bool isRangedSource = srcLabel && strcmp(srcLabel, "ranged") == 0;
+    const bool isRangedSlot = slotLabel && (strcmp(slotLabel, "Arrows") == 0 || strcmp(slotLabel, "Slingshot") == 0);
+    const bool isRangedFire = isRangedSource && isRangedSlot;
+    const int totalTicks = isRangedFire ? kBurnRangedTicks : kBurnDefaultTicks;
+    const int tickDamage = kBurnTickDamage;
     const bool immune = Fuse_IsBurnImmuneVictim(victim);
-    FUSE_LOG_DBG("[FuseDBG] BurnApply: src=%s slot=%s victim=%p id=0x%04X durFrames=%d ticks=%d immune=%d\n",
-                 srcLabel ? srcLabel : "unknown", slotLabel ? slotLabel : "unknown", (void*)victim, victim->id,
-                 durationFrames, totalTicks, immune ? 1 : 0);
+    if (isRangedFire) {
+        FUSE_LOG_DBG(
+            "[FuseDBG] BurnApply: src=ranged slot=%s victim=%p id=0x%04X durFrames=%d ticks=%d tickDmg=%d "
+            "firstTick=vanillaFireBonus\n",
+            slotLabel ? slotLabel : "unknown", (void*)victim, victim->id, durationFrames, totalTicks, tickDamage);
+    } else {
+        FUSE_LOG_DBG(
+            "[FuseDBG] BurnApply: src=%s slot=%s victim=%p id=0x%04X durFrames=%d ticks=%d tickDmg=%d immune=%d\n",
+            srcLabel ? srcLabel : "unknown", slotLabel ? slotLabel : "unknown", (void*)victim, victim->id,
+            durationFrames, totalTicks, tickDamage, immune ? 1 : 0);
+    }
 
     if (immune) {
         return;
@@ -816,6 +831,7 @@ void Fuse::ApplyBurn(PlayState* play, Actor* victim, uint8_t level, MaterialId m
         state.endFrame = curFrame + durationFrames;
         state.nextTickFrame = curFrame + kBurnTickIntervalFrames;
         state.ticksRemaining = totalTicks;
+        state.tickDamage = tickDamage;
         sBurnStates[victim] = state;
         Fuse_BurnTryApplyVfx(victim, kBurnVfxDurationFrames);
         FUSE_LOG_DBG("[FuseDBG] BurnApplySet: victim=%p end=%d next=%d ticks=%d\n", (void*)victim, state.endFrame,
@@ -828,6 +844,7 @@ void Fuse::ApplyBurn(PlayState* play, Actor* victim, uint8_t level, MaterialId m
     if (state.nextTickFrame < curFrame) {
         state.nextTickFrame = curFrame + kBurnTickIntervalFrames;
     }
+    state.tickDamage = tickDamage;
     Fuse_BurnTryApplyVfx(victim, kBurnVfxDurationFrames);
     FUSE_LOG_DBG("[FuseDBG] BurnApplySet: victim=%p end=%d next=%d ticks=%d\n", (void*)victim, state.endFrame,
                  state.nextTickFrame, state.ticksRemaining);
