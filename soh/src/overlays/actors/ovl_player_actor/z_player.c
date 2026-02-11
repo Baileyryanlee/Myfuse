@@ -4885,205 +4885,151 @@ s32 func_808382DC(Player* this, PlayState* play) {
             // This behavior was later fixed in MM, most likely by removing both the `atHit` and `atFlags` checks.
             if (sp64 || ((this->invincibilityTimer < 0) && (this->cylinder.base.acFlags & AC_HIT) &&
                          (this->cylinder.info.atHit != NULL) && (this->cylinder.info.atHit->atFlags & 0x20000000))) {
-                bool guardBreak = false;
-                int guardBase = 0;
-                int guardBonus = 0;
-                int guardMatId = 0;
-                int incomingPower = -1;
-                int effectiveGuard = 0;
+                Player_RequestRumble(this, 180, 20, 100, 0);
 
                 if (sp64) {
+                    s32 explosionMatId = 0;
+                    u8 explosionLevel = 0;
                     Actor* attacker = this->shieldQuad.base.ac;
-                    effectiveGuard = Fuse_GetShieldEffectiveGuard(this, &guardBase, &guardBonus, &guardMatId);
-                    incomingPower = Fuse_GetIncomingHitPowerFromCollision(this);
-                    if (incomingPower >= 0) {
-                        guardBreak = incomingPower > effectiveGuard;
-                        if (CVarGetInteger("gFuseDbgShieldGuardStrength", 0) != 0) {
-                            const int equipValue = CUR_EQUIP_VALUE(EQUIP_TYPE_SHIELD);
-                            const char* shieldName = "None";
+                    Vec3f explosionPos = this->actor.world.pos;
+                    if ((this->shieldQuad.info.bumper.hitPos.x != 0) ||
+                        (this->shieldQuad.info.bumper.hitPos.y != 0) ||
+                        (this->shieldQuad.info.bumper.hitPos.z != 0)) {
+                        explosionPos.x = this->shieldQuad.info.bumper.hitPos.x;
+                        explosionPos.y = this->shieldQuad.info.bumper.hitPos.y;
+                        explosionPos.z = this->shieldQuad.info.bumper.hitPos.z;
+                    } else if (attacker != NULL) {
+                        explosionPos = attacker->world.pos;
+                    }
+                    const bool shouldExplode =
+                        Fuse_ShieldHasExplosion(play, &explosionMatId, NULL, NULL, &explosionLevel) &&
+                        (explosionLevel > 0);
 
-                            switch (equipValue) {
-                                case EQUIP_VALUE_SHIELD_DEKU:
-                                    shieldName = "Deku";
-                                    break;
-                                case EQUIP_VALUE_SHIELD_HYLIAN:
-                                    shieldName = "Hylian";
-                                    break;
-                                case EQUIP_VALUE_SHIELD_MIRROR:
-                                    shieldName = "Mirror";
-                                    break;
-                                default:
-                                    shieldName = "None";
-                                    break;
+                    if (shouldExplode) {
+                        Fuse_ShieldTriggerExplosion(play, explosionMatId, explosionLevel, &explosionPos);
+                    }
+
+                    if (attacker != NULL && FuseBash_IsEnemyActor(attacker)) {
+                        int shieldMatId = 0;
+                        int shieldDurabilityCur = 0;
+                        int shieldDurabilityMax = 0;
+                        uint8_t stunLevel = 0;
+                        const int32_t equipValue = CUR_EQUIP_VALUE(EQUIP_TYPE_SHIELD);
+                        int shieldItemId = ITEM_NONE;
+
+                        switch (equipValue) {
+                            case EQUIP_VALUE_SHIELD_DEKU:
+                                shieldItemId = ITEM_SHIELD_DEKU;
+                                break;
+                            case EQUIP_VALUE_SHIELD_HYLIAN:
+                                shieldItemId = ITEM_SHIELD_HYLIAN;
+                                break;
+                            case EQUIP_VALUE_SHIELD_MIRROR:
+                                shieldItemId = ITEM_SHIELD_MIRROR;
+                                break;
+                            default:
+                                shieldItemId = ITEM_NONE;
+                                break;
+                        }
+
+                        if (Player_IsChildWithHylianShield(this)) {
+                            if (Fuse_ShieldHasMegaStun(play, &shieldMatId, &shieldDurabilityCur,
+                                                       &shieldDurabilityMax, &stunLevel) &&
+                                stunLevel > 0) {
+                                osSyncPrintf(
+                                    "[FuseDBG] shield_stun_trigger shield=%d attacker=%p attackerId=0x%04X\n",
+                                    equipValue, (void*)attacker, attacker->id);
+                                Fuse_ShieldTriggerMegaStun(play, this, shieldMatId, shieldItemId);
                             }
+                        } else if (Fuse_ShieldHasStun(play, &shieldMatId, &shieldDurabilityCur,
+                                                      &shieldDurabilityMax, &stunLevel) &&
+                                   stunLevel > 0) {
+                            osSyncPrintf("[FuseDBG] shield_stun_trigger shield=%d attacker=%p attackerId=0x%04X\n",
+                                         equipValue, (void*)attacker, attacker->id);
+                            Fuse_ShieldEnqueuePendingStun(attacker, stunLevel, shieldMatId, shieldItemId);
+                        }
 
+                        uint8_t freezeLevel = 0;
+                        int freezeMatId = 0;
+                        int freezeDurabilityCur = 0;
+                        int freezeDurabilityMax = 0;
+                        if (Fuse_ShieldHasFreeze(play, &freezeMatId, &freezeDurabilityCur, &freezeDurabilityMax,
+                                                 &freezeLevel) &&
+                            freezeLevel > 0 && attacker->freezeTimer == 0) {
+                            osSyncPrintf("[FuseDBG] FreezeApply: src=shield attacker=%p lvl=%u mat=%d\n",
+                                         (void*)attacker, freezeLevel, freezeMatId);
+                            Fuse_ShieldApplyFreeze(play, attacker, freezeLevel);
+                        }
+
+                        uint8_t burnLevel = 0;
+                        int burnMatId = 0;
+                        int burnDurabilityCur = 0;
+                        int burnDurabilityMax = 0;
+                        if (Fuse_ShieldHasBurn(play, &burnMatId, &burnDurabilityCur, &burnDurabilityMax,
+                                               &burnLevel) &&
+                            burnLevel > 0) {
+                            Fuse_ShieldApplyBurn(play, attacker, burnLevel, burnMatId);
+                        }
+                    }
+
+                    Fuse_ShieldGuardDrain(play);
+                }
+
+                if (!Player_IsChildWithHylianShield(this)) {
+                    if (this->invincibilityTimer >= 0) {
+                        LinkAnimationHeader* anim;
+                        s32 sp54 = Player_Action_80843188 == this->actionFunc;
+
+                        if (!func_808332B8(this)) {
+                            Player_SetupAction(play, this, Player_Action_808435C4, 0);
+                        }
+
+                        if (!(this->av1.actionVar1 = sp54)) {
+                            Player_SetUpperActionFunc(this, func_80834BD4);
+
+                            if (this->unk_870 < 0.5f) {
+                                anim = D_808543BC[Player_HoldsTwoHandedWeapon(this) &&
+                                                  !(CVarGetInteger(CVAR_CHEAT("ShieldTwoHanded"), 0) &&
+                                                    (this->heldItemAction != PLAYER_IA_DEKU_STICK))];
+                            } else {
+                                anim = D_808543B4[Player_HoldsTwoHandedWeapon(this) &&
+                                                  !(CVarGetInteger(CVAR_CHEAT("ShieldTwoHanded"), 0) &&
+                                                    (this->heldItemAction != PLAYER_IA_DEKU_STICK))];
+                            }
+                            LinkAnimation_PlayOnce(play, &this->upperSkelAnime, anim);
+                        } else {
+                            Player_AnimPlayOnce(
+                                play, this,
+                                D_808543C4[Player_HoldsTwoHandedWeapon(this) &&
+                                           !(CVarGetInteger(CVAR_CHEAT("ShieldTwoHanded"), 0) &&
+                                             (this->heldItemAction != PLAYER_IA_DEKU_STICK))]);
+                        }
+                    }
+
+                    if (!(this->stateFlags1 & (PLAYER_STATE1_HANGING_OFF_LEDGE | PLAYER_STATE1_CLIMBING_LEDGE |
+                                               PLAYER_STATE1_CLIMBING_LADDER))) {
+                        int fuseMatId = 0;
+                        int fuseDurabilityCur = 0;
+                        int fuseDurabilityMax = 0;
+                        uint8_t fuseLevel = 0;
+                        if (Fuse_ShieldHasNegateKnockback(play, &fuseMatId, &fuseDurabilityCur,
+                                                          &fuseDurabilityMax, &fuseLevel)) {
                             osSyncPrintf(
-                                "[FuseDBG] ShieldGuardCheck shield=%s base=%d bonus=%d eff=%d incoming=%d mat=%d "
-                                "result=%s srcActor=%04X\n",
-                                shieldName, guardBase, guardBonus, effectiveGuard, incomingPower, guardMatId,
-                                guardBreak ? "BREAK" : "HOLD", attacker ? attacker->id : 0);
+                                "[FuseDBG] ShieldGuard: event=guard_cancel_knockback item=shield mat=%d lvl=%u "
+                                "dura=%d/%d\n",
+                                fuseMatId, fuseLevel, fuseDurabilityCur, fuseDurabilityMax);
+                        } else {
+                            this->linearVelocity = -18.0f;
+                            this->yaw = this->actor.shape.rot.y;
                         }
                     }
                 }
 
-                if (guardBreak) {
-                    Actor* attacker = this->shieldQuad.base.ac;
+                if (sp64 && (this->shieldQuad.info.acHitInfo->toucher.effect == 1)) {
+                    func_8083819C(this, play);
+                }
 
-                    this->shieldQuad.base.acFlags &= ~AC_BOUNCED;
-                    this->cylinder.base.acFlags |= AC_HIT;
-                    this->cylinder.base.ac = attacker;
-                    this->actor.colChkInfo.damage = incomingPower;
-                    if (this->shieldQuad.info.acHitInfo != NULL) {
-                        this->actor.colChkInfo.acHitEffect = this->shieldQuad.info.acHitInfo->toucher.effect;
-                    } else {
-                        this->actor.colChkInfo.acHitEffect = 0;
-                    }
-                } else {
-                    Player_RequestRumble(this, 180, 20, 100, 0);
-
-                    if (sp64) {
-                        s32 explosionMatId = 0;
-                        u8 explosionLevel = 0;
-                        Actor* attacker = this->shieldQuad.base.ac;
-                        Vec3f explosionPos = this->actor.world.pos;
-                        if ((this->shieldQuad.info.bumper.hitPos.x != 0) ||
-                            (this->shieldQuad.info.bumper.hitPos.y != 0) ||
-                            (this->shieldQuad.info.bumper.hitPos.z != 0)) {
-                            explosionPos.x = this->shieldQuad.info.bumper.hitPos.x;
-                            explosionPos.y = this->shieldQuad.info.bumper.hitPos.y;
-                            explosionPos.z = this->shieldQuad.info.bumper.hitPos.z;
-                        } else if (attacker != NULL) {
-                            explosionPos = attacker->world.pos;
-                        }
-                        const bool shouldExplode =
-                            Fuse_ShieldHasExplosion(play, &explosionMatId, NULL, NULL, &explosionLevel) &&
-                            (explosionLevel > 0);
-
-                        if (shouldExplode) {
-                            Fuse_ShieldTriggerExplosion(play, explosionMatId, explosionLevel, &explosionPos);
-                        }
-
-                        if (attacker != NULL && FuseBash_IsEnemyActor(attacker)) {
-                            int shieldMatId = 0;
-                            int shieldDurabilityCur = 0;
-                            int shieldDurabilityMax = 0;
-                            uint8_t stunLevel = 0;
-                            const int32_t equipValue = CUR_EQUIP_VALUE(EQUIP_TYPE_SHIELD);
-                            int shieldItemId = ITEM_NONE;
-
-                            switch (equipValue) {
-                                case EQUIP_VALUE_SHIELD_DEKU:
-                                    shieldItemId = ITEM_SHIELD_DEKU;
-                                    break;
-                                case EQUIP_VALUE_SHIELD_HYLIAN:
-                                    shieldItemId = ITEM_SHIELD_HYLIAN;
-                                    break;
-                                case EQUIP_VALUE_SHIELD_MIRROR:
-                                    shieldItemId = ITEM_SHIELD_MIRROR;
-                                    break;
-                                default:
-                                    shieldItemId = ITEM_NONE;
-                                    break;
-                            }
-
-                            if (Player_IsChildWithHylianShield(this)) {
-                                if (Fuse_ShieldHasMegaStun(play, &shieldMatId, &shieldDurabilityCur,
-                                                           &shieldDurabilityMax, &stunLevel) &&
-                                    stunLevel > 0) {
-                                    osSyncPrintf(
-                                        "[FuseDBG] shield_stun_trigger shield=%d attacker=%p attackerId=0x%04X\n",
-                                        equipValue, (void*)attacker, attacker->id);
-                                    Fuse_ShieldTriggerMegaStun(play, this, shieldMatId, shieldItemId);
-                                }
-                            } else if (Fuse_ShieldHasStun(play, &shieldMatId, &shieldDurabilityCur,
-                                                          &shieldDurabilityMax, &stunLevel) &&
-                                       stunLevel > 0) {
-                                osSyncPrintf("[FuseDBG] shield_stun_trigger shield=%d attacker=%p attackerId=0x%04X\n",
-                                             equipValue, (void*)attacker, attacker->id);
-                                Fuse_ShieldEnqueuePendingStun(attacker, stunLevel, shieldMatId, shieldItemId);
-                            }
-
-                            uint8_t freezeLevel = 0;
-                            int freezeMatId = 0;
-                            int freezeDurabilityCur = 0;
-                            int freezeDurabilityMax = 0;
-                            if (Fuse_ShieldHasFreeze(play, &freezeMatId, &freezeDurabilityCur, &freezeDurabilityMax,
-                                                     &freezeLevel) &&
-                                freezeLevel > 0 && attacker->freezeTimer == 0) {
-                                osSyncPrintf("[FuseDBG] FreezeApply: src=shield attacker=%p lvl=%u mat=%d\n",
-                                             (void*)attacker, freezeLevel, freezeMatId);
-                                Fuse_ShieldApplyFreeze(play, attacker, freezeLevel);
-                            }
-
-                            uint8_t burnLevel = 0;
-                            int burnMatId = 0;
-                            int burnDurabilityCur = 0;
-                            int burnDurabilityMax = 0;
-                            if (Fuse_ShieldHasBurn(play, &burnMatId, &burnDurabilityCur, &burnDurabilityMax,
-                                                   &burnLevel) &&
-                                burnLevel > 0) {
-                                Fuse_ShieldApplyBurn(play, attacker, burnLevel, burnMatId);
-                            }
-                        }
-
-                        Fuse_ShieldGuardDrain(play);
-                    }
-
-                    if (!Player_IsChildWithHylianShield(this)) {
-                        if (this->invincibilityTimer >= 0) {
-                            LinkAnimationHeader* anim;
-                            s32 sp54 = Player_Action_80843188 == this->actionFunc;
-
-                            if (!func_808332B8(this)) {
-                                Player_SetupAction(play, this, Player_Action_808435C4, 0);
-                            }
-
-                            if (!(this->av1.actionVar1 = sp54)) {
-                                Player_SetUpperActionFunc(this, func_80834BD4);
-
-                                if (this->unk_870 < 0.5f) {
-                                    anim = D_808543BC[Player_HoldsTwoHandedWeapon(this) &&
-                                                      !(CVarGetInteger(CVAR_CHEAT("ShieldTwoHanded"), 0) &&
-                                                        (this->heldItemAction != PLAYER_IA_DEKU_STICK))];
-                                } else {
-                                    anim = D_808543B4[Player_HoldsTwoHandedWeapon(this) &&
-                                                      !(CVarGetInteger(CVAR_CHEAT("ShieldTwoHanded"), 0) &&
-                                                        (this->heldItemAction != PLAYER_IA_DEKU_STICK))];
-                                }
-                                LinkAnimation_PlayOnce(play, &this->upperSkelAnime, anim);
-                            } else {
-                                Player_AnimPlayOnce(
-                                    play, this,
-                                    D_808543C4[Player_HoldsTwoHandedWeapon(this) &&
-                                               !(CVarGetInteger(CVAR_CHEAT("ShieldTwoHanded"), 0) &&
-                                                 (this->heldItemAction != PLAYER_IA_DEKU_STICK))]);
-                            }
-                        }
-
-                        if (!(this->stateFlags1 & (PLAYER_STATE1_HANGING_OFF_LEDGE | PLAYER_STATE1_CLIMBING_LEDGE |
-                                                   PLAYER_STATE1_CLIMBING_LADDER))) {
-                            int fuseMatId = 0;
-                            int fuseDurabilityCur = 0;
-                            int fuseDurabilityMax = 0;
-                            uint8_t fuseLevel = 0;
-                            if (Fuse_ShieldHasNegateKnockback(play, &fuseMatId, &fuseDurabilityCur,
-                                                              &fuseDurabilityMax, &fuseLevel)) {
-                                osSyncPrintf(
-                                    "[FuseDBG] ShieldGuard: event=guard_cancel_knockback item=shield mat=%d lvl=%u "
-                                    "dura=%d/%d\n",
-                                    fuseMatId, fuseLevel, fuseDurabilityCur, fuseDurabilityMax);
-                            } else {
-                                this->linearVelocity = -18.0f;
-                                this->yaw = this->actor.shape.rot.y;
-                            }
-                        }
-                    }
-
-                    if (sp64 && (this->shieldQuad.info.acHitInfo->toucher.effect == 1)) {
-                        func_8083819C(this, play);
-                    }
-
-                    return 0;
+                return 0;
                 }
             }
 
@@ -5098,25 +5044,25 @@ s32 func_808382DC(Player* this, PlayState* play) {
                 s32 sp4C;
 
                 if (ac != NULL && Fuse_IsActorFuseFrozen(ac)) {
-                    osSyncPrintf("[FuseDBG] FreezeBlockPlayerDamage: attacker=%p id=0x%04X\n", (void*)ac, ac->id);
-                    return 0;
+                osSyncPrintf("[FuseDBG] FreezeBlockPlayerDamage: attacker=%p id=0x%04X\n", (void*)ac, ac->id);
+                return 0;
                 }
 
                 if (ac->flags & ACTOR_FLAG_SFX_FOR_PLAYER_BODY_HIT) {
-                    Player_PlaySfx(this, NA_SE_PL_BODY_HIT);
+                Player_PlaySfx(this, NA_SE_PL_BODY_HIT);
                 }
 
                 if (this->stateFlags1 & PLAYER_STATE1_IN_WATER) {
-                    sp4C = PLAYER_HIT_RESPONSE_NONE;
+                sp4C = PLAYER_HIT_RESPONSE_NONE;
                 } else if (this->actor.colChkInfo.acHitEffect == 2) {
-                    sp4C = PLAYER_HIT_RESPONSE_ICE_TRAP;
+                sp4C = PLAYER_HIT_RESPONSE_ICE_TRAP;
                 } else if (this->actor.colChkInfo.acHitEffect == 3) {
-                    sp4C = PLAYER_HIT_RESPONSE_ELECTRIC_SHOCK;
+                sp4C = PLAYER_HIT_RESPONSE_ELECTRIC_SHOCK;
                 } else if (this->actor.colChkInfo.acHitEffect == 4) {
-                    sp4C = PLAYER_HIT_RESPONSE_KNOCKBACK_LARGE;
+                sp4C = PLAYER_HIT_RESPONSE_KNOCKBACK_LARGE;
                 } else {
-                    func_80838280(this);
-                    sp4C = PLAYER_HIT_RESPONSE_NONE;
+                func_80838280(this);
+                sp4C = PLAYER_HIT_RESPONSE_NONE;
                 }
 
                 func_80837C0C(play, this, sp4C, 4.0f, 5.0f, Actor_WorldYawTowardActor(ac, &this->actor), 20);
@@ -5127,18 +5073,18 @@ s32 func_808382DC(Player* this, PlayState* play) {
                 s32 sp48 = func_80838144(sFloorType);
 
                 if (((this->actor.wallPoly != NULL) &&
-                     SurfaceType_IsWallDamage(&play->colCtx, this->actor.wallPoly, this->actor.wallBgId)) ||
-                    ((sp48 >= 0) &&
-                     SurfaceType_IsWallDamage(&play->colCtx, this->actor.floorPoly, this->actor.floorBgId) &&
-                     (this->floorTypeTimer >= D_808544F4[sp48])) ||
-                    ((sp48 >= 0) &&
-                     ((this->currentTunic != PLAYER_TUNIC_GORON && CVarGetInteger(CVAR_CHEAT("SuperTunic"), 0) == 0) ||
-                      (this->floorTypeTimer >= D_808544F4[sp48])))) {
-                    this->floorTypeTimer = 0;
-                    this->actor.colChkInfo.damage = 4;
-                    func_80837C0C(play, this, PLAYER_HIT_RESPONSE_NONE, 4.0f, 5.0f, this->actor.shape.rot.y, 20);
+                 SurfaceType_IsWallDamage(&play->colCtx, this->actor.wallPoly, this->actor.wallBgId)) ||
+                ((sp48 >= 0) &&
+                 SurfaceType_IsWallDamage(&play->colCtx, this->actor.floorPoly, this->actor.floorBgId) &&
+                 (this->floorTypeTimer >= D_808544F4[sp48])) ||
+                ((sp48 >= 0) &&
+                 ((this->currentTunic != PLAYER_TUNIC_GORON && CVarGetInteger(CVAR_CHEAT("SuperTunic"), 0) == 0) ||
+                  (this->floorTypeTimer >= D_808544F4[sp48])))) {
+                this->floorTypeTimer = 0;
+                this->actor.colChkInfo.damage = 4;
+                func_80837C0C(play, this, PLAYER_HIT_RESPONSE_NONE, 4.0f, 5.0f, this->actor.shape.rot.y, 20);
                 } else {
-                    return 0;
+                return 0;
                 }
             }
         }
@@ -5184,13 +5130,13 @@ s32 Player_ActionHandler_12(Player* this, PlayState* play) {
         if (func_808332B8(this)) {
             if (this->actor.yDistToWater < 50.0f) {
                 if ((this->ledgeClimbType < 2) || (this->yDistToLedge > this->ageProperties->unk_10)) {
-                    return 0;
+                return 0;
                 }
             } else if ((this->currentBoots != PLAYER_BOOTS_IRON) || (this->ledgeClimbType > 2)) {
                 return 0;
             }
         } else if (!(this->actor.bgCheckFlags & 1) || ((this->ageProperties->unk_14 <= this->yDistToLedge) &&
-                                                       (this->stateFlags1 & PLAYER_STATE1_IN_WATER))) {
+                                                   (this->stateFlags1 & PLAYER_STATE1_IN_WATER))) {
             return 0;
         }
 
@@ -5198,7 +5144,7 @@ s32 Player_ActionHandler_12(Player* this, PlayState* play) {
             if (this->ledgeClimbDelayTimer >= 6) {
                 this->stateFlags2 |= PLAYER_STATE2_DO_ACTION_CLIMB;
                 if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A)) {
-                    sp3C = 1;
+                sp3C = 1;
                 }
             }
         } else if ((this->ledgeClimbDelayTimer >= 6) || CHECK_BTN_ALL(sControlInput->press.button, BTN_A)) {
@@ -5223,15 +5169,15 @@ s32 Player_ActionHandler_12(Player* this, PlayState* play) {
                 this->stateFlags1 |= PLAYER_STATE1_CLIMBING_LEDGE;
 
                 if (func_808332B8(this)) {
-                    anim = &gPlayerAnim_link_swimer_swim_15step_up;
-                    sp34 -= (60.0f * this->ageProperties->unk_08);
-                    this->stateFlags1 &= ~PLAYER_STATE1_IN_WATER;
+                anim = &gPlayerAnim_link_swimer_swim_15step_up;
+                sp34 -= (60.0f * this->ageProperties->unk_08);
+                this->stateFlags1 &= ~PLAYER_STATE1_IN_WATER;
                 } else if (this->ageProperties->unk_18 <= sp34) {
-                    anim = &gPlayerAnim_link_normal_150step_up;
-                    sp34 -= (59.0f * this->ageProperties->unk_08);
+                anim = &gPlayerAnim_link_normal_150step_up;
+                sp34 -= (59.0f * this->ageProperties->unk_08);
                 } else {
-                    anim = &gPlayerAnim_link_normal_100step_up;
-                    sp34 -= (41.0f * this->ageProperties->unk_08);
+                anim = &gPlayerAnim_link_normal_100step_up;
+                sp34 -= (41.0f * this->ageProperties->unk_08);
                 }
 
                 this->actor.shape.yOffset -= sp34 * 100.0f;
@@ -5379,7 +5325,7 @@ s32 Player_HandleExitsAndVoids(PlayState* play, Player* this, CollisionPoly* pol
 
             if (exitIndex == 0) {
                 if (GameInteractor_Should(VB_TRIGGER_VOIDOUT, true, this)) {
-                    Play_TriggerVoidOut(play);
+                Play_TriggerVoidOut(play);
                 }
                 Scene_SetTransitionForNextEntrance(play);
             } else {
@@ -5387,40 +5333,40 @@ s32 Player_HandleExitsAndVoids(PlayState* play, Player* this, CollisionPoly* pol
 
                 // Main override for entrance rando and entrance skips
                 if (IS_RANDO) {
-                    play->nextEntranceIndex = Entrance_OverrideNextIndex(play->nextEntranceIndex);
+                play->nextEntranceIndex = Entrance_OverrideNextIndex(play->nextEntranceIndex);
                 }
 
                 if (play->nextEntranceIndex == ENTR_RETURN_GROTTO) {
-                    gSaveContext.respawnFlag = 2;
-                    play->nextEntranceIndex = gSaveContext.respawn[RESPAWN_MODE_RETURN].entranceIndex;
-                    play->transitionType = TRANS_TYPE_FADE_WHITE;
-                    gSaveContext.nextTransitionType = TRANS_TYPE_FADE_WHITE;
+                gSaveContext.respawnFlag = 2;
+                play->nextEntranceIndex = gSaveContext.respawn[RESPAWN_MODE_RETURN].entranceIndex;
+                play->transitionType = TRANS_TYPE_FADE_WHITE;
+                gSaveContext.nextTransitionType = TRANS_TYPE_FADE_WHITE;
                 } else if (play->nextEntranceIndex >= ENTR_RETURN_YOUSEI_IZUMI_YOKO) {
-                    // handle dynamic exits
-                    if (IS_RANDO) {
-                        play->nextEntranceIndex = Entrance_OverrideDynamicExit(
-                            sReturnEntranceGroupIndices[play->nextEntranceIndex - ENTR_RETURN_YOUSEI_IZUMI_YOKO] +
-                            play->curSpawn);
-                    } else {
-                        play->nextEntranceIndex =
-                            sReturnEntranceGroupData[sReturnEntranceGroupIndices[play->nextEntranceIndex -
-                                                                                 ENTR_RETURN_YOUSEI_IZUMI_YOKO] +
-                                                     play->curSpawn];
-                    }
-
-                    Scene_SetTransitionForNextEntrance(play);
+                // handle dynamic exits
+                if (IS_RANDO) {
+                    play->nextEntranceIndex = Entrance_OverrideDynamicExit(
+                        sReturnEntranceGroupIndices[play->nextEntranceIndex - ENTR_RETURN_YOUSEI_IZUMI_YOKO] +
+                        play->curSpawn);
                 } else {
-                    if (GameInteractor_Should(VB_SET_VOIDOUT_FROM_SURFACE,
-                                              SurfaceType_GetSlope(&play->colCtx, poly, bgId) == 2,
-                                              play->setupExitList[exitIndex - 1])) {
-                        gSaveContext.respawn[RESPAWN_MODE_DOWN].entranceIndex = play->nextEntranceIndex;
-                        if (GameInteractor_Should(VB_TRIGGER_VOIDOUT, true, this)) {
-                            Play_TriggerVoidOut(play);
-                        }
-                        gSaveContext.respawnFlag = -2;
+                    play->nextEntranceIndex =
+                        sReturnEntranceGroupData[sReturnEntranceGroupIndices[play->nextEntranceIndex -
+                                                                             ENTR_RETURN_YOUSEI_IZUMI_YOKO] +
+                                                 play->curSpawn];
+                }
+
+                Scene_SetTransitionForNextEntrance(play);
+                } else {
+                if (GameInteractor_Should(VB_SET_VOIDOUT_FROM_SURFACE,
+                                          SurfaceType_GetSlope(&play->colCtx, poly, bgId) == 2,
+                                          play->setupExitList[exitIndex - 1])) {
+                    gSaveContext.respawn[RESPAWN_MODE_DOWN].entranceIndex = play->nextEntranceIndex;
+                    if (GameInteractor_Should(VB_TRIGGER_VOIDOUT, true, this)) {
+                        Play_TriggerVoidOut(play);
                     }
-                    gSaveContext.retainWeatherMode = 1;
-                    Scene_SetTransitionForNextEntrance(play);
+                    gSaveContext.respawnFlag = -2;
+                }
+                gSaveContext.retainWeatherMode = 1;
+                Scene_SetTransitionForNextEntrance(play);
                 }
                 play->transitionTrigger = TRANS_TRIGGER_START;
             }
@@ -5431,34 +5377,34 @@ s32 Player_HandleExitsAndVoids(PlayState* play, Player* this, CollisionPoly* pol
                 ((sp34 < 100) || (this->actor.bgCheckFlags & 1))) {
 
                 if (temp == 11) {
-                    Sfx_PlaySfxCentered2(NA_SE_OC_SECRET_HOLE_OUT);
-                    func_800F6964(5);
-                    gSaveContext.seqId = (u8)NA_BGM_DISABLED;
-                    gSaveContext.natureAmbienceId = NATURE_ID_DISABLED;
+                Sfx_PlaySfxCentered2(NA_SE_OC_SECRET_HOLE_OUT);
+                func_800F6964(5);
+                gSaveContext.seqId = (u8)NA_BGM_DISABLED;
+                gSaveContext.natureAmbienceId = NATURE_ID_DISABLED;
                 } else {
-                    speedXZ = this->linearVelocity;
+                speedXZ = this->linearVelocity;
 
-                    if (speedXZ < 0.0f) {
-                        this->actor.world.rot.y += 0x8000;
-                        speedXZ = -speedXZ;
-                    }
+                if (speedXZ < 0.0f) {
+                    this->actor.world.rot.y += 0x8000;
+                    speedXZ = -speedXZ;
+                }
 
-                    if (speedXZ > R_RUN_SPEED_LIMIT / 100.0f) {
-                        gSaveContext.entranceSpeed = R_RUN_SPEED_LIMIT / 100.0f;
-                    } else {
-                        gSaveContext.entranceSpeed = speedXZ;
-                    }
+                if (speedXZ > R_RUN_SPEED_LIMIT / 100.0f) {
+                    gSaveContext.entranceSpeed = R_RUN_SPEED_LIMIT / 100.0f;
+                } else {
+                    gSaveContext.entranceSpeed = speedXZ;
+                }
 
-                    if (sConveyorSpeed != 0) {
-                        yaw = sConveyorYaw;
-                    } else {
-                        yaw = this->actor.world.rot.y;
-                    }
-                    func_80838E70(play, this, 400.0f, yaw);
+                if (sConveyorSpeed != 0) {
+                    yaw = sConveyorYaw;
+                } else {
+                    yaw = this->actor.world.rot.y;
+                }
+                func_80838E70(play, this, 400.0f, yaw);
                 }
             } else {
                 if (!(this->actor.bgCheckFlags & 1)) {
-                    Player_ZeroSpeedXZ(this);
+                Player_ZeroSpeedXZ(this);
                 }
             }
 
@@ -5471,28 +5417,28 @@ s32 Player_HandleExitsAndVoids(PlayState* play, Player* this, CollisionPoly* pol
             if (play->transitionTrigger == TRANS_TRIGGER_OFF) {
 
                 if ((this->actor.world.pos.y < -4000.0f) ||
-                    (((this->floorProperty == 5) || (this->floorProperty == 12)) &&
-                     ((sYDistToFloor < 100.0f) || (this->fallDistance > 400.0f) ||
-                      ((play->sceneNum != SCENE_SHADOW_TEMPLE) && (this->fallDistance > 200.0f)))) ||
-                    ((play->sceneNum == SCENE_GANONS_TOWER_COLLAPSE_EXTERIOR) && (this->fallDistance > 320.0f))) {
+                (((this->floorProperty == 5) || (this->floorProperty == 12)) &&
+                 ((sYDistToFloor < 100.0f) || (this->fallDistance > 400.0f) ||
+                  ((play->sceneNum != SCENE_SHADOW_TEMPLE) && (this->fallDistance > 200.0f)))) ||
+                ((play->sceneNum == SCENE_GANONS_TOWER_COLLAPSE_EXTERIOR) && (this->fallDistance > 320.0f))) {
 
-                    if (this->actor.bgCheckFlags & 1) {
-                        if (this->floorProperty == 5) {
-                            Play_TriggerRespawn(play);
-                        } else if (GameInteractor_Should(VB_TRIGGER_VOIDOUT, true, this)) {
-                            Play_TriggerVoidOut(play);
-                        }
-                        play->transitionType = TRANS_TYPE_FADE_BLACK_FAST;
-                        Sfx_PlaySfxCentered(NA_SE_OC_ABYSS);
-                    } else {
-                        func_80838F5C(play, this);
-                        this->av2.actionVar2 = 9999;
-                        if (this->floorProperty == 5) {
-                            this->av1.actionVar1 = -1;
-                        } else {
-                            this->av1.actionVar1 = 1;
-                        }
+                if (this->actor.bgCheckFlags & 1) {
+                    if (this->floorProperty == 5) {
+                        Play_TriggerRespawn(play);
+                    } else if (GameInteractor_Should(VB_TRIGGER_VOIDOUT, true, this)) {
+                        Play_TriggerVoidOut(play);
                     }
+                    play->transitionType = TRANS_TYPE_FADE_BLACK_FAST;
+                    Sfx_PlaySfxCentered(NA_SE_OC_ABYSS);
+                } else {
+                    func_80838F5C(play, this);
+                    this->av2.actionVar2 = 9999;
+                    if (this->floorProperty == 5) {
+                        this->av1.actionVar1 = -1;
+                    } else {
+                        this->av1.actionVar1 = 1;
+                    }
+                }
                 }
 
                 this->unk_A84 = this->actor.world.pos.y;
@@ -5546,7 +5492,7 @@ f32 func_8083973C(PlayState* play, Player* this, Vec3f* arg2, Vec3f* arg3) {
  * Point A and B are always at the same height, meaning this is a horizontal line test.
  */
 s32 Player_PosVsWallLineTest(PlayState* play, Player* this, Vec3f* offset, CollisionPoly** wallPoly, s32* bgId,
-                             Vec3f* posResult) {
+                         Vec3f* posResult) {
     Vec3f posA;
     Vec3f posB;
 
@@ -5596,12 +5542,12 @@ s32 Player_ActionHandler_1(Player* this, PlayState* play) {
 
                 this->yaw = doorShutter->dyna.actor.home.rot.y;
                 if (doorDirection > 0) {
-                    this->yaw -= 0x8000;
+                this->yaw -= 0x8000;
                 }
                 this->actor.shape.rot.y = this->yaw;
 
                 if (this->linearVelocity <= 0.0f) {
-                    this->linearVelocity = 0.1f;
+                this->linearVelocity = 0.1f;
                 }
 
                 func_80838E70(play, this, 50.0f, this->actor.shape.rot.y);
@@ -5619,7 +5565,9 @@ s32 Player_ActionHandler_1(Player* this, PlayState* play) {
                 func_80832224(this);
 
                 if (this->doorTimer != 0) {
-                    this->av2.actionVar2 = 0;
+    
+
+                this->av2.actionVar2 = 0;
                     Player_AnimChangeOnceMorph(play, this, Player_GetIdleAnim(this));
                     this->skelAnime.endFrame = 0.0f;
                 } else {
