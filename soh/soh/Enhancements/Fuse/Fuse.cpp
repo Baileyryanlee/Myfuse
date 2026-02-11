@@ -547,8 +547,7 @@ static void Fuse_BurnTryApplyVfx(Actor* victim, int frames) {
 
     FuseBurnState& state = it->second;
     const s16 duration = static_cast<s16>(std::clamp(frames, 1, 255));
-    const u16 desiredParams =
-        Fuse_MakeColorFilterParams(kBurnVfxColorFlag, kBurnVfxIntensity, kBurnVfxXlu, duration);
+    const u16 desiredParams = Fuse_MakeColorFilterParams(kBurnVfxColorFlag, kBurnVfxIntensity, kBurnVfxXlu, duration);
 
     if (victim->colorFilterTimer > 0) {
         const bool matchesBurn = state.burnVfxActive && (victim->colorFilterParams == state.burnVfxParams);
@@ -804,10 +803,10 @@ void Fuse::ApplyBurn(PlayState* play, Actor* victim, uint8_t level, MaterialId m
     const int tickDamage = kBurnTickDamage;
     const bool immune = Fuse_IsBurnImmuneVictim(victim);
     if (isRangedFire) {
-        FUSE_LOG_DBG(
-            "[FuseDBG] BurnApply: src=ranged slot=%s victim=%p id=0x%04X durFrames=%d ticks=%d tickDmg=%d "
-            "firstTick=vanillaFireBonus\n",
-            slotLabel ? slotLabel : "unknown", (void*)victim, victim->id, durationFrames, totalTicks, tickDamage);
+        FUSE_LOG_DBG("[FuseDBG] BurnApply: src=ranged slot=%s victim=%p id=0x%04X durFrames=%d ticks=%d tickDmg=%d "
+                     "firstTick=vanillaFireBonus\n",
+                     slotLabel ? slotLabel : "unknown", (void*)victim, victim->id, durationFrames, totalTicks,
+                     tickDamage);
     } else {
         FUSE_LOG_DBG(
             "[FuseDBG] BurnApply: src=%s slot=%s victim=%p id=0x%04X durFrames=%d ticks=%d tickDmg=%d immune=%d\n",
@@ -2450,8 +2449,7 @@ void Fuse_GetRangedFuseStatus(RangedFuseSlot slot, int* outMaterialId, int* outD
     }
 }
 
-void Fuse_GetRangedQueuedStatus(RangedFuseSlot slot, int* outMaterialId, int* outDurabilityCur,
-                                int* outDurabilityMax) {
+void Fuse_GetRangedQueuedStatus(RangedFuseSlot slot, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax) {
     if (outMaterialId) {
         *outMaterialId = static_cast<int>(MaterialId::None);
     }
