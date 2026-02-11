@@ -14,6 +14,111 @@
 #include <string>
 #include <vector>
 
+/*
+# Fuse Pause Menu UI Implementation Report
+
+## 1) FILE INVENTORY
+- `soh/soh/Enhancements/Fuse/UI/FusePauseBridge.cpp`
+  - Primary Fuse Pause Menu implementation: prompt eligibility detection, modal state updates, input routing while open,
+    and all pause-modal rendering (background, list, metadata text, durability bar).
+  - Key functions:
+    - Entry/context gating: `IsFuseMenuPressed`, `BuildPromptContext`, `IsPausePageForItem`
+    - State updates: `FusePause_UpdateModal`, `MoveCursor`, `UpdateModalBounds`, `SetUiState`, `TriggerPrompt`
+    - Rendering: `FusePause_DrawPrompt`, `FusePause_DrawModal`, `DrawSolidRectOpa`, `DrawDurabilityBar`,
+      `RestorePauseTextState`
+    - Text/model composition helpers: `ModifierName`, `PauseItemName`, `BuildMaterialList`, `WeaponViewForPauseItem`
+- `soh/soh/Enhancements/Fuse/UI/FusePauseBridge.h`
+  - C/C++ bridge interface exported to pause code.
+  - Key functions: `FusePause_DrawPrompt`, `FusePause_DrawModal`, `FusePause_UpdateModal`, `FusePause_IsModalOpen`.
+- `soh/src/overlays/misc/ovl_kaleido_scope/z_kaleido_scope_PAL.c` (analysis only)
+  - Pause-loop call site for Fuse bridge functions.
+  - Entry points observed: `FusePause_UpdateModal` (update), `FusePause_DrawPrompt` and `FusePause_DrawModal`
+    (render), and `FusePause_IsModalOpen` (input suppression while modal is open).
+
+## 2) ENTRY FLOW
+- Activation begins in pause update when `FusePause_UpdateModal(play)` is called from Kaleido Scope.
+- `BuildPromptContext` computes whether the currently hovered item is fuse-eligible on current pause page.
+- `IsFuseMenuPressed` edge-detects `BTN_CUSTOM_FUSE_MENU`.
+- If eligible and pressed, modal is opened by setting `sModal.open = true` and initializing modal fields.
+- While open, input is routed in `FusePause_UpdateModal` by consuming/zeroing pause input fields and button masks,
+  including directional/buttons used by pause navigation.
+
+## 3) STATE STRUCTURE
+- Fuse pause state is file-local `FuseModalState sModal` with fields:
+  - `open`: modal visibility.
+  - `cursor`: current selected material index.
+  - `scroll`: top-of-list scroll index.
+  - `uiState`: `Locked/Browse/Preview/Confirm` state machine.
+  - `isLocked`: item already fused lock flag.
+  - `activeItem`: target item enum for the modal session.
+  - `highlightedMaterialId`: currently highlighted list material.
+  - `previewMaterialId`: active preview/confirm material.
+  - `confirmedMaterialId`: fused material (or resolved current fused material at open).
+  - `promptType` + `promptTimer`: transient prompt state, including Already Fused message.
+- Selection index tracking: `cursor`.
+- Scroll offset tracking: `scroll`.
+- Confirmation-state controls: `uiState`, `isLocked`, `promptType/promptTimer`.
+
+## 4) RENDERING PIPELINE
+- Draw call hierarchy:
+  1. Pause render calls `FusePause_DrawPrompt` then `FusePause_DrawModal`.
+  2. `FusePause_DrawModal` builds materials/state and issues rectangle + text draws.
+  3. Primitive draws are performed through `DrawSolidRectOpa`; durability uses `DrawDurabilityBar`.
+  4. Text state is reset with `RestorePauseTextState` before `GfxPrint` text rendering.
+- Order inside `FusePause_DrawModal` (simplified):
+  1. Early exits / state guards
+  2. Full-screen and panel backdrops/borders
+  3. Durability bar draw
+  4. List-row background quads
+  5. Text pass: title, prompts, status (`ITEM ALREADY FUSED`), list entries, left info block, right info block
+- Positioning model: absolute pixel constants (`constexpr s32 ...`) and offsets (`modalYOffsetPx`), no retained layout
+  container system.
+- Clip/scissor APIs: `gDPSetScissor(..., 0, 0, 320, 240)` is called multiple times but always as full-screen bounds,
+  not per-panel clipping regions.
+- Hardcoded coordinate anchors include (non-exhaustive):
+  - Panel/cards: `leftCardX/Y/W/H`, `rightCardX/Y/W/H`, `kPanelX/Y/W/H`, `kFooterX/Y/W/H`
+  - List: `kListX`, `kListY`, `kRowH`, `kVisibleRows`, `kRowBgX/Y/W/H`
+  - Text anchors: `kTitleX/Y`, `kLeftTextX`, `kRightTextX`, line Y constants.
+
+## 5) SCROLL LOGIC
+- Cursor changes in `FusePause_UpdateModal` on D-pad up/down or stick Y thresholds.
+- `MoveCursor` clamps movement and attempts to skip disabled materials.
+- `UpdateModalBounds` computes scroll window using `kVisibleRows`; if cursor leaves visible range, `scroll` is adjusted.
+- Drawing loops use `entryIndex = sModal.scroll + i` for exactly `kVisibleRows`, so items outside visible window are not
+  list-rendered. However, there is no panel clip region; text still renders unconstrained within full-screen scissor.
+
+## 6) DURABILITY BAR
+- Responsible function: `DrawDurabilityBar` (called from `FusePause_DrawModal`).
+- Percent/range calculation:
+  - `ratio = curDurability / maxDurability`
+  - `filled = clamp(ratio * innerBarWidth, 0, innerBarWidth)`
+- Width is hardcoded-derived (`kDurabilityBarWidth = leftCardW - innerPadding*2`), height fixed
+  (`kDurabilityBarHeight = 8`).
+- Position is absolute (`barX = leftCardX + kLeftCardInnerPadding`, `barY = durabilityBarY`), not clipped to panel bounds.
+
+## 7) MODIFIER TEXT RENDERING
+- Constructed in `FusePause_DrawModal` from `displayDef->modifiers`.
+- String concatenation is manual (`modifierText += ", "; modifierText += ModifierName(mod.id);`).
+- Word wrapping is absent; modifier text is rendered as one line with `GfxPrint_Printf`.
+
+## 8) PANEL BOUNDING
+- Visual panel rectangles exist as hardcoded constants and drawn quads (`kPanel*`, card constants), but these are visual
+  only; there is no layout container object enforcing child bounds.
+- Left/right panel positions are fixed constants (`leftCard*`, `rightCard*`), not dynamically computed from content.
+- Coordinates target fixed pause-space dimensions (320x240 scissor); behavior is not adaptive to dynamic resolutions.
+
+## 9) CLIPPING
+- No per-panel clipping/scissor is implemented.
+- Existing scissor calls set full-screen scissor only (`0,0,320,240`), so list/details text are not clipped by card/panel.
+
+## 10) KNOWN STRUCTURAL LIMITATIONS
+- Text overflow: text uses fixed anchors and single-line `GfxPrint_Printf` without wrapping/truncation.
+- Scroll overflow behavior: scroll selects visible row range only, but without per-panel clipping, other content can still
+  visually conflict with fixed regions.
+- Overlap causes: durability bar/list/info blocks all use absolute Y anchors with no collision/layout solver.
+- Missing system: no retained layout/container engine, no clip rectangles per region, no text measurement/wrapping pass.
+*/
+
 namespace {
 static bool IsFuseMenuPressed() {
     auto ctx = Ship::Context::GetInstance();
@@ -697,6 +802,10 @@ void FusePause_UpdateModal(PlayState* play) {
             const FuseSlot resolvedSlot = ResolveSlotForPauseItem(context.activeItem, play);
             const FuseWeaponView weaponView = WeaponViewFromSlot(resolvedSlot);
 
+            Fuse::Log("[FuseDBG_UI] Activation item=%s hoverSlot=%d hoverItem=%d fused=%d\n",
+                      PauseItemName(context.activeItem, context.hoveredSword), context.hoverSlotId, context.hoverItemId,
+                      weaponView.isFused ? 1 : 0);
+
             sModal.open = true;
             sModal.cursor = 0;
             sModal.scroll = 0;
@@ -773,21 +882,35 @@ void FusePause_UpdateModal(PlayState* play) {
     const int entryCount = static_cast<int>(materials.size());
 
     if (!sModal.isLocked && entryCount > 0 && (pressed & BTN_DUP || input->rel.stick_y > 30)) {
+        const int prevCursor = sModal.cursor;
         sModal.cursor = MoveCursor(-1, materials);
+        if (sModal.cursor != prevCursor) {
+            Fuse::Log("[FuseDBG_UI] ScrollChange dir=up cursor=%d scroll=%d\n", sModal.cursor, sModal.scroll);
+        }
         SetUiState(FuseUiState::Preview);
     }
 
     if (!sModal.isLocked && entryCount > 0 && (pressed & BTN_DDOWN || input->rel.stick_y < -30)) {
+        const int prevCursor = sModal.cursor;
         sModal.cursor = MoveCursor(1, materials);
+        if (sModal.cursor != prevCursor) {
+            Fuse::Log("[FuseDBG_UI] ScrollChange dir=down cursor=%d scroll=%d\n", sModal.cursor, sModal.scroll);
+        }
         SetUiState(FuseUiState::Preview);
     }
 
     UpdateModalBounds(materials);
 
     const bool hasHighlight = entryCount > 0 && sModal.cursor >= 0 && sModal.cursor < entryCount;
+    const MaterialId prevHighlighted = sModal.highlightedMaterialId;
     sModal.highlightedMaterialId = hasHighlight ? materials[sModal.cursor].id : MaterialId::None;
     const bool highlightEnabled = hasHighlight && materials[sModal.cursor].enabled;
     sModal.previewMaterialId = (!sModal.isLocked && highlightEnabled) ? sModal.highlightedMaterialId : MaterialId::None;
+
+    if (prevHighlighted != sModal.highlightedMaterialId) {
+        Fuse::Log("[FuseDBG_UI] SelectedMaterialChange cursor=%d material=%d enabled=%d\n", sModal.cursor,
+                  static_cast<int>(sModal.highlightedMaterialId), highlightEnabled ? 1 : 0);
+    }
 
     if (pressed & BTN_A) {
         if (sModal.isLocked) {
@@ -942,6 +1065,10 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         return;
     }
 
+    Fuse::Log("[FuseDBG_UI] RenderEntry item=%d cursor=%d scroll=%d state=%d locked=%d\n",
+              static_cast<int>(sModal.activeItem), sModal.cursor, sModal.scroll, static_cast<int>(sModal.uiState),
+              sModal.isLocked ? 1 : 0);
+
     const int currentFrame = play->state.frames;
     if (sLastModalFrame == currentFrame) {
         // PROOF OVERLAY: if anything draws after this, you will still see it on top.
@@ -1021,11 +1148,10 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
 
         const s32 barX = leftCardX + kLeftCardInnerPadding;
         const s32 barY = durabilityBarY;
+        const f32 percent = ratio * 100.0f;
 
-        Fuse::Log(
-            "[FuseDBG] DurBarDraw barX=%d barY=%d barW=%d barH=%d filled=%d cur=%d max=%d yOff=%d leftX=%d leftY=%d\n",
-            barX, barY, barWidth, barHeight, filled, curDurability, weaponView.maxDurability, modalYOffsetPx, leftCardX,
-            leftCardY);
+        Fuse::Log("[FuseDBG_UI] DurabilityDraw pct=%.2f barX=%d barY=%d barW=%d barH=%d filled=%d cur=%d max=%d\n",
+                  percent, barX, barY, barWidth, barHeight, filled, curDurability, weaponView.maxDurability);
         DrawDurabilityBar(gfxCtx, &OPA, barX, barY, barWidth, barHeight, filled);
     }
 
