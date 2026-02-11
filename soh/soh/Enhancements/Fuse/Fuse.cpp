@@ -4090,12 +4090,18 @@ void Fuse::TickRangedProjectileSeek(PlayState* play) {
                 dispDir = Fuse_Vec3fNormalize(move);
                 projForward = dispDir;
             } else {
-                const float speed = sqrtf((proj->speedXZ * proj->speedXZ) + (proj->velocity.y * proj->velocity.y));
-                const float denom = std::max(speed, 0.0001f);
-                projForward.x = Math_SinS(proj->world.rot.y);
-                projForward.z = Math_CosS(proj->world.rot.y);
-                projForward.y = proj->velocity.y / denom;
-                projForward = Fuse_Vec3fNormalize(projForward);
+                Vec3f vel{ proj->velocity.x, proj->velocity.y, proj->velocity.z };
+                float velLen = Fuse_Vec3fLength(vel);
+                if (velLen > 0.01f) {
+                    projForward = Fuse_Vec3fNormalize(vel);
+                } else {
+                    const float speed = sqrtf((proj->speedXZ * proj->speedXZ) + (proj->velocity.y * proj->velocity.y));
+                    const float denom = std::max(speed, 0.0001f);
+                    projForward.x = Math_SinS(proj->world.rot.y);
+                    projForward.z = Math_CosS(proj->world.rot.y);
+                    projForward.y = proj->velocity.y / denom;
+                    projForward = Fuse_Vec3fNormalize(projForward);
+                }
             }
 
             auto logSeekStopCheck = [&](float dot, const Vec3f& desiredDir) {
