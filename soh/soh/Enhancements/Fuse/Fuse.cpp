@@ -238,16 +238,52 @@ bool Fuse_IsExplosionImmuneVictim(const Actor* victim) {
     return victim && victim->id == ACTOR_BOSS_DODONGO;
 }
 
-static bool Fuse_IsBurnImmuneVictim(const Actor* victim) {
+static bool EnFirefly_IsFireVariant(const Actor* victim) {
+    if (!victim || victim->id != ACTOR_EN_FIREFLY) {
+        return false;
+    }
+
+    // ovl_En_Firefly uses params low 15 bits as KeeseType after stripping 0x8000 lens bit in Init.
+    // KeeseType: 0 = KEESE_FIRE_FLY, 1 = KEESE_FIRE_PERCH (both should be burn-immune).
+    constexpr s16 kKeeseTypeMask = 0x7FFF;
+    constexpr s16 kKeeseFirePerchType = 1;
+    const s16 fireflyType = static_cast<s16>(victim->params & kKeeseTypeMask);
+    return fireflyType <= kKeeseFirePerchType;
+}
+
+static bool EnBb_IsRedVariant(const Actor* victim) {
+    if (!victim || victim->id != ACTOR_EN_BB) {
+        return false;
+    }
+
+    // ovl_En_Bb EnBbType: ENBB_RED is -2 in params after init-time decoding/sign-extension.
+    constexpr s16 kEnBbRedType = -2;
+    return static_cast<s16>(victim->params) == kEnBbRedType;
+}
+
+static bool Fuse_IsBurnImmuneActor(const Actor* victim) {
     if (!victim) {
         return false;
     }
 
-    // TODO: Expand burn immunity list for additional fire-based enemies.
     switch (victim->id) {
-        case ACTOR_EN_BW:      // Torch Slug
-        case ACTOR_EN_FIREFLY: // Fire Keese
+        case ACTOR_EN_BW:        // Torch Slug
+        case ACTOR_EN_FD:        // Flare Dancer
+        case ACTOR_EN_AM:        // Armos
+        case ACTOR_EN_VM:        // Beamos
+        case ACTOR_EN_DODONGO:   // Dodongo
+        case ACTOR_EN_DODOJR:    // Baby Dodongo
+        case ACTOR_BOSS_DODONGO: // King Dodongo
+        case ACTOR_BOSS_FD:      // Volvagia (Flying)
+        case ACTOR_BOSS_FD2:     // Volvagia (Hole Form)
             return true;
+
+        case ACTOR_EN_FIREFLY:
+            return EnFirefly_IsFireVariant(victim);
+
+        case ACTOR_EN_BB:
+            return EnBb_IsRedVariant(victim);
+
         default:
             return false;
     }
@@ -801,7 +837,7 @@ void Fuse::ApplyBurn(PlayState* play, Actor* victim, uint8_t level, MaterialId m
     const bool isRangedFire = isRangedSource && isRangedSlot;
     const int totalTicks = isRangedFire ? kBurnRangedTicks : kBurnDefaultTicks;
     const int tickDamage = kBurnTickDamage;
-    const bool immune = Fuse_IsBurnImmuneVictim(victim);
+    const bool immune = Fuse_IsBurnImmuneActor(victim);
     if (isRangedFire) {
         FUSE_LOG_DBG("[FuseDBG] BurnApply: src=ranged slot=%s victim=%p id=0x%04X durFrames=%d ticks=%d tickDmg=%d "
                      "firstTick=vanillaFireBonus\n",
