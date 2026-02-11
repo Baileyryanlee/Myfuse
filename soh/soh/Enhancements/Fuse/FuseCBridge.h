@@ -17,17 +17,10 @@ typedef enum {
     FUSE_MATERIAL_FIRE_JELLY = 7,
 } FuseMaterialId;
 
-s32 Fuse_ShieldHasExplosion(PlayState* play,
-                            s32* outMaterialId,
-                            s32* outDurabilityCur,
-                            s32* outDurabilityMax,
+s32 Fuse_ShieldHasExplosion(PlayState* play, s32* outMaterialId, s32* outDurabilityCur, s32* outDurabilityMax,
                             u8* outLevel);
 
-
-void Fuse_ShieldTriggerExplosion(PlayState* play,
-                                 s32 materialId,
-                                 u8 level,
-                                 const Vec3f* pos);
+void Fuse_ShieldTriggerExplosion(PlayState* play, s32 materialId, u8 level, const Vec3f* pos);
 
 void Fuse_AddMaterialById(s32 materialId, s32 amount);
 
