@@ -203,6 +203,42 @@ constexpr s16 kStatusYOffset = -16;
 
 constexpr const char* kDurabilityBarCVar = CVAR_DEVELOPER_TOOLS("Fuse.DurabilityBarEnabled");
 
+void SetScissorRect(Gfx*& opa, s32 x, s32 y, s32 w, s32 h) {
+    const s32 minX = std::clamp(x, 0, 320);
+    const s32 minY = std::clamp(y, 0, 240);
+    const s32 maxX = std::clamp(x + w, 0, 320);
+    const s32 maxY = std::clamp(y + h, 0, 240);
+    const s32 clampedMaxX = std::max(maxX, minX);
+    const s32 clampedMaxY = std::max(maxY, minY);
+
+    gDPPipeSync(opa++);
+    gDPSetScissor(opa++, G_SC_NON_INTERLACE, minX, minY, clampedMaxX, clampedMaxY);
+}
+
+void SetScissorFullscreen(Gfx*& opa) {
+    gDPPipeSync(opa++);
+    gDPSetScissor(opa++, G_SC_NON_INTERLACE, 0, 0, 320, 240);
+}
+
+std::string TruncateToPx(GfxPrint* printer, const std::string& s, int maxPx) {
+    (void)printer;
+    if (maxPx <= 0) {
+        return "";
+    }
+
+    // TODO: Replace this approximation with exact GfxPrint text width measurement when available.
+    const int maxChars = std::max(maxPx / 6, 0);
+    if (static_cast<int>(s.size()) <= maxChars) {
+        return s;
+    }
+
+    if (maxChars <= 3) {
+        return std::string("...").substr(0, maxChars);
+    }
+
+    return s.substr(0, maxChars - 3) + "...";
+}
+
 void DrawSolidRectOpa(GraphicsContext* gfxCtx, Gfx** gfxp, s32 x, s32 y, s32 w, s32 h, u8 r, u8 g, u8 b, u8 a) {
     if (gfxCtx == nullptr || gfxp == nullptr || *gfxp == nullptr) {
         return;
@@ -1065,11 +1101,33 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         return;
     }
 
-    Fuse::Log("[FuseDBG_UI] RenderEntry item=%d cursor=%d scroll=%d state=%d locked=%d\n",
-              static_cast<int>(sModal.activeItem), sModal.cursor, sModal.scroll, static_cast<int>(sModal.uiState),
-              sModal.isLocked ? 1 : 0);
-
     const int currentFrame = play->state.frames;
+
+    static int sLastRenderLogFrame = -1000;
+    static int sLastRenderCursor = -1;
+    static int sLastRenderScroll = -1;
+    static int sLastRenderState = -1;
+    static int sLastRenderLocked = -1;
+    static int sLastRenderItem = -1;
+
+    const int renderItem = static_cast<int>(sModal.activeItem);
+    const int renderState = static_cast<int>(sModal.uiState);
+    const int renderLocked = sModal.isLocked ? 1 : 0;
+    const bool renderStateChanged = (renderItem != sLastRenderItem) || (sModal.cursor != sLastRenderCursor) ||
+                                    (sModal.scroll != sLastRenderScroll) || (renderState != sLastRenderState) ||
+                                    (renderLocked != sLastRenderLocked);
+
+    if (renderStateChanged || (currentFrame - sLastRenderLogFrame) >= 30) {
+        Fuse::Log("[FuseDBG_UI] RenderEntry item=%d cursor=%d scroll=%d state=%d locked=%d\n", renderItem,
+                  sModal.cursor, sModal.scroll, renderState, renderLocked);
+        sLastRenderLogFrame = currentFrame;
+        sLastRenderCursor = sModal.cursor;
+        sLastRenderScroll = sModal.scroll;
+        sLastRenderState = renderState;
+        sLastRenderLocked = renderLocked;
+        sLastRenderItem = renderItem;
+    }
+
     if (sLastModalFrame == currentFrame) {
         // PROOF OVERLAY: if anything draws after this, you will still see it on top.
         gDPPipeSync(OPA++);
@@ -1091,17 +1149,14 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     const bool durabilityBarEnabled = IsDurabilityBarEnabled();
     const FuseWeaponView weaponView = WeaponViewForPauseItem(sModal.activeItem, play);
 
-    gDPPipeSync(OPA++);
-    gDPSetScissor(OPA++, G_SC_NON_INTERLACE, 0, 0, 320, 240);
-    gDPPipeSync(XLU++);
-    gDPSetScissor(XLU++, G_SC_NON_INTERLACE, 0, 0, 320, 240);
+    SetScissorFullscreen(OPA);
+    SetScissorFullscreen(XLU);
     // Cover bottom strip (tune Y if needed)
     DrawSolidRectOpa(gfxCtx, &OPA, 0, 200, SCREEN_WIDTH, SCREEN_HEIGHT - 200, 0, 0, 0, 200);
 
     Gfx_SetupDL_39Opa(gfxCtx);
 
-    gDPPipeSync(OPA++);
-    gDPSetScissor(OPA++, G_SC_NON_INTERLACE, 0, 0, 320, 240);
+    SetScissorFullscreen(OPA);
 
     DrawSolidRectOpa(gfxCtx, &OPA, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, 0, 96);
 
@@ -1138,22 +1193,22 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     const s32 durabilityTextY = kDurabilityTextY + modalYOffsetPx;
     const s32 durabilityBarY = durabilityTextY + kInfoLineSpacing - 2;
 
-    if (durabilityBarEnabled && weaponView.isFused && weaponView.maxDurability > 0) {
-        const int curDurability = std::clamp(weaponView.curDurability, 0, weaponView.maxDurability);
-        const f32 ratio = static_cast<f32>(curDurability) / static_cast<f32>(weaponView.maxDurability);
-        const s32 barWidth = kDurabilityBarWidth;
-        const s32 innerBarWidth = std::max(barWidth - 2, 0);
-        const s32 filled = std::clamp(static_cast<s32>(ratio * innerBarWidth), 0, innerBarWidth);
-        const s32 barHeight = kDurabilityBarHeight;
+    const s32 leftInnerX = leftCardX + kCardPaddingX;
+    const s32 leftInnerY = leftCardY + kCardPaddingY;
+    const s32 leftInnerW = leftCardW - (kCardPaddingX * 2);
+    const s32 leftInnerH = leftCardH - (kCardPaddingY * 2);
 
-        const s32 barX = leftCardX + kLeftCardInnerPadding;
-        const s32 barY = durabilityBarY;
-        const f32 percent = ratio * 100.0f;
+    const s32 rightInnerX = rightCardX + kCardPaddingX;
+    const s32 rightInnerY = rightCardY + kCardPaddingY;
+    const s32 rightInnerW = rightCardW - (kCardPaddingX * 2);
+    const s32 rightInnerH = rightCardH - (kCardPaddingY * 2);
 
-        Fuse::Log("[FuseDBG_UI] DurabilityDraw pct=%.2f barX=%d barY=%d barW=%d barH=%d filled=%d cur=%d max=%d\n",
-                  percent, barX, barY, barWidth, barHeight, filled, curDurability, weaponView.maxDurability);
-        DrawDurabilityBar(gfxCtx, &OPA, barX, barY, barWidth, barHeight, filled);
-    }
+    const s32 listClipX = kRowBgX;
+    const s32 listClipY = kListY + modalYOffsetPx + kRowBgYOffset;
+    const s32 listClipW = kRowBgW;
+    const s32 listClipH = (kVisibleRows * kRowH) + 4;
+
+    SetScissorRect(OPA, listClipX, listClipY, listClipW, listClipH);
 
     if (entryCount > 0) {
         const s32 baseY = kListY + modalYOffsetPx + kRowBgYOffset;
@@ -1191,71 +1246,135 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         }
     }
 
+    SetScissorFullscreen(OPA);
+
+    if (durabilityBarEnabled && weaponView.isFused && weaponView.maxDurability > 0) {
+        const int curDurability = std::clamp(weaponView.curDurability, 0, weaponView.maxDurability);
+        const f32 ratio = static_cast<f32>(curDurability) / static_cast<f32>(weaponView.maxDurability);
+        const s32 barWidth = kDurabilityBarWidth;
+        const s32 innerBarWidth = std::max(barWidth - 2, 0);
+        const s32 filled = std::clamp(static_cast<s32>(ratio * innerBarWidth), 0, innerBarWidth);
+        const s32 barHeight = kDurabilityBarHeight;
+
+        const s32 barX = leftCardX + kLeftCardInnerPadding;
+        const s32 barY = durabilityBarY;
+        const f32 percent = ratio * 100.0f;
+
+        static int sLastDurabilityLogFrame = -1000;
+        static int sLastDurabilityCur = -1;
+        static int sLastDurabilityMax = -1;
+        static int sLastDurabilityFilled = -1;
+        static s32 sLastDurabilityBarX = -1;
+        static s32 sLastDurabilityBarY = -1;
+        static s32 sLastDurabilityBarW = -1;
+        static s32 sLastDurabilityBarH = -1;
+
+        const bool durabilityChanged = (curDurability != sLastDurabilityCur) ||
+                                       (weaponView.maxDurability != sLastDurabilityMax) ||
+                                       (filled != sLastDurabilityFilled) || (barX != sLastDurabilityBarX) ||
+                                       (barY != sLastDurabilityBarY) || (barWidth != sLastDurabilityBarW) ||
+                                       (barHeight != sLastDurabilityBarH);
+
+        if (durabilityChanged || (currentFrame - sLastDurabilityLogFrame) >= 30) {
+            Fuse::Log(
+                "[FuseDBG_UI] DurabilityDraw pct=%.2f barX=%d barY=%d barW=%d barH=%d filled=%d cur=%d max=%d\n",
+                percent, barX, barY, barWidth, barHeight, filled, curDurability, weaponView.maxDurability);
+            sLastDurabilityLogFrame = currentFrame;
+            sLastDurabilityCur = curDurability;
+            sLastDurabilityMax = weaponView.maxDurability;
+            sLastDurabilityFilled = filled;
+            sLastDurabilityBarX = barX;
+            sLastDurabilityBarY = barY;
+            sLastDurabilityBarW = barWidth;
+            sLastDurabilityBarH = barHeight;
+        }
+
+        SetScissorRect(OPA, leftInnerX, leftInnerY, leftInnerW, leftInnerH);
+        DrawDurabilityBar(gfxCtx, &OPA, barX, barY, barWidth, barHeight, filled);
+        SetScissorFullscreen(OPA);
+    }
+
     RestorePauseTextState(gfxCtx, &OPA);
     gDPSetPrimColor(OPA++, 0, 0, 255, 255, 255, 255);
 
-    GfxPrint printer;
-    GfxPrint_Init(&printer);
-    GfxPrint_Open(&printer, OPA);
-    GfxPrint_SetColor(&printer, 255, 255, 255, 255);
-
-    GfxPrint_SetPosPx(&printer, kTitleX, kTitleY + modalYOffsetPx);
-    GfxPrint_Printf(&printer, "Fuse");
-
-    const s32 promptX = kFooterX;
-    const s32 promptY = kFooterY + modalYOffsetPx;
-    const s32 nextPromptLineY = promptY + kPromptLineSpacing;
-
-    GfxPrint_SetPosPx(&printer, promptX, promptY);
-    if (locked) {
-        GfxPrint_Printf(&printer, "B: Back");
-    } else if (confirmMode) {
-        GfxPrint_Printf(&printer, "A: Confirm   B: Cancel");
-    } else {
-        GfxPrint_Printf(&printer, "A: Select   B: Back");
-    }
-
-    if (locked || (sModal.promptTimer > 0 && sModal.promptType == FusePromptType::AlreadyFused)) {
-        GfxPrint_SetPosPx(&printer, promptX, nextPromptLineY);
-        GfxPrint_SetColor(&printer, 255, 120, 120, 255);
-        GfxPrint_Printf(&printer, "ITEM ALREADY FUSED");
+    // Footer/status intentionally remain full-screen scoped to preserve current placement behavior.
+    {
+        GfxPrint printer;
+        GfxPrint_Init(&printer);
+        GfxPrint_Open(&printer, OPA);
         GfxPrint_SetColor(&printer, 255, 255, 255, 255);
-    }
 
-    GfxPrint_SetColor(&printer, 255, 255, 255, 255);
+        GfxPrint_SetPosPx(&printer, kTitleX, kTitleY + modalYOffsetPx);
+        GfxPrint_Printf(&printer, "Fuse");
 
-    if (entryCount == 0) {
-        GfxPrint_SetPosPx(&printer, kListX, kListY + modalYOffsetPx);
-        GfxPrint_Printf(&printer, "No materials available");
-    } else {
-        for (int i = 0; i < kVisibleRows; i++) {
-            const int entryIndex = sModal.scroll + i;
-            if (entryIndex >= entryCount) {
-                break;
-            }
+        const s32 promptX = kFooterX;
+        const s32 promptY = kFooterY + modalYOffsetPx;
+        const s32 nextPromptLineY = promptY + kPromptLineSpacing;
 
-            const MaterialEntry& entry = materials[entryIndex];
-            const bool isSelected = (entryIndex == sModal.cursor);
-            const bool enabled = entry.enabled;
-
-            if (locked) {
-                GfxPrint_SetColor(&printer, 140, 140, 140, 180);
-            } else if (!enabled) {
-                GfxPrint_SetColor(&printer, 140, 140, 140, 255);
-            } else if (isSelected) {
-                if (confirmMode) {
-                    GfxPrint_SetColor(&printer, 120, 200, 255, 255);
-                } else {
-                    GfxPrint_SetColor(&printer, 255, 255, 0, 255);
-                }
-            } else {
-                GfxPrint_SetColor(&printer, 255, 255, 255, 255);
-            }
-
-            GfxPrint_SetPosPx(&printer, kListX, kListY + (i * kRowH) + modalYOffsetPx);
-            GfxPrint_Printf(&printer, "%s  x%d", entry.def ? entry.def->name : "Unknown", entry.quantity);
+        GfxPrint_SetPosPx(&printer, promptX, promptY);
+        if (locked) {
+            GfxPrint_Printf(&printer, "B: Back");
+        } else if (confirmMode) {
+            GfxPrint_Printf(&printer, "A: Confirm   B: Cancel");
+        } else {
+            GfxPrint_Printf(&printer, "A: Select   B: Back");
         }
+
+        if (locked || (sModal.promptTimer > 0 && sModal.promptType == FusePromptType::AlreadyFused)) {
+            GfxPrint_SetPosPx(&printer, promptX, nextPromptLineY);
+            GfxPrint_SetColor(&printer, 255, 120, 120, 255);
+            GfxPrint_Printf(&printer, "ITEM ALREADY FUSED");
+            GfxPrint_SetColor(&printer, 255, 255, 255, 255);
+        }
+
+        OPA = GfxPrint_Close(&printer);
+        GfxPrint_Destroy(&printer);
     }
+
+    SetScissorRect(OPA, listClipX, listClipY, listClipW, listClipH);
+    {
+        GfxPrint printer;
+        GfxPrint_Init(&printer);
+        GfxPrint_Open(&printer, OPA);
+
+        if (entryCount == 0) {
+            GfxPrint_SetColor(&printer, 255, 255, 255, 255);
+            GfxPrint_SetPosPx(&printer, kListX, kListY + modalYOffsetPx);
+            GfxPrint_Printf(&printer, "No materials available");
+        } else {
+            for (int i = 0; i < kVisibleRows; i++) {
+                const int entryIndex = sModal.scroll + i;
+                if (entryIndex >= entryCount) {
+                    break;
+                }
+
+                const MaterialEntry& entry = materials[entryIndex];
+                const bool isSelected = (entryIndex == sModal.cursor);
+                const bool enabled = entry.enabled;
+
+                if (locked) {
+                    GfxPrint_SetColor(&printer, 140, 140, 140, 180);
+                } else if (!enabled) {
+                    GfxPrint_SetColor(&printer, 140, 140, 140, 255);
+                } else if (isSelected) {
+                    if (confirmMode) {
+                        GfxPrint_SetColor(&printer, 120, 200, 255, 255);
+                    } else {
+                        GfxPrint_SetColor(&printer, 255, 255, 0, 255);
+                    }
+                } else {
+                    GfxPrint_SetColor(&printer, 255, 255, 255, 255);
+                }
+
+                GfxPrint_SetPosPx(&printer, kListX, kListY + (i * kRowH) + modalYOffsetPx);
+                GfxPrint_Printf(&printer, "%s  x%d", entry.def ? entry.def->name : "Unknown", entry.quantity);
+            }
+        }
+
+        OPA = GfxPrint_Close(&printer);
+        GfxPrint_Destroy(&printer);
+    }
+    SetScissorFullscreen(OPA);
 
     const char* selectedItemName = PauseItemName(sModal.activeItem, context.hoveredSword);
 
@@ -1284,49 +1403,72 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         }
     }
 
-    GfxPrint_SetColor(&printer, 255, 255, 255, 255);
-
     const s32 leftHeaderY = kHeaderY + modalYOffsetPx;
     const s32 leftSelectedY = kSelectedY + modalYOffsetPx;
     const s32 leftItemNameY = kItemNameY + modalYOffsetPx;
     const s32 leftDurabilityY = durabilityTextY;
 
-    GfxPrint_SetPosPx(&printer, kLeftTextX, leftSelectedY);
-    GfxPrint_Printf(&printer, "Selected:");
+    SetScissorRect(OPA, leftInnerX, leftInnerY, leftInnerW, leftInnerH);
+    {
+        GfxPrint printer;
+        GfxPrint_Init(&printer);
+        GfxPrint_Open(&printer, OPA);
+        GfxPrint_SetColor(&printer, 255, 255, 255, 255);
 
-    GfxPrint_SetPosPx(&printer, kLeftTextX, leftItemNameY);
-    GfxPrint_Printf(&printer, "%s", selectedItemName);
+        GfxPrint_SetPosPx(&printer, kLeftTextX, leftSelectedY);
+        GfxPrint_Printf(&printer, "Selected:");
 
-    GfxPrint_SetPosPx(&printer, kLeftTextX, leftDurabilityY);
-    if (!weaponView.isFused) {
-        GfxPrint_Printf(&printer, "Durability: --");
-    } else {
-        GfxPrint_Printf(&printer, "Durability: %d / %d", weaponView.curDurability, weaponView.maxDurability);
+        GfxPrint_SetPosPx(&printer, kLeftTextX, leftItemNameY);
+        GfxPrint_Printf(&printer, "%s", selectedItemName);
+
+        GfxPrint_SetPosPx(&printer, kLeftTextX, leftDurabilityY);
+        if (!weaponView.isFused) {
+            GfxPrint_Printf(&printer, "Durability: --");
+        } else {
+            GfxPrint_Printf(&printer, "Durability: %d / %d", weaponView.curDurability, weaponView.maxDurability);
+        }
+
+        OPA = GfxPrint_Close(&printer);
+        GfxPrint_Destroy(&printer);
     }
+
+    SetScissorFullscreen(OPA);
 
     const s32 rightHeaderLineY = leftHeaderY;
     const s32 rightMaterialY = rightHeaderLineY + kInfoLineSpacing;
     const s32 rightQtyY = rightMaterialY + kInfoLineSpacing;
     const s32 rightEffectLabelY = rightQtyY + kInfoLineSpacing;
     const s32 rightEffectValueY = rightEffectLabelY + kInfoLineSpacing;
+    const s32 rightEffectMaxPx = rightInnerW;
 
-    GfxPrint_SetPosPx(&printer, kRightTextX, rightHeaderLineY);
-    GfxPrint_Printf(&printer, "Material:");
+    SetScissorRect(OPA, rightInnerX, rightInnerY, rightInnerW, rightInnerH);
+    {
+        GfxPrint printer;
+        GfxPrint_Init(&printer);
+        GfxPrint_Open(&printer, OPA);
+        GfxPrint_SetColor(&printer, 255, 255, 255, 255);
 
-    GfxPrint_SetPosPx(&printer, kRightTextX, rightMaterialY);
-    GfxPrint_Printf(&printer, "%s", matName.c_str());
+        GfxPrint_SetPosPx(&printer, kRightTextX, rightHeaderLineY);
+        GfxPrint_Printf(&printer, "Material:");
 
-    GfxPrint_SetPosPx(&printer, kRightTextX, rightQtyY);
-    GfxPrint_Printf(&printer, "Qty: %d", matQty);
+        GfxPrint_SetPosPx(&printer, kRightTextX, rightMaterialY);
+        GfxPrint_Printf(&printer, "%s", matName.c_str());
 
-    GfxPrint_SetPosPx(&printer, kRightTextX, rightEffectLabelY);
-    GfxPrint_Printf(&printer, "Effect:");
+        GfxPrint_SetPosPx(&printer, kRightTextX, rightQtyY);
+        GfxPrint_Printf(&printer, "Qty: %d", matQty);
 
-    GfxPrint_SetPosPx(&printer, kRightTextX, rightEffectValueY);
-    GfxPrint_Printf(&printer, "%s", modifierText.c_str());
+        GfxPrint_SetPosPx(&printer, kRightTextX, rightEffectLabelY);
+        GfxPrint_Printf(&printer, "Effect:");
 
-    OPA = GfxPrint_Close(&printer);
-    GfxPrint_Destroy(&printer);
+        GfxPrint_SetPosPx(&printer, kRightTextX, rightEffectValueY);
+        const std::string effectText = TruncateToPx(&printer, modifierText, rightEffectMaxPx);
+        GfxPrint_Printf(&printer, "%s", effectText.c_str());
+
+        OPA = GfxPrint_Close(&printer);
+        GfxPrint_Destroy(&printer);
+    }
+
+    SetScissorFullscreen(OPA);
 }
 
 } // extern "C"
