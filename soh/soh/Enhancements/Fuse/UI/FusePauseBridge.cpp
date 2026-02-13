@@ -613,7 +613,7 @@ static void UpdateMaterialAnimPos(int entryCount) {
 }
 
 static void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx** gfxp, int x, int y, int w, int h, bool selected, bool locked,
-                             bool enabled, bool confirmMode, u8 alpha) {
+                             bool enabled, bool confirmMode, u8 alpha, bool drawSlot = true) {
     u8 r = 35;
     u8 g = 35;
     u8 b = 35;
@@ -640,13 +640,15 @@ static void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx** gfxp, int x, int y, 
     DrawSolidRectOpa(gfxCtx, gfxp, x, y, 1, h, border, border, border, borderA);
     DrawSolidRectOpa(gfxCtx, gfxp, x + w - 1, y, 1, h, border, border, border, borderA);
 
-    const int slotX = x + 6;
-    const int slotY = y + (h / 2) - 8;
-    DrawSolidRectOpa(gfxCtx, gfxp, slotX, slotY, 16, 16, 20, 20, 20, static_cast<u8>(std::min<int>(255, a + 10)));
-    DrawSolidRectOpa(gfxCtx, gfxp, slotX, slotY, 16, 1, 120, 120, 120, borderA);
-    DrawSolidRectOpa(gfxCtx, gfxp, slotX, slotY + 15, 16, 1, 120, 120, 120, borderA);
-    DrawSolidRectOpa(gfxCtx, gfxp, slotX, slotY, 1, 16, 120, 120, 120, borderA);
-    DrawSolidRectOpa(gfxCtx, gfxp, slotX + 15, slotY, 1, 16, 120, 120, 120, borderA);
+    if (drawSlot) {
+        const int slotX = x + 6;
+        const int slotY = y + (h / 2) - 8;
+        DrawSolidRectOpa(gfxCtx, gfxp, slotX, slotY, 16, 16, 20, 20, 20, static_cast<u8>(std::min<int>(255, a + 10)));
+        DrawSolidRectOpa(gfxCtx, gfxp, slotX, slotY, 16, 1, 120, 120, 120, borderA);
+        DrawSolidRectOpa(gfxCtx, gfxp, slotX, slotY + 15, 16, 1, 120, 120, 120, borderA);
+        DrawSolidRectOpa(gfxCtx, gfxp, slotX, slotY, 1, 16, 120, 120, 120, borderA);
+        DrawSolidRectOpa(gfxCtx, gfxp, slotX + 15, slotY, 1, 16, 120, 120, 120, borderA);
+    }
 }
 
 static void DrawMaterialCarousel(PlayState* play, GraphicsContext* gfxCtx, Gfx*& OPA,
@@ -687,6 +689,7 @@ static void DrawMaterialCarousel(PlayState* play, GraphicsContext* gfxCtx, Gfx*&
         int w;
         int h;
         u8 alpha;
+        bool isCap;
     };
 
     std::array<CardDrawInfo, (kStackHalf * 2) + 1> cards{};
@@ -697,25 +700,32 @@ static void DrawMaterialCarousel(PlayState* play, GraphicsContext* gfxCtx, Gfx*&
     const float frac = base - static_cast<float>(baseIndex);
 
     for (int k = -kStackHalf; k <= kStackHalf; ++k) {
-        const int idx = std::clamp(baseIndex + k, 0, entryCount - 1);
+        const int rawIdx = baseIndex + k;
+        const bool isCap = rawIdx < 0 || rawIdx >= entryCount;
+        const int idx = isCap ? -1 : rawIdx;
         const float dist = static_cast<float>(k) - frac;
         const float ad = fabsf(dist);
-        const float scale = std::clamp(1.0f - (ad * scaleStep), 0.72f, 1.0f);
+        const float baseScale = std::clamp(1.0f - (ad * scaleStep), 0.72f, 1.0f);
+        const float scale = isCap ? std::clamp(baseScale * 0.9f, 0.68f, 1.0f) : baseScale;
 
         const int cardW = static_cast<int>(cardW0 * scale);
         const int cardH = static_cast<int>(cardH0 * scale);
         const int x = centerX - (cardW / 2);
         const int y = centerY + static_cast<int>(dist * static_cast<float>(spacingY0)) - (cardH / 2);
-        const u8 alpha = static_cast<u8>(std::clamp(220 - static_cast<int>(ad * static_cast<float>(alphaStep)), 90, 220));
+        const int maxAlpha = isCap ? 150 : 220;
+        const int minAlpha = isCap ? 70 : 90;
+        const u8 alpha =
+            static_cast<u8>(std::clamp(maxAlpha - static_cast<int>(ad * static_cast<float>(alphaStep)), minAlpha, maxAlpha));
 
-        cards[cardCount++] = { idx, x, y, cardW, cardH, alpha };
+        cards[cardCount++] = { idx, x, y, cardW, cardH, alpha, isCap };
     }
 
     for (int i = 0; i < cardCount; ++i) {
         const CardDrawInfo& card = cards[i];
-        const bool selected = (card.idx == sModal.cursor);
-        const bool enabled = materials[card.idx].enabled;
-        DrawMaterialCard(gfxCtx, &OPA, card.x, card.y, card.w, card.h, selected, locked, enabled, confirmMode, card.alpha);
+        const bool selected = !card.isCap && (card.idx == sModal.cursor);
+        const bool enabled = card.isCap ? false : materials[card.idx].enabled;
+        DrawMaterialCard(gfxCtx, &OPA, card.x, card.y, card.w, card.h, selected, locked || card.isCap, enabled, confirmMode,
+                         card.alpha, !card.isCap);
     }
 
     RestorePauseTextState(gfxCtx, &OPA);
@@ -725,6 +735,10 @@ static void DrawMaterialCarousel(PlayState* play, GraphicsContext* gfxCtx, Gfx*&
 
     for (int i = 0; i < cardCount; ++i) {
         const CardDrawInfo& card = cards[i];
+        if (card.isCap) {
+            continue;
+        }
+
         const MaterialEntry& entry = materials[card.idx];
         const bool selected = (card.idx == sModal.cursor);
 
