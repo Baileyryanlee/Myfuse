@@ -568,7 +568,20 @@ int MoveCursor(int delta, const std::vector<MaterialEntry>& materials) {
     return newCursor;
 }
 
-void UpdateModalBounds(const std::vector<MaterialEntry>& materials) {
+int ComputeVisibleRows(int entryCount, s32 modalYOffsetPx) {
+    const s32 listTop = kListY + modalYOffsetPx;
+    const s32 listBottomLimit = (kFooterY + modalYOffsetPx) - 4;
+    const s32 listAvailH = listBottomLimit - listTop;
+    int visibleRows = std::clamp(static_cast<int>(listAvailH / kRowH), 0, static_cast<int>(kVisibleRows));
+
+    if (entryCount > 0) {
+        visibleRows = std::max(visibleRows, 1);
+    }
+
+    return visibleRows;
+}
+
+void UpdateModalBounds(const std::vector<MaterialEntry>& materials, int visibleRows) {
     const int entryCount = static_cast<int>(materials.size());
     const int maxCursor = (entryCount > 0) ? (entryCount - 1) : 0;
     sModal.cursor = std::clamp(sModal.cursor, 0, maxCursor);
@@ -576,11 +589,11 @@ void UpdateModalBounds(const std::vector<MaterialEntry>& materials) {
     if (sModal.cursor < sModal.scroll) {
         sModal.scroll = sModal.cursor;
     }
-    if (sModal.cursor >= sModal.scroll + kVisibleRows) {
-        sModal.scroll = sModal.cursor - kVisibleRows + 1;
+    if (visibleRows > 0 && sModal.cursor >= sModal.scroll + visibleRows) {
+        sModal.scroll = sModal.cursor - visibleRows + 1;
     }
 
-    const int maxScroll = std::max(0, entryCount - kVisibleRows);
+    const int maxScroll = std::max(0, entryCount - visibleRows);
     sModal.scroll = std::clamp(sModal.scroll, 0, maxScroll);
 }
 
@@ -935,7 +948,9 @@ void FusePause_UpdateModal(PlayState* play) {
         SetUiState(FuseUiState::Preview);
     }
 
-    UpdateModalBounds(materials);
+    const s32 modalYOffsetPx = kFuseModalYOffset * 8;
+    const int visibleRows = ComputeVisibleRows(entryCount, modalYOffsetPx);
+    UpdateModalBounds(materials, visibleRows);
 
     const bool hasHighlight = entryCount > 0 && sModal.cursor >= 0 && sModal.cursor < entryCount;
     const MaterialId prevHighlighted = sModal.highlightedMaterialId;
@@ -1143,9 +1158,10 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     }
 
     std::vector<MaterialEntry> materials = BuildMaterialList();
-    UpdateModalBounds(materials);
     const int entryCount = static_cast<int>(materials.size());
     const s32 modalYOffsetPx = kFuseModalYOffset * 8;
+    const int visibleRows = ComputeVisibleRows(entryCount, modalYOffsetPx);
+    UpdateModalBounds(materials, visibleRows);
     const bool durabilityBarEnabled = IsDurabilityBarEnabled();
     const FuseWeaponView weaponView = WeaponViewForPauseItem(sModal.activeItem, play);
 
@@ -1204,20 +1220,20 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     const s32 rightInnerY = rightCardY + kCardPaddingY;
     const s32 rightInnerW = rightCardW - (kCardPaddingX * 2);
     const s32 rightInnerH = rightCardH - (kCardPaddingY * 2);
-    const s32 rightTextClipX = rightInnerX - 4;
-    const s32 rightTextClipW = rightInnerW + 8;
+    const s32 rightTextClipX = rightInnerX - 12;
+    const s32 rightTextClipW = rightInnerW + 24;
 
     const s32 listClipX = kRowBgX;
     const s32 listClipY = kListY + modalYOffsetPx + kRowBgYOffset;
     const s32 listClipW = kRowBgW;
-    const s32 listClipH = (kVisibleRows * kRowH) + 4;
+    const s32 listClipH = (visibleRows * kRowH) + 4;
 
     SetScissorRect(OPA, listClipX, listClipY, listClipW, listClipH);
 
     if (entryCount > 0) {
         const s32 baseY = kListY + modalYOffsetPx + kRowBgYOffset;
 
-        for (int i = 0; i < kVisibleRows; i++) {
+        for (int i = 0; i < visibleRows; i++) {
             const int entryIndex = sModal.scroll + i;
             if (entryIndex >= entryCount) {
                 break;
@@ -1312,7 +1328,7 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
             GfxPrint_SetPosPx(&printer, kListX, kListY + modalYOffsetPx);
             GfxPrint_Printf(&printer, "No materials available");
         } else {
-            for (int i = 0; i < kVisibleRows; i++) {
+            for (int i = 0; i < visibleRows; i++) {
                 const int entryIndex = sModal.scroll + i;
                 if (entryIndex >= entryCount) {
                     break;
