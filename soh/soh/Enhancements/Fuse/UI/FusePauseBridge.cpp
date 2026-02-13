@@ -1197,11 +1197,15 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     const s32 leftInnerY = leftCardY + kCardPaddingY;
     const s32 leftInnerW = leftCardW - (kCardPaddingX * 2);
     const s32 leftInnerH = leftCardH - (kCardPaddingY * 2);
+    const s32 leftTextClipX = leftInnerX - 4;
+    const s32 leftTextClipW = leftInnerW + 8;
 
     const s32 rightInnerX = rightCardX + kCardPaddingX;
     const s32 rightInnerY = rightCardY + kCardPaddingY;
     const s32 rightInnerW = rightCardW - (kCardPaddingX * 2);
     const s32 rightInnerH = rightCardH - (kCardPaddingY * 2);
+    const s32 rightTextClipX = rightInnerX - 4;
+    const s32 rightTextClipW = rightInnerW + 8;
 
     const s32 listClipX = kRowBgX;
     const s32 listClipY = kListY + modalYOffsetPx + kRowBgYOffset;
@@ -1289,47 +1293,13 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
             sLastDurabilityBarH = barHeight;
         }
 
-        SetScissorRect(OPA, leftInnerX, leftInnerY, leftInnerW, leftInnerH);
+        SetScissorRect(OPA, leftTextClipX, leftInnerY, leftTextClipW, leftInnerH);
         DrawDurabilityBar(gfxCtx, &OPA, barX, barY, barWidth, barHeight, filled);
         SetScissorFullscreen(OPA);
     }
 
     RestorePauseTextState(gfxCtx, &OPA);
     gDPSetPrimColor(OPA++, 0, 0, 255, 255, 255, 255);
-
-    // Footer/status intentionally remain full-screen scoped to preserve current placement behavior.
-    {
-        GfxPrint printer;
-        GfxPrint_Init(&printer);
-        GfxPrint_Open(&printer, OPA);
-        GfxPrint_SetColor(&printer, 255, 255, 255, 255);
-
-        GfxPrint_SetPosPx(&printer, kTitleX, kTitleY + modalYOffsetPx);
-        GfxPrint_Printf(&printer, "Fuse");
-
-        const s32 promptX = kFooterX;
-        const s32 promptY = kFooterY + modalYOffsetPx;
-        const s32 nextPromptLineY = promptY + kPromptLineSpacing;
-
-        GfxPrint_SetPosPx(&printer, promptX, promptY);
-        if (locked) {
-            GfxPrint_Printf(&printer, "B: Back");
-        } else if (confirmMode) {
-            GfxPrint_Printf(&printer, "A: Confirm   B: Cancel");
-        } else {
-            GfxPrint_Printf(&printer, "A: Select   B: Back");
-        }
-
-        if (locked || (sModal.promptTimer > 0 && sModal.promptType == FusePromptType::AlreadyFused)) {
-            GfxPrint_SetPosPx(&printer, promptX, nextPromptLineY);
-            GfxPrint_SetColor(&printer, 255, 120, 120, 255);
-            GfxPrint_Printf(&printer, "ITEM ALREADY FUSED");
-            GfxPrint_SetColor(&printer, 255, 255, 255, 255);
-        }
-
-        OPA = GfxPrint_Close(&printer);
-        GfxPrint_Destroy(&printer);
-    }
 
     SetScissorRect(OPA, listClipX, listClipY, listClipW, listClipH);
     {
@@ -1376,6 +1346,39 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     }
     SetScissorFullscreen(OPA);
 
+    {
+        GfxPrint printer;
+        GfxPrint_Init(&printer);
+        GfxPrint_Open(&printer, OPA);
+        GfxPrint_SetColor(&printer, 255, 255, 255, 255);
+
+        GfxPrint_SetPosPx(&printer, kTitleX, kTitleY + modalYOffsetPx);
+        GfxPrint_Printf(&printer, "Fuse");
+
+        const s32 promptX = kFooterX;
+        const s32 promptY = kFooterY + modalYOffsetPx;
+        const s32 nextPromptLineY = promptY + kPromptLineSpacing;
+
+        GfxPrint_SetPosPx(&printer, promptX, promptY);
+        if (locked) {
+            GfxPrint_Printf(&printer, "B: Back");
+        } else if (confirmMode) {
+            GfxPrint_Printf(&printer, "A: Confirm   B: Cancel");
+        } else {
+            GfxPrint_Printf(&printer, "A: Select   B: Back");
+        }
+
+        if (locked || (sModal.promptTimer > 0 && sModal.promptType == FusePromptType::AlreadyFused)) {
+            GfxPrint_SetPosPx(&printer, promptX, nextPromptLineY);
+            GfxPrint_SetColor(&printer, 255, 120, 120, 255);
+            GfxPrint_Printf(&printer, "ITEM ALREADY FUSED");
+            GfxPrint_SetColor(&printer, 255, 255, 255, 255);
+        }
+
+        OPA = GfxPrint_Close(&printer);
+        GfxPrint_Destroy(&printer);
+    }
+
     const char* selectedItemName = PauseItemName(sModal.activeItem, context.hoveredSword);
 
     const MaterialEntry* highlightedEntry = nullptr;
@@ -1408,7 +1411,7 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     const s32 leftItemNameY = kItemNameY + modalYOffsetPx;
     const s32 leftDurabilityY = durabilityTextY;
 
-    SetScissorRect(OPA, leftInnerX, leftInnerY, leftInnerW, leftInnerH);
+    SetScissorRect(OPA, leftTextClipX, leftInnerY, leftTextClipW, leftInnerH);
     {
         GfxPrint printer;
         GfxPrint_Init(&printer);
@@ -1441,7 +1444,7 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     const s32 rightEffectValueY = rightEffectLabelY + kInfoLineSpacing;
     const s32 rightEffectMaxPx = rightInnerW;
 
-    SetScissorRect(OPA, rightInnerX, rightInnerY, rightInnerW, rightInnerH);
+    SetScissorRect(OPA, rightTextClipX, rightInnerY, rightTextClipW, rightInnerH);
     {
         GfxPrint printer;
         GfxPrint_Init(&printer);
