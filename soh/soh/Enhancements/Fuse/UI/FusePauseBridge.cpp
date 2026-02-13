@@ -182,6 +182,16 @@ constexpr s32 kRowH = 14;
 constexpr s32 kVisibleRows = 7;
 constexpr s32 kRowBgYOffset = -2;
 
+constexpr s32 kCarouselInsetX = 10;
+constexpr s32 kCarouselInsetY = 12;
+
+constexpr s32 kCarouselCardH = 44;
+constexpr s32 kCarouselGap = 10;
+constexpr s32 kCarouselStride = kCarouselCardH + kCarouselGap;
+
+constexpr s32 kCarouselVisibleCards = 3;
+constexpr s32 kCardIconBox = 34;
+
 constexpr s32 kHeaderY = leftCardY + kCardPaddingY;
 constexpr s32 kLeftTextX = leftCardX + kCardPaddingX;
 constexpr s32 kSelectedY = kHeaderY + kInfoLineSpacing;
@@ -214,25 +224,6 @@ void SetScissorRect(Gfx*& opa, s32 x, s32 y, s32 w, s32 h) {
 void SetScissorFullscreen(Gfx*& opa) {
     gDPPipeSync(opa++);
     gDPSetScissor(opa++, G_SC_NON_INTERLACE, 0, 0, 320, 240);
-}
-
-std::string TruncateToPx(GfxPrint* printer, const std::string& s, int maxPx) {
-    (void)printer;
-    if (maxPx <= 0) {
-        return "";
-    }
-
-    // TODO: Replace this approximation with exact GfxPrint text width measurement when available.
-    const int maxChars = std::max(maxPx / 6, 0);
-    if (static_cast<int>(s.size()) <= maxChars) {
-        return s;
-    }
-
-    if (maxChars <= 3) {
-        return std::string("...").substr(0, maxChars);
-    }
-
-    return s.substr(0, maxChars - 3) + "...";
 }
 
 void DrawSolidRectOpa(GraphicsContext* gfxCtx, Gfx** gfxp, s32 x, s32 y, s32 w, s32 h, u8 r, u8 g, u8 b, u8 a) {
@@ -370,11 +361,12 @@ struct FuseModalState {
     MaterialId confirmedMaterialId = MaterialId::None;
     FusePromptType promptType = FusePromptType::None;
     int promptTimer = 0;
+    float carouselPos = 0.0f;
+    float carouselVel = 0.0f;
 };
 
 static FuseModalState sModal;
 static int sLastModalFrame = -1;
-static float sMaterialAnimPos = 0.0f;
 
 struct MaterialEntry {
     MaterialId id;
@@ -480,25 +472,6 @@ static bool IsPausePageForItem(const PauseContext* pauseCtx, FusePauseItem item)
     }
 }
 
-static const char* ModifierName(ModifierId id) {
-    switch (id) {
-        case ModifierId::Hammerize:
-            return "Hammerize";
-        case ModifierId::Stun:
-            return "Stun";
-        case ModifierId::MegaStun:
-            return "Mega Stun";
-        case ModifierId::RangeUp:
-            return "Range Up";
-        case ModifierId::WideRange:
-            return "Wide Range";
-        case ModifierId::BashAttack:
-            return "Bash Attack";
-        default:
-            return "Unknown";
-    }
-}
-
 const char* UiStateName(FuseUiState state) {
     switch (state) {
         case FuseUiState::Locked:
@@ -594,184 +567,6 @@ void UpdateModalBounds(const std::vector<MaterialEntry>& materials, int visibleR
 
     const int maxScroll = std::max(0, entryCount - visibleRows);
     sModal.scroll = std::clamp(sModal.scroll, 0, maxScroll);
-}
-
-static void UpdateMaterialAnimPos(int entryCount) {
-    if (entryCount <= 0) {
-        sMaterialAnimPos = 0.0f;
-        return;
-    }
-
-    const float target = static_cast<float>(sModal.cursor);
-    sMaterialAnimPos += (target - sMaterialAnimPos) * 0.25f;
-
-    if (fabsf(target - sMaterialAnimPos) < 0.001f) {
-        sMaterialAnimPos = target;
-    }
-
-    sMaterialAnimPos = std::clamp(sMaterialAnimPos, 0.0f, static_cast<float>(entryCount - 1));
-}
-
-static void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx** gfxp, int x, int y, int w, int h, bool selected, bool locked,
-                             bool enabled, bool confirmMode, u8 alpha, bool drawSlot = true) {
-    u8 r = 35;
-    u8 g = 35;
-    u8 b = 35;
-    u8 a = alpha;
-
-    if (locked || !enabled) {
-        r = 18;
-        g = 18;
-        b = 18;
-        a = static_cast<u8>(std::min<int>(alpha, 160));
-    } else if (selected) {
-        r = 45;
-        g = confirmMode ? 165 : 115;
-        b = confirmMode ? 90 : 235;
-        a = static_cast<u8>(std::min<int>(255, alpha + 20));
-    }
-
-    DrawSolidRectOpa(gfxCtx, gfxp, x, y, w, h, r, g, b, a);
-
-    const u8 border = selected ? 220 : 170;
-    const u8 borderA = static_cast<u8>(std::min<int>(255, a + 20));
-    DrawSolidRectOpa(gfxCtx, gfxp, x, y, w, 1, border, border, border, borderA);
-    DrawSolidRectOpa(gfxCtx, gfxp, x, y + h - 1, w, 1, border, border, border, borderA);
-    DrawSolidRectOpa(gfxCtx, gfxp, x, y, 1, h, border, border, border, borderA);
-    DrawSolidRectOpa(gfxCtx, gfxp, x + w - 1, y, 1, h, border, border, border, borderA);
-
-    if (drawSlot) {
-        const int slotX = x + 6;
-        const int slotY = y + (h / 2) - 8;
-        DrawSolidRectOpa(gfxCtx, gfxp, slotX, slotY, 16, 16, 20, 20, 20, static_cast<u8>(std::min<int>(255, a + 10)));
-        DrawSolidRectOpa(gfxCtx, gfxp, slotX, slotY, 16, 1, 120, 120, 120, borderA);
-        DrawSolidRectOpa(gfxCtx, gfxp, slotX, slotY + 15, 16, 1, 120, 120, 120, borderA);
-        DrawSolidRectOpa(gfxCtx, gfxp, slotX, slotY, 1, 16, 120, 120, 120, borderA);
-        DrawSolidRectOpa(gfxCtx, gfxp, slotX + 15, slotY, 1, 16, 120, 120, 120, borderA);
-    }
-}
-
-static void DrawMaterialCarousel(PlayState* play, GraphicsContext* gfxCtx, Gfx*& OPA,
-                                 const std::vector<MaterialEntry>& materials, int entryCount, s32 listClipX,
-                                 s32 listClipY, s32 listClipW, s32 listClipH, bool locked, bool confirmMode,
-                                 s32 modalYOffsetPx) {
-    (void)play;
-
-    SetScissorRect(OPA, listClipX, listClipY, listClipW, listClipH);
-
-    if (entryCount <= 0) {
-        RestorePauseTextState(gfxCtx, &OPA);
-        GfxPrint printer;
-        GfxPrint_Init(&printer);
-        GfxPrint_Open(&printer, OPA);
-        GfxPrint_SetColor(&printer, 255, 255, 255, 255);
-        GfxPrint_SetPosPx(&printer, listClipX + 10, listClipY + (listClipH / 2) - 4);
-        GfxPrint_Printf(&printer, "No materials available");
-        OPA = GfxPrint_Close(&printer);
-        GfxPrint_Destroy(&printer);
-        SetScissorFullscreen(OPA);
-        return;
-    }
-
-    constexpr int kStackHalf = 2;
-    const int centerX = rightCardX + (rightCardW / 2);
-    const int centerY = (kListY + modalYOffsetPx) + 36;
-    const int cardW0 = rightCardW - 14;
-    const int cardH0 = 26;
-    const float scaleStep = 0.12f;
-    const int spacingY0 = 24;
-    const int alphaStep = 60;
-
-    struct CardDrawInfo {
-        int idx;
-        int x;
-        int y;
-        int w;
-        int h;
-        u8 alpha;
-        bool isCap;
-    };
-
-    std::array<CardDrawInfo, (kStackHalf * 2) + 1> cards{};
-    int cardCount = 0;
-
-    const float base = sMaterialAnimPos;
-    const int baseIndex = static_cast<int>(floorf(base));
-    const float frac = base - static_cast<float>(baseIndex);
-
-    for (int k = -kStackHalf; k <= kStackHalf; ++k) {
-        const int rawIdx = baseIndex + k;
-        const bool isCap = rawIdx < 0 || rawIdx >= entryCount;
-        const int idx = isCap ? -1 : rawIdx;
-        const float dist = static_cast<float>(k) - frac;
-        const float ad = fabsf(dist);
-        const float baseScale = std::clamp(1.0f - (ad * scaleStep), 0.72f, 1.0f);
-        const float scale = isCap ? std::clamp(baseScale * 0.9f, 0.68f, 1.0f) : baseScale;
-
-        const int cardW = static_cast<int>(cardW0 * scale);
-        const int cardH = static_cast<int>(cardH0 * scale);
-        const int x = centerX - (cardW / 2);
-        const int y = centerY + static_cast<int>(dist * static_cast<float>(spacingY0)) - (cardH / 2);
-        const int maxAlpha = isCap ? 150 : 220;
-        const int minAlpha = isCap ? 70 : 90;
-        const u8 alpha =
-            static_cast<u8>(std::clamp(maxAlpha - static_cast<int>(ad * static_cast<float>(alphaStep)), minAlpha, maxAlpha));
-
-        cards[cardCount++] = { idx, x, y, cardW, cardH, alpha, isCap };
-    }
-
-    for (int i = 0; i < cardCount; ++i) {
-        const CardDrawInfo& card = cards[i];
-        const bool selected = !card.isCap && (card.idx == sModal.cursor);
-        const bool enabled = card.isCap ? false : materials[card.idx].enabled;
-        DrawMaterialCard(gfxCtx, &OPA, card.x, card.y, card.w, card.h, selected, locked || card.isCap, enabled, confirmMode,
-                         card.alpha, !card.isCap);
-    }
-
-    RestorePauseTextState(gfxCtx, &OPA);
-    GfxPrint printer;
-    GfxPrint_Init(&printer);
-    GfxPrint_Open(&printer, OPA);
-
-    for (int i = 0; i < cardCount; ++i) {
-        const CardDrawInfo& card = cards[i];
-        if (card.isCap) {
-            continue;
-        }
-
-        const MaterialEntry& entry = materials[card.idx];
-        const bool selected = (card.idx == sModal.cursor);
-
-        if (locked) {
-            GfxPrint_SetColor(&printer, 140, 140, 140, card.alpha);
-        } else if (!entry.enabled) {
-            GfxPrint_SetColor(&printer, 140, 140, 140, card.alpha);
-        } else if (selected) {
-            if (confirmMode) {
-                GfxPrint_SetColor(&printer, 120, 200, 255, card.alpha);
-            } else {
-                GfxPrint_SetColor(&printer, 255, 255, 0, card.alpha);
-            }
-        } else {
-            GfxPrint_SetColor(&printer, 255, 255, 255, card.alpha);
-        }
-
-        const int textX = card.x + 6 + 16 + 6;
-        const int nameY = card.y + 6;
-        const int qtyY = card.y + 6;
-        const int qtyX = card.x + card.w - 34;
-        const int maxPx = ((card.x + card.w - 6) - textX) - 30;
-        const std::string entryName = TruncateToPx(&printer, entry.def ? entry.def->name : "Unknown", maxPx);
-
-        GfxPrint_SetPosPx(&printer, textX, nameY);
-        GfxPrint_Printf(&printer, "%s", entryName.c_str());
-        GfxPrint_SetPosPx(&printer, qtyX, qtyY);
-        GfxPrint_Printf(&printer, "x%d", entry.quantity);
-    }
-
-    OPA = GfxPrint_Close(&printer);
-    GfxPrint_Destroy(&printer);
-    SetScissorFullscreen(OPA);
 }
 
 EquipValueSword HoveredSwordForCursor(const PauseContext* pauseCtx) {
@@ -993,13 +788,13 @@ void FusePause_UpdateModal(PlayState* play) {
     }
 
     PauseContext* pauseCtx = &play->pauseCtx;
+    Input* input = &play->state.input[0];
 
     if (pauseCtx->state != 6) {
         sModal.open = false;
         return;
     }
 
-    Input* input = &play->state.input[0];
     const u16 pressed = input->press.button;
     const bool fusePressed = IsFuseMenuPressed();
 
@@ -1035,7 +830,8 @@ void FusePause_UpdateModal(PlayState* play) {
             sModal.open = true;
             sModal.cursor = 0;
             sModal.scroll = 0;
-            sMaterialAnimPos = static_cast<float>(sModal.cursor);
+            sModal.carouselPos = static_cast<float>(sModal.cursor);
+            sModal.carouselVel = 0.0f;
             sModal.isLocked = weaponView.isFused;
             sModal.activeItem = context.activeItem;
             sModal.confirmedMaterialId = weaponView.materialId;
@@ -1046,6 +842,15 @@ void FusePause_UpdateModal(PlayState* play) {
             SetUiState(sModal.isLocked ? FuseUiState::Locked : FuseUiState::Browse);
 
             const std::vector<MaterialEntry> materials = BuildMaterialList();
+            if (sModal.isLocked && sModal.confirmedMaterialId != MaterialId::None) {
+                for (int i = 0; i < static_cast<int>(materials.size()); ++i) {
+                    if (materials[i].id == sModal.confirmedMaterialId) {
+                        sModal.cursor = i;
+                        sModal.carouselPos = static_cast<float>(i);
+                        break;
+                    }
+                }
+            }
             Fuse::Log("[FuseDBG] MaterialsList: item=%s count=%zu\n",
                       PauseItemName(sModal.activeItem, context.hoveredSword), materials.size());
             Fuse::Log("[FuseDBG] UI:ResolvedSlot item=%s mat=%d dur=%d/%d\n",
@@ -1129,6 +934,24 @@ void FusePause_UpdateModal(PlayState* play) {
     const s32 modalYOffsetPx = kFuseModalYOffset * 8;
     const int visibleRows = ComputeVisibleRows(entryCount, modalYOffsetPx);
     UpdateModalBounds(materials, visibleRows);
+
+    if (entryCount > 0) {
+        float target = static_cast<float>(sModal.cursor);
+
+        // simple smooth approach
+        sModal.carouselPos += (target - sModal.carouselPos) * 0.25f;
+
+        // clamp
+        if (sModal.carouselPos < 0.0f) {
+            sModal.carouselPos = 0.0f;
+        }
+
+        if (sModal.carouselPos > static_cast<float>(entryCount - 1)) {
+            sModal.carouselPos = static_cast<float>(entryCount - 1);
+        }
+    } else {
+        sModal.carouselPos = 0.0f;
+    }
 
     const bool hasHighlight = entryCount > 0 && sModal.cursor >= 0 && sModal.cursor < entryCount;
     const MaterialId prevHighlighted = sModal.highlightedMaterialId;
@@ -1266,7 +1089,6 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
 
     PauseContext* pauseCtx = &play->pauseCtx;
     GraphicsContext* gfxCtx = play->state.gfxCtx;
-    Input* input = &play->state.input[0];
     Gfx*& OPA = *polyOpaDisp;
     Gfx*& XLU = *polyXluDisp;
 
@@ -1398,18 +1220,79 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     const s32 rightInnerY = rightCardY + kCardPaddingY;
     const s32 rightInnerW = rightCardW - (kCardPaddingX * 2);
     const s32 rightInnerH = rightCardH - (kCardPaddingY * 2);
-    const s32 rightTextClipX = rightInnerX - 12;
-    const s32 rightTextClipW = rightInnerW + 24;
+    const s32 carouselX = rightInnerX + kCarouselInsetX;
+    const s32 carouselW = std::max(0, rightInnerW - (kCarouselInsetX * 2));
+    const s32 carouselY = rightInnerY + kCarouselInsetY;
+    const s32 carouselH = std::max(0, rightInnerH - (kCarouselInsetY * 2));
+    const s32 centerY = carouselY + (carouselH / 2);
 
-    const s32 listClipX = rightTextClipX;
-    const s32 listClipY = kListY + modalYOffsetPx + kRowBgYOffset;
-    const s32 listClipW = rightTextClipW;
-    const s32 listBottomLimit = std::min((kFooterY + modalYOffsetPx) - 4, rightInnerY + rightInnerH);
-    const s32 listClipH = std::max(0, listBottomLimit - listClipY);
+    SetScissorRect(OPA, rightInnerX, rightInnerY, rightInnerW, rightInnerH);
 
-    UpdateMaterialAnimPos(entryCount);
-    DrawMaterialCarousel(play, gfxCtx, OPA, materials, entryCount, listClipX, listClipY, listClipW, listClipH, locked,
-                         confirmMode, modalYOffsetPx);
+    const int baseIndex = static_cast<int>(floorf(sModal.carouselPos));
+    const int carouselHalfRange = kCarouselVisibleCards - 1;
+    for (int idx = baseIndex - carouselHalfRange; idx <= baseIndex + carouselHalfRange; idx++) {
+        if (idx < 0 || idx >= entryCount) {
+            continue;
+        }
+
+        const float rel = static_cast<float>(idx) - sModal.carouselPos;
+
+        const s32 cardX = carouselX;
+        const s32 cardY = static_cast<s32>(centerY + rel * kCarouselStride - (kCarouselCardH / 2));
+        const s32 cardW = carouselW;
+        const s32 cardH = kCarouselCardH;
+
+        const bool isSelected = (idx == sModal.cursor);
+
+        u8 r = 35;
+        u8 g = 35;
+        u8 b = 35;
+        u8 a = 180;
+
+        if (isSelected) {
+            r = 40;
+            g = 120;
+            b = 255;
+            a = 220;
+        }
+
+        DrawSolidRectOpa(gfxCtx, &OPA, cardX, cardY, cardW, cardH, r, g, b, a);
+
+        const s32 iconX = cardX + 6;
+        const s32 iconY = cardY + (cardH - kCardIconBox) / 2;
+
+        DrawSolidRectOpa(gfxCtx, &OPA, iconX, iconY, kCardIconBox, kCardIconBox, 20, 20, 20, 220);
+
+        const MaterialEntry& entry = materials[idx];
+
+        RestorePauseTextState(gfxCtx, &OPA);
+
+        GfxPrint printer;
+        GfxPrint_Init(&printer);
+        GfxPrint_Open(&printer, OPA);
+
+        if (isSelected) {
+            GfxPrint_SetColor(&printer, 255, 255, 0, 255);
+        } else {
+            GfxPrint_SetColor(&printer, 255, 255, 255, 255);
+        }
+
+        const s32 nameX = iconX + kCardIconBox + 8;
+        const s32 nameY = cardY + 12;
+
+        GfxPrint_SetPosPx(&printer, nameX, nameY);
+        GfxPrint_Printf(&printer, "%s", entry.def ? entry.def->name : "Unknown");
+
+        const s32 qtyX = cardX + cardW - 28;
+
+        GfxPrint_SetPosPx(&printer, qtyX, nameY);
+        GfxPrint_Printf(&printer, "x%d", entry.quantity);
+
+        OPA = GfxPrint_Close(&printer);
+        GfxPrint_Destroy(&printer);
+    }
+
+    SetScissorFullscreen(OPA);
 
     if (durabilityBarEnabled && weaponView.isFused && weaponView.maxDurability > 0) {
         const int curDurability = std::clamp(weaponView.curDurability, 0, weaponView.maxDurability);
@@ -1494,32 +1377,7 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
 
     const char* selectedItemName = PauseItemName(sModal.activeItem, context.hoveredSword);
 
-    const MaterialEntry* highlightedEntry = nullptr;
-    if (entryCount > 0 && sModal.cursor >= 0 && sModal.cursor < entryCount) {
-        highlightedEntry = &materials[sModal.cursor];
-    }
 
-    const MaterialId materialToDisplay = locked ? sModal.confirmedMaterialId
-                                                : (sModal.previewMaterialId != MaterialId::None
-                                                       ? sModal.previewMaterialId
-                                                       : (highlightedEntry ? highlightedEntry->id : MaterialId::None));
-    const MaterialDef* displayDef = Fuse::GetMaterialDef(materialToDisplay);
-
-    std::string matName = displayDef ? displayDef->name : "--";
-    int matQty = (materialToDisplay != MaterialId::None) ? Fuse::GetMaterialCount(materialToDisplay) : 0;
-    std::string modifierText = "None";
-    if (displayDef && displayDef->modifierCount > 0) {
-        modifierText.clear();
-        for (size_t i = 0; i < displayDef->modifierCount; i++) {
-            const ModifierSpec& mod = displayDef->modifiers[i];
-            if (!modifierText.empty()) {
-                modifierText += ", ";
-            }
-            modifierText += ModifierName(mod.id);
-        }
-    }
-
-    const s32 leftHeaderY = kHeaderY + modalYOffsetPx;
     const s32 leftSelectedY = kSelectedY + modalYOffsetPx;
     const s32 leftItemNameY = kItemNameY + modalYOffsetPx;
     const s32 leftDurabilityY = durabilityTextY;
@@ -1543,42 +1401,6 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         } else {
             GfxPrint_Printf(&printer, "Durability: %d / %d", weaponView.curDurability, weaponView.maxDurability);
         }
-
-        OPA = GfxPrint_Close(&printer);
-        GfxPrint_Destroy(&printer);
-    }
-
-    SetScissorFullscreen(OPA);
-
-    const s32 leftMaterialLabelY = durabilityBarY + kDurabilityBarHeight + kDurabilitySectionSpacing + kInfoLineSpacing;
-    const s32 leftMaterialValueY = leftMaterialLabelY + kInfoLineSpacing;
-    const s32 leftQtyY = leftMaterialValueY + kInfoLineSpacing;
-    const s32 leftEffectLabelY = leftQtyY + kInfoLineSpacing;
-    const s32 leftEffectValueY = leftEffectLabelY + kInfoLineSpacing;
-    const s32 leftEffectMaxPx = leftInnerW;
-
-    SetScissorRect(OPA, leftTextClipX, leftInnerY, leftTextClipW, leftInnerH);
-    {
-        GfxPrint printer;
-        GfxPrint_Init(&printer);
-        GfxPrint_Open(&printer, OPA);
-        GfxPrint_SetColor(&printer, 255, 255, 255, 255);
-
-        GfxPrint_SetPosPx(&printer, kLeftTextX, leftMaterialLabelY);
-        GfxPrint_Printf(&printer, "Material:");
-
-        GfxPrint_SetPosPx(&printer, kLeftTextX, leftMaterialValueY);
-        GfxPrint_Printf(&printer, "%s", matName.c_str());
-
-        GfxPrint_SetPosPx(&printer, kLeftTextX, leftQtyY);
-        GfxPrint_Printf(&printer, "Qty: %d", matQty);
-
-        GfxPrint_SetPosPx(&printer, kLeftTextX, leftEffectLabelY);
-        GfxPrint_Printf(&printer, "Effect:");
-
-        GfxPrint_SetPosPx(&printer, kLeftTextX, leftEffectValueY);
-        const std::string effectText = TruncateToPx(&printer, modifierText, leftEffectMaxPx);
-        GfxPrint_Printf(&printer, "%s", effectText.c_str());
 
         OPA = GfxPrint_Close(&printer);
         GfxPrint_Destroy(&printer);
