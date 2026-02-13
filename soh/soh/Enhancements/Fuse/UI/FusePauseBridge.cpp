@@ -175,19 +175,18 @@ constexpr s32 kFooterY = kPanelY + kPanelH - kFooterBottomPad - kFooterH;
 
 constexpr s32 kTitleX = leftCardX + kCardPaddingX;
 constexpr s32 kTitleY = leftCardY + kCardPaddingY;
-constexpr s32 kListX = leftCardX + kCardPaddingX;
+constexpr s32 kListX = rightCardX + kCardPaddingX;
 constexpr s32 kListOffsetY = 64;
-constexpr s32 kListY = leftCardY + kListOffsetY;
+constexpr s32 kListY = rightCardY + kListOffsetY;
 constexpr s32 kRowH = 14;
 constexpr s32 kVisibleRows = 7;
 constexpr s32 kRowBgX = kListX - 6;
 constexpr s32 kRowBgYOffset = -2;
-constexpr s32 kRowBgW = (leftCardX + leftCardW - kCardPaddingX) - kRowBgX;
+constexpr s32 kRowBgW = (rightCardX + rightCardW - kCardPaddingX) - kRowBgX;
 constexpr s32 kRowBgH = kRowH;
 
 constexpr s32 kHeaderY = leftCardY + kCardPaddingY;
 constexpr s32 kLeftTextX = leftCardX + kCardPaddingX;
-constexpr s32 kRightTextX = rightCardX + kCardPaddingX;
 constexpr s32 kSelectedY = kHeaderY + kInfoLineSpacing;
 constexpr s32 kItemNameY = kSelectedY + kInfoLineSpacing;
 constexpr s32 kDurabilityTextY = kItemNameY + kInfoLineSpacing;
@@ -570,7 +569,9 @@ int MoveCursor(int delta, const std::vector<MaterialEntry>& materials) {
 
 int ComputeVisibleRows(int entryCount, s32 modalYOffsetPx) {
     const s32 listTop = kListY + modalYOffsetPx;
-    const s32 listBottomLimit = (kFooterY + modalYOffsetPx) - 4;
+    const s32 footerBottomLimit = (kFooterY + modalYOffsetPx) - 4;
+    const s32 rightInnerBottomLimit = rightCardY + rightCardH - kCardPaddingY;
+    const s32 listBottomLimit = std::min(footerBottomLimit, rightInnerBottomLimit);
     const s32 listAvailH = listBottomLimit - listTop;
     int visibleRows = std::clamp(static_cast<int>(listAvailH / kRowH), 0, static_cast<int>(kVisibleRows));
 
@@ -1223,10 +1224,11 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     const s32 rightTextClipX = rightInnerX - 12;
     const s32 rightTextClipW = rightInnerW + 24;
 
-    const s32 listClipX = kRowBgX;
+    const s32 listClipX = rightTextClipX;
     const s32 listClipY = kListY + modalYOffsetPx + kRowBgYOffset;
-    const s32 listClipW = kRowBgW;
-    const s32 listClipH = (visibleRows * kRowH) + 4;
+    const s32 listClipW = rightTextClipW;
+    const s32 listBottomLimit = std::min((kFooterY + modalYOffsetPx) - 4, rightInnerY + rightInnerH);
+    const s32 listClipH = std::max(0, listBottomLimit - listClipY);
 
     SetScissorRect(OPA, listClipX, listClipY, listClipW, listClipH);
 
@@ -1453,34 +1455,34 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
 
     SetScissorFullscreen(OPA);
 
-    const s32 rightHeaderLineY = leftHeaderY;
-    const s32 rightMaterialY = rightHeaderLineY + kInfoLineSpacing;
-    const s32 rightQtyY = rightMaterialY + kInfoLineSpacing;
-    const s32 rightEffectLabelY = rightQtyY + kInfoLineSpacing;
-    const s32 rightEffectValueY = rightEffectLabelY + kInfoLineSpacing;
-    const s32 rightEffectMaxPx = rightInnerW;
+    const s32 leftMaterialLabelY = durabilityBarY + kDurabilityBarHeight + kDurabilitySectionSpacing + kInfoLineSpacing;
+    const s32 leftMaterialValueY = leftMaterialLabelY + kInfoLineSpacing;
+    const s32 leftQtyY = leftMaterialValueY + kInfoLineSpacing;
+    const s32 leftEffectLabelY = leftQtyY + kInfoLineSpacing;
+    const s32 leftEffectValueY = leftEffectLabelY + kInfoLineSpacing;
+    const s32 leftEffectMaxPx = leftInnerW;
 
-    SetScissorRect(OPA, rightTextClipX, rightInnerY, rightTextClipW, rightInnerH);
+    SetScissorRect(OPA, leftTextClipX, leftInnerY, leftTextClipW, leftInnerH);
     {
         GfxPrint printer;
         GfxPrint_Init(&printer);
         GfxPrint_Open(&printer, OPA);
         GfxPrint_SetColor(&printer, 255, 255, 255, 255);
 
-        GfxPrint_SetPosPx(&printer, kRightTextX, rightHeaderLineY);
+        GfxPrint_SetPosPx(&printer, kLeftTextX, leftMaterialLabelY);
         GfxPrint_Printf(&printer, "Material:");
 
-        GfxPrint_SetPosPx(&printer, kRightTextX, rightMaterialY);
+        GfxPrint_SetPosPx(&printer, kLeftTextX, leftMaterialValueY);
         GfxPrint_Printf(&printer, "%s", matName.c_str());
 
-        GfxPrint_SetPosPx(&printer, kRightTextX, rightQtyY);
+        GfxPrint_SetPosPx(&printer, kLeftTextX, leftQtyY);
         GfxPrint_Printf(&printer, "Qty: %d", matQty);
 
-        GfxPrint_SetPosPx(&printer, kRightTextX, rightEffectLabelY);
+        GfxPrint_SetPosPx(&printer, kLeftTextX, leftEffectLabelY);
         GfxPrint_Printf(&printer, "Effect:");
 
-        GfxPrint_SetPosPx(&printer, kRightTextX, rightEffectValueY);
-        const std::string effectText = TruncateToPx(&printer, modifierText, rightEffectMaxPx);
+        GfxPrint_SetPosPx(&printer, kLeftTextX, leftEffectValueY);
+        const std::string effectText = TruncateToPx(&printer, modifierText, leftEffectMaxPx);
         GfxPrint_Printf(&printer, "%s", effectText.c_str());
 
         OPA = GfxPrint_Close(&printer);
