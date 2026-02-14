@@ -182,8 +182,9 @@ constexpr s32 kRowH = 14;
 constexpr s32 kVisibleRows = 7;
 constexpr s32 kRowBgYOffset = -2;
 
-constexpr s32 kCarouselInsetX = 10;
 constexpr s32 kCarouselInsetY = 12;
+constexpr s32 kCarouselLeftBound = 176;
+constexpr s32 kCarouselCardW = 132;
 
 constexpr s32 kCarouselCardH = 44;
 constexpr s32 kCarouselGap = 10;
@@ -1216,17 +1217,17 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     const s32 leftTextClipX = leftInnerX - 4;
     const s32 leftTextClipW = leftInnerW + 8;
 
-    const s32 rightInnerX = rightCardX + kCardPaddingX;
     const s32 rightInnerY = rightCardY + kCardPaddingY;
-    const s32 rightInnerW = rightCardW - (kCardPaddingX * 2);
     const s32 rightInnerH = rightCardH - (kCardPaddingY * 2);
-    const s32 carouselX = rightInnerX + kCarouselInsetX;
-    const s32 carouselW = std::max(0, rightInnerW - (kCarouselInsetX * 2));
+    const s32 carouselX = kCarouselLeftBound;
+    const s32 carouselW = kCarouselCardW;
     const s32 carouselY = rightInnerY + kCarouselInsetY;
     const s32 carouselH = std::max(0, rightInnerH - (kCarouselInsetY * 2));
     const s32 centerY = carouselY + (carouselH / 2);
+    const s32 listClipY = rightInnerY;
+    const s32 listClipH = rightInnerH;
 
-    SetScissorRect(OPA, rightInnerX, rightInnerY, rightInnerW, rightInnerH);
+    SetScissorRect(OPA, kCarouselLeftBound - 8, listClipY, kCarouselCardW + 16, listClipH);
 
     const int baseIndex = static_cast<int>(floorf(sModal.carouselPos));
     const int carouselHalfRange = kCarouselVisibleCards - 1;
