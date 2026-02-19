@@ -191,7 +191,14 @@ constexpr s32 kCarouselGap = 10;
 constexpr s32 kCarouselStride = kCarouselCardH + kCarouselGap;
 
 constexpr s32 kCarouselVisibleCards = 3;
-constexpr s32 kCardIconBox = 34;
+constexpr s32 kRightCardInnerPad = 6;
+constexpr s32 kSpriteBoxSize = 44;
+constexpr s32 kQtyBoxW = 24;
+constexpr s32 kAttackBoxW = 14;
+constexpr s32 kAttackBoxH = 14;
+constexpr s32 kModifierIconBoxSize = 6;
+constexpr s32 kModifierIconBoxGap = 2;
+constexpr s32 kModifierIconRowCount = 6;
 
 constexpr s32 kHeaderY = leftCardY + kCardPaddingY;
 constexpr s32 kLeftTextX = leftCardX + kCardPaddingX;
@@ -375,6 +382,104 @@ struct MaterialEntry {
     int quantity;
     bool enabled;
 };
+
+std::string TruncateToPx(const char* text, s32 maxPx) {
+    if (text == nullptr || maxPx <= 0) {
+        return "";
+    }
+
+    constexpr s32 kGlyphPx = 8;
+    const s32 maxChars = maxPx / kGlyphPx;
+    const std::string src(text);
+
+    if (maxChars <= 0) {
+        return "";
+    }
+
+    if (static_cast<s32>(src.size()) <= maxChars) {
+        return src;
+    }
+
+    if (maxChars <= 3) {
+        return std::string(static_cast<size_t>(maxChars), '.');
+    }
+
+    return src.substr(0, static_cast<size_t>(maxChars - 3)) + "...";
+}
+
+void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx*& opa, const MaterialEntry& entry, s32 cardX, s32 cardY, s32 cardW,
+                      s32 cardH, bool selected, bool enabled, bool locked, bool confirmMode) {
+    (void)locked;
+    (void)confirmMode;
+
+    u8 r = 35;
+    u8 g = 35;
+    u8 b = 35;
+    u8 a = 180;
+
+    if (selected) {
+        r = 40;
+        g = 120;
+        b = 255;
+        a = 220;
+    }
+
+    if (!enabled) {
+        r = 28;
+        g = 28;
+        b = 28;
+        a = 150;
+    }
+
+    DrawSolidRectOpa(gfxCtx, &opa, cardX, cardY, cardW, cardH, r, g, b, a);
+
+    const s32 spriteX = cardX + kRightCardInnerPad;
+    const s32 spriteY = cardY + ((cardH - kSpriteBoxSize) / 2);
+    DrawSolidRectOpa(gfxCtx, &opa, spriteX, spriteY, kSpriteBoxSize, kSpriteBoxSize, 20, 20, 20, 220);
+
+    const s32 textX = spriteX + kSpriteBoxSize + kRightCardInnerPad;
+    const s32 nameY = cardY + kRightCardInnerPad + 2;
+    const s32 qtyX = cardX + cardW - kRightCardInnerPad - kQtyBoxW;
+    const s32 nameMaxPx = std::max(0, cardW - (kRightCardInnerPad * 3) - kSpriteBoxSize - kQtyBoxW - 2);
+
+    RestorePauseTextState(gfxCtx, &opa);
+
+    GfxPrint printer;
+    GfxPrint_Init(&printer);
+    GfxPrint_Open(&printer, opa);
+
+    if (selected) {
+        GfxPrint_SetColor(&printer, 255, 255, 0, 255);
+    } else {
+        GfxPrint_SetColor(&printer, 255, 255, 255, 255);
+    }
+
+    const std::string materialName = TruncateToPx(entry.def ? entry.def->name : "Unknown", nameMaxPx);
+    GfxPrint_SetPosPx(&printer, textX, nameY);
+    GfxPrint_Printf(&printer, "%s", materialName.c_str());
+
+    char qtyText[16];
+    std::snprintf(qtyText, sizeof(qtyText), "x%d", entry.quantity);
+    const s32 qtyTextLen = static_cast<s32>(std::string(qtyText).size());
+    constexpr s32 kGlyphPx = 8;
+    const s32 qtyDrawX = qtyX + std::max(0, kQtyBoxW - (qtyTextLen * kGlyphPx));
+
+    GfxPrint_SetPosPx(&printer, qtyDrawX, nameY);
+    GfxPrint_Printf(&printer, "%s", qtyText);
+
+    opa = GfxPrint_Close(&printer);
+    GfxPrint_Destroy(&printer);
+
+    const s32 iconY = cardY + cardH - kRightCardInnerPad - kModifierIconBoxSize;
+    for (s32 i = 0; i < kModifierIconRowCount; i++) {
+        const s32 iconX = textX + i * (kModifierIconBoxSize + kModifierIconBoxGap);
+        DrawSolidRectOpa(gfxCtx, &opa, iconX, iconY, kModifierIconBoxSize, kModifierIconBoxSize, 24, 24, 24, 220);
+    }
+
+    const s32 atkX = cardX + cardW - kRightCardInnerPad - kAttackBoxW;
+    const s32 atkY = cardY + cardH - kRightCardInnerPad - kAttackBoxH;
+    DrawSolidRectOpa(gfxCtx, &opa, atkX, atkY, kAttackBoxW, kAttackBoxH, 24, 24, 24, 220);
+}
 
 static const char* SwordNameFromEquip(EquipValueSword sword) {
     switch (sword) {
@@ -1244,53 +1349,9 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         const s32 cardH = kCarouselCardH;
 
         const bool isSelected = (idx == sModal.cursor);
-
-        u8 r = 35;
-        u8 g = 35;
-        u8 b = 35;
-        u8 a = 180;
-
-        if (isSelected) {
-            r = 40;
-            g = 120;
-            b = 255;
-            a = 220;
-        }
-
-        DrawSolidRectOpa(gfxCtx, &OPA, cardX, cardY, cardW, cardH, r, g, b, a);
-
-        const s32 iconX = cardX + 6;
-        const s32 iconY = cardY + (cardH - kCardIconBox) / 2;
-
-        DrawSolidRectOpa(gfxCtx, &OPA, iconX, iconY, kCardIconBox, kCardIconBox, 20, 20, 20, 220);
-
         const MaterialEntry& entry = materials[idx];
-
-        RestorePauseTextState(gfxCtx, &OPA);
-
-        GfxPrint printer;
-        GfxPrint_Init(&printer);
-        GfxPrint_Open(&printer, OPA);
-
-        if (isSelected) {
-            GfxPrint_SetColor(&printer, 255, 255, 0, 255);
-        } else {
-            GfxPrint_SetColor(&printer, 255, 255, 255, 255);
-        }
-
-        const s32 nameX = iconX + kCardIconBox + 8;
-        const s32 nameY = cardY + 12;
-
-        GfxPrint_SetPosPx(&printer, nameX, nameY);
-        GfxPrint_Printf(&printer, "%s", entry.def ? entry.def->name : "Unknown");
-
-        const s32 qtyX = cardX + cardW - 28;
-
-        GfxPrint_SetPosPx(&printer, qtyX, nameY);
-        GfxPrint_Printf(&printer, "x%d", entry.quantity);
-
-        OPA = GfxPrint_Close(&printer);
-        GfxPrint_Destroy(&printer);
+        DrawMaterialCard(gfxCtx, OPA, entry, cardX, cardY, cardW, cardH, isSelected, entry.enabled, locked,
+                         confirmMode);
     }
 
     SetScissorFullscreen(OPA);
