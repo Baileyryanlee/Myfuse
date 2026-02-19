@@ -7,6 +7,7 @@
 #include "soh/OTRGlobals.h"
 #include <libultraship/controller/controldeck/ControlDeck.h>
 #include <libultraship/libultraship.h>
+#include <imgui.h>
 #include "soh/cvar_prefixes.h"
 #include <array>
 #include <algorithm>
@@ -217,6 +218,10 @@ constexpr s16 kStatusYOffset = -16;
 
 constexpr const char* kDurabilityBarCVar = CVAR_DEVELOPER_TOOLS("Fuse.DurabilityBarEnabled");
 
+static bool IsImguiTextOverlayEnabled() {
+    return CVarGetInteger(CVAR_DEVELOPER_TOOLS("Fuse.ImguiTextOverlay"), 0) != 0;
+}
+
 void SetScissorRect(Gfx*& opa, s32 x, s32 y, s32 w, s32 h) {
     const s32 minX = std::clamp(x, 0, 320);
     const s32 minY = std::clamp(y, 0, 240);
@@ -407,8 +412,72 @@ std::string TruncateToPx(const char* text, s32 maxPx) {
     return src.substr(0, static_cast<size_t>(maxChars - 3)) + "...";
 }
 
+std::string TruncateToWidth_Imgui(const std::string& source, float maxW) {
+    if (maxW <= 0.0f || source.empty()) {
+        return "";
+    }
+
+    if (ImGui::CalcTextSize(source.c_str()).x <= maxW) {
+        return source;
+    }
+
+    const std::string ellipsis = u8"…";
+    const float ellipsisW = ImGui::CalcTextSize(ellipsis.c_str()).x;
+    if (ellipsisW > maxW) {
+        return "";
+    }
+
+    size_t lo = 0;
+    size_t hi = source.size();
+    size_t best = 0;
+
+    while (lo <= hi) {
+        const size_t mid = lo + ((hi - lo) / 2);
+        const std::string candidate = source.substr(0, mid) + ellipsis;
+        if (ImGui::CalcTextSize(candidate.c_str()).x <= maxW) {
+            best = mid;
+            lo = mid + 1;
+        } else {
+            if (mid == 0) {
+                break;
+            }
+            hi = mid - 1;
+        }
+    }
+
+    return source.substr(0, best) + ellipsis;
+}
+
+void FuseImgui_DrawCardTextOverlay(const MaterialEntry& entry, float cardX, float cardY, float cardW, float cardH, float alpha,
+                                   float nameX, float nameY, float qtyX, float qtyY, int nameMaxPx) {
+    if (alpha <= 0.01f) {
+        return;
+    }
+
+    ImDrawList* drawList = ImGui::GetForegroundDrawList();
+    if (drawList == nullptr) {
+        return;
+    }
+
+    const float clampedAlpha = std::clamp(alpha, 0.0f, 1.0f);
+    const ImU32 textColor = IM_COL32(255, 255, 255, static_cast<int>(255.0f * clampedAlpha));
+
+    const std::string name = entry.def ? entry.def->name : "Unknown";
+    const std::string clippedName = TruncateToWidth_Imgui(name, static_cast<float>(std::max(0, nameMaxPx)));
+
+    char qtyText[16];
+    std::snprintf(qtyText, sizeof(qtyText), "x%d", entry.quantity);
+    const ImVec2 qtySize = ImGui::CalcTextSize(qtyText);
+
+    drawList->PushClipRect(ImVec2(cardX, cardY), ImVec2(cardX + cardW, cardY + cardH), true);
+    drawList->AddText(ImVec2(nameX, nameY), textColor, clippedName.c_str());
+    drawList->AddText(ImVec2(qtyX - qtySize.x, qtyY), textColor, qtyText);
+    drawList->PopClipRect();
+}
+
 void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx*& opa, const MaterialEntry& entry, s32 cardX, s32 cardY, s32 cardW,
-                      s32 cardH, bool selected, bool enabled, bool locked, bool confirmMode) {
+                      s32 cardH, bool selected, bool enabled, bool locked, bool confirmMode, bool drawGfxText,
+                      float* outAlpha = nullptr) {
     (void)locked;
     (void)confirmMode;
 
@@ -431,6 +500,10 @@ void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx*& opa, const MaterialEntry& e
         a = 150;
     }
 
+    if (outAlpha != nullptr) {
+        *outAlpha = static_cast<float>(a) / 255.0f;
+    }
+
     DrawSolidRectOpa(gfxCtx, &opa, cardX, cardY, cardW, cardH, r, g, b, a);
 
     const s32 spriteX = cardX + kRightCardInnerPad;
@@ -438,37 +511,40 @@ void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx*& opa, const MaterialEntry& e
     DrawSolidRectOpa(gfxCtx, &opa, spriteX, spriteY, kSpriteBoxSize, kSpriteBoxSize, 20, 20, 20, 220);
 
     const s32 textX = spriteX + kSpriteBoxSize + kRightCardInnerPad;
-    const s32 nameY = cardY + kRightCardInnerPad + 2;
-    const s32 qtyX = cardX + cardW - kRightCardInnerPad - kQtyBoxW;
-    const s32 nameMaxPx = std::max(0, cardW - (kRightCardInnerPad * 3) - kSpriteBoxSize - kQtyBoxW - 2);
 
-    RestorePauseTextState(gfxCtx, &opa);
+    if (drawGfxText) {
+        const s32 nameY = cardY + kRightCardInnerPad + 2;
+        const s32 qtyX = cardX + cardW - kRightCardInnerPad - kQtyBoxW;
+        const s32 nameMaxPx = std::max(0, cardW - (kRightCardInnerPad * 3) - kSpriteBoxSize - kQtyBoxW - 2);
 
-    GfxPrint printer;
-    GfxPrint_Init(&printer);
-    GfxPrint_Open(&printer, opa);
+        RestorePauseTextState(gfxCtx, &opa);
 
-    if (selected) {
-        GfxPrint_SetColor(&printer, 255, 255, 0, 255);
-    } else {
-        GfxPrint_SetColor(&printer, 255, 255, 255, 255);
+        GfxPrint printer;
+        GfxPrint_Init(&printer);
+        GfxPrint_Open(&printer, opa);
+
+        if (selected) {
+            GfxPrint_SetColor(&printer, 255, 255, 0, 255);
+        } else {
+            GfxPrint_SetColor(&printer, 255, 255, 255, 255);
+        }
+
+        const std::string materialName = TruncateToPx(entry.def ? entry.def->name : "Unknown", nameMaxPx);
+        GfxPrint_SetPosPx(&printer, textX, nameY);
+        GfxPrint_Printf(&printer, "%s", materialName.c_str());
+
+        char qtyText[16];
+        std::snprintf(qtyText, sizeof(qtyText), "x%d", entry.quantity);
+        const s32 qtyTextLen = static_cast<s32>(std::string(qtyText).size());
+        constexpr s32 kGlyphPx = 8;
+        const s32 qtyDrawX = qtyX + std::max(0, kQtyBoxW - (qtyTextLen * kGlyphPx));
+
+        GfxPrint_SetPosPx(&printer, qtyDrawX, nameY);
+        GfxPrint_Printf(&printer, "%s", qtyText);
+
+        opa = GfxPrint_Close(&printer);
+        GfxPrint_Destroy(&printer);
     }
-
-    const std::string materialName = TruncateToPx(entry.def ? entry.def->name : "Unknown", nameMaxPx);
-    GfxPrint_SetPosPx(&printer, textX, nameY);
-    GfxPrint_Printf(&printer, "%s", materialName.c_str());
-
-    char qtyText[16];
-    std::snprintf(qtyText, sizeof(qtyText), "x%d", entry.quantity);
-    const s32 qtyTextLen = static_cast<s32>(std::string(qtyText).size());
-    constexpr s32 kGlyphPx = 8;
-    const s32 qtyDrawX = qtyX + std::max(0, kQtyBoxW - (qtyTextLen * kGlyphPx));
-
-    GfxPrint_SetPosPx(&printer, qtyDrawX, nameY);
-    GfxPrint_Printf(&printer, "%s", qtyText);
-
-    opa = GfxPrint_Close(&printer);
-    GfxPrint_Destroy(&printer);
 
     const s32 iconY = cardY + cardH - kRightCardInnerPad - kModifierIconBoxSize;
     for (s32 i = 0; i < kModifierIconRowCount; i++) {
@@ -1331,6 +1407,7 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     const s32 centerY = carouselY + (carouselH / 2);
     const s32 listClipY = rightInnerY;
     const s32 listClipH = rightInnerH;
+    const bool imguiTextOverlayEnabled = IsImguiTextOverlayEnabled();
 
     SetScissorRect(OPA, kCarouselLeftBound - 8, listClipY, kCarouselCardW + 16, listClipH);
 
@@ -1347,11 +1424,26 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         const s32 cardY = static_cast<s32>(centerY + rel * kCarouselStride - (kCarouselCardH / 2));
         const s32 cardW = carouselW;
         const s32 cardH = kCarouselCardH;
+        const s32 pad = kRightCardInnerPad;
+        const s32 spriteBoxW = kSpriteBoxSize;
+        const s32 nameX = cardX + pad + spriteBoxW + pad;
+        const s32 nameY = cardY + pad + 2;
+        const s32 qtyRightX = cardX + cardW - pad;
+        const s32 qtyY = nameY;
+        const s32 nameMaxPx = std::max(0, (qtyRightX - pad) - nameX);
 
         const bool isSelected = (idx == sModal.cursor);
         const MaterialEntry& entry = materials[idx];
+        float alpha = 1.0f;
         DrawMaterialCard(gfxCtx, OPA, entry, cardX, cardY, cardW, cardH, isSelected, entry.enabled, locked,
-                         confirmMode);
+                         confirmMode, !imguiTextOverlayEnabled, &alpha);
+
+        if (imguiTextOverlayEnabled) {
+            FuseImgui_DrawCardTextOverlay(entry, static_cast<float>(cardX), static_cast<float>(cardY),
+                                          static_cast<float>(cardW), static_cast<float>(cardH), alpha,
+                                          static_cast<float>(nameX), static_cast<float>(nameY),
+                                          static_cast<float>(qtyRightX), static_cast<float>(qtyY), nameMaxPx);
+        }
     }
 
     SetScissorFullscreen(OPA);
