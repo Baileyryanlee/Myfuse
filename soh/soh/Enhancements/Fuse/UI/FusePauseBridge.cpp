@@ -454,7 +454,20 @@ void FuseImgui_DrawCardTextOverlay(const MaterialEntry& entry, float cardX, floa
         return;
     }
 
-    ImDrawList* drawList = ImGui::GetForegroundDrawList();
+    if (ImGui::GetCurrentContext() == nullptr) {
+        return;
+    }
+
+    if (ImGui::GetFrameCount() <= 0) {
+        return;
+    }
+
+    ImGuiViewport* vp = ImGui::GetMainViewport();
+    if (vp == nullptr) {
+        return;
+    }
+
+    ImDrawList* drawList = ImGui::GetForegroundDrawList(vp);
     if (drawList == nullptr) {
         return;
     }
