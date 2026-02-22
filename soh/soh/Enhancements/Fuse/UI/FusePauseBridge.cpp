@@ -223,7 +223,6 @@ constexpr const char* kPauseUseOrderedFontCVar = CVAR_DEVELOPER_TOOLS("Fuse.UiPa
 
 static Font sFuseOrderedFont;
 static bool sFuseOrderedFontLoaded = false;
-static bool sFuseOrderedMapBuilt = false;
 static s16 sFuseOrderedGlyphForByte[256];
 static constexpr u8 kFuseMsgNewline = 0x01;
 static constexpr u8 kFuseMsgEnd = 0x02;
@@ -242,15 +241,13 @@ void FuseUi_EnsureOrderedFontLoaded() {
         if (ch == 0 || ch == kFuseMsgEnd) {
             break;
         }
-        if (ch == kFuseMsgNewline || ch == '\n') {
+        if (ch == kFuseMsgNewline) {
             continue;
         }
         if (glyph >= 0x8B) {
             break;
         }
-        if (sFuseOrderedGlyphForByte[ch] < 0) {
-            sFuseOrderedGlyphForByte[ch] = static_cast<s16>(glyph);
-        }
+        sFuseOrderedGlyphForByte[ch] = static_cast<s16>(glyph);
         glyph++;
     }
 
@@ -261,7 +258,6 @@ void FuseUi_EnsureOrderedFontLoaded() {
         sFuseOrderedGlyphForByte[static_cast<u8>(' ')] = 0;
     }
 
-    sFuseOrderedMapBuilt = true;
     sFuseOrderedFontLoaded = true;
 }
 
@@ -283,7 +279,8 @@ void FuseUi_DrawOrderedGlyph(GraphicsContext* gfxCtx, Gfx*& opa, int x, int y, i
     gDPPipeSync(opa++);
     gDPSetTextureLUT(opa++, G_TT_NONE);
     gDPSetPrimColor(opa++, 0, 0, r, g, b, a);
-    gDPSetCombineMode(opa++, G_CC_MODULATEI_PRIM, G_CC_MODULATEI_PRIM);
+    gDPSetCombineMode(opa++, G_CC_MODULATEIDECALA_PRIM, G_CC_MODULATEIDECALA_PRIM);
+    gDPSetRenderMode(opa++, G_RM_XLU_SURF, G_RM_XLU_SURF2);
     gDPLoadTextureBlock_4b(opa++, tex, G_IM_FMT_I, kFontGlyphW, kFontGlyphH, 0, G_TX_NOMIRROR | G_TX_CLAMP,
                            G_TX_NOMIRROR | G_TX_CLAMP, G_TX_NOMASK, G_TX_NOMASK, G_TX_NOLOD, G_TX_NOLOD);
     gSPTextureRectangle(opa++, (x << 2), (y << 2), ((x + w) << 2), ((y + h) << 2), G_TX_RENDERTILE, 0, 0, (1 << 10),
