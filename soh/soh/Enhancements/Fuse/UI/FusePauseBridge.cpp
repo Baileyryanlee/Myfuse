@@ -223,6 +223,8 @@ constexpr const char* kPauseUseOrderedFontCVar = CVAR_DEVELOPER_TOOLS("Fuse.UiPa
 
 static Font sFuseOrderedFont;
 static bool sFuseOrderedFontLoaded = false;
+static bool sFuseOrderedMapBuilt = false;
+static s16 sFuseOrderedGlyphForByte[256];
 
 void FuseUi_EnsureOrderedFontLoaded() {
     if (sFuseOrderedFontLoaded) {
@@ -230,6 +232,34 @@ void FuseUi_EnsureOrderedFontLoaded() {
     }
 
     Font_LoadOrderedFont(&sFuseOrderedFont);
+
+    std::fill(std::begin(sFuseOrderedGlyphForByte), std::end(sFuseOrderedGlyphForByte), static_cast<s16>(-1));
+    int glyph = 0;
+    for (int i = 0;; i++) {
+        const u8 ch = static_cast<u8>(sFuseOrderedFont.msgBuf[i]);
+        if (ch == MESSAGE_END) {
+            break;
+        }
+        if (ch == MESSAGE_NEWLINE) {
+            continue;
+        }
+        if (glyph >= 0x8B) {
+            break;
+        }
+        if (sFuseOrderedGlyphForByte[ch] < 0) {
+            sFuseOrderedGlyphForByte[ch] = static_cast<s16>(glyph);
+        }
+        glyph++;
+    }
+
+    if (sFuseOrderedGlyphForByte[static_cast<u8>('?')] < 0) {
+        sFuseOrderedGlyphForByte[static_cast<u8>('?')] = 0;
+    }
+    if (sFuseOrderedGlyphForByte[static_cast<u8>(' ')] < 0) {
+        sFuseOrderedGlyphForByte[static_cast<u8>(' ')] = 0;
+    }
+
+    sFuseOrderedMapBuilt = true;
     sFuseOrderedFontLoaded = true;
 }
 
@@ -271,12 +301,18 @@ void FuseUi_DrawOrderedText(GraphicsContext* gfxCtx, Gfx*& opa, int x, int y, fl
 
     int penX = x;
     for (const unsigned char* p = reinterpret_cast<const unsigned char*>(text); *p != '\0'; ++p) {
-        int gi = static_cast<int>(*p) - 0x20;
-        if (gi < 0 || gi >= 0x8B) {
-            gi = static_cast<int>('?') - 0x20;
-            if (gi < 0 || gi >= 0x8B) {
-                gi = 0;
-            }
+        int gi = -1;
+        if (sFuseOrderedMapBuilt) {
+            gi = sFuseOrderedGlyphForByte[*p];
+        }
+        if (gi < 0) {
+            gi = sFuseOrderedGlyphForByte[static_cast<u8>('?')];
+        }
+        if (gi < 0) {
+            gi = sFuseOrderedGlyphForByte[static_cast<u8>(' ')];
+        }
+        if (gi < 0) {
+            gi = 0;
         }
 
         FuseUi_DrawOrderedGlyph(gfxCtx, opa, penX, y, w, h, gi, r, g, b, a);
