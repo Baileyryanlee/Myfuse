@@ -226,7 +226,7 @@ constexpr const char* kPauseCardQtyScaleCVar = CVAR_DEVELOPER_TOOLS("Fuse.UiPaus
 constexpr const char* kPauseFooterPromptScaleCVar = CVAR_DEVELOPER_TOOLS("Fuse.UiPauseFooterPromptScale");
 constexpr const char* kPauseFooterStatusScaleCVar = CVAR_DEVELOPER_TOOLS("Fuse.UiPauseFooterStatusScale");
 constexpr const char* kPauseUseOrderedFontCVar = CVAR_DEVELOPER_TOOLS("Fuse.UiPauseUseOrderedFont");
-constexpr const char* kPauseOrderedTrackingCVar = CVAR_DEVELOPER_TOOLS("Fuse.Pause.OrderedTracking");
+constexpr const char* kPauseOrderedTightenCVar = CVAR_DEVELOPER_TOOLS("Fuse.Pause.OrderedTighten");
 
 static Font sFuseOrderedFont;
 static bool sFuseOrderedFontLoaded = false;
@@ -612,7 +612,8 @@ void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx*& opa, const MaterialEntry& e
     const s32 qtyX = textX;
 
     const bool useOrderedFont = CVarGetInteger(kPauseUseOrderedFontCVar, 1) != 0;
-    const float orderedTracking = CVarGetFloat(kPauseOrderedTrackingCVar, 0.0f);
+    const float orderedTighten = std::clamp(CVarGetFloat(kPauseOrderedTightenCVar, 0.75f), 0.0f, 2.0f);
+    const float trackingPx = -orderedTighten;
     const u8 textR = 255;
     const u8 textG = 255;
     const u8 textB = selected ? 0 : 255;
@@ -630,7 +631,7 @@ void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx*& opa, const MaterialEntry& e
     if (useOrderedFont) {
         RestorePauseTextState(gfxCtx, &opa);
         FuseUi_DrawOrderedTextTracked(gfxCtx, opa, textX, nameY, nameScale, materialName.c_str(), textR, textG,
-                                      textB, textA, orderedTracking);
+                                      textB, textA, trackingPx);
         FuseUi_DrawOrderedText(gfxCtx, opa, qtyX, qtyY, qtyScale, qtyText, textR, textG, textB, textA);
         FuseUi_DrawOrderedText(gfxCtx, opa, atkTextX, qtyY, qtyScale, atkText, textR, textG, textB, textA);
     } else {
@@ -1612,13 +1613,14 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
             promptText = "A: Confirm   B: Cancel";
         }
 
-        const float orderedTracking = CVarGetFloat(kPauseOrderedTrackingCVar, 0.0f);
+        const float orderedTighten = std::clamp(CVarGetFloat(kPauseOrderedTightenCVar, 0.75f), 0.0f, 2.0f);
+        const float trackingPx = -orderedTighten;
         FuseUi_DrawOrderedTextTrackedWithColor(gfxCtx, OPA, promptX, promptY, promptScale, 255, 255, 255, 255,
-                                               promptText, orderedTracking);
+                                               promptText, trackingPx);
 
         if (locked || (sModal.promptTimer > 0 && sModal.promptType == FusePromptType::AlreadyFused)) {
             FuseUi_DrawOrderedTextTrackedWithColor(gfxCtx, OPA, promptX, nextPromptLineY, statusScale, 255, 120, 120,
-                                                   255, "ITEM ALREADY FUSED", orderedTracking);
+                                                   255, "ITEM ALREADY FUSED", trackingPx);
         }
     }
 
