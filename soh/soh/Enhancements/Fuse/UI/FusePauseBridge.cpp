@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -193,7 +194,7 @@ constexpr s32 kCarouselStride = kCarouselCardH + kCarouselGap;
 constexpr s32 kCarouselVisibleCards = 3;
 constexpr s32 kRightCardInnerPad = 6;
 constexpr s32 kSpriteBoxSize = 44;
-constexpr s32 kQtyBoxW = 24;
+constexpr [[maybe_unused]] s32 kQtyBoxW = 24;
 constexpr s32 kAttackBoxW = 14;
 constexpr s32 kAttackBoxH = 14;
 constexpr s32 kModifierIconBoxSize = 6;
@@ -216,6 +217,9 @@ constexpr s16 kPromptYOffset = 0;
 constexpr s16 kStatusYOffset = -16;
 
 constexpr const char* kDurabilityBarCVar = CVAR_DEVELOPER_TOOLS("Fuse.DurabilityBarEnabled");
+constexpr const char* kPauseGlyphPxCVar = CVAR_DEVELOPER_TOOLS("Fuse.UiPauseGlyphPx");
+constexpr const char* kPauseCardNameScaleCVar = CVAR_DEVELOPER_TOOLS("Fuse.UiPauseCardNameScale");
+constexpr const char* kPauseCardQtyScaleCVar = CVAR_DEVELOPER_TOOLS("Fuse.UiPauseCardQtyScale");
 
 void SetScissorRect(Gfx*& opa, s32 x, s32 y, s32 w, s32 h) {
     const s32 minX = std::clamp(x, 0, 320);
@@ -383,13 +387,28 @@ struct MaterialEntry {
     bool enabled;
 };
 
-std::string TruncateToPx(const char* text, s32 maxPx) {
+int ReadGlyphPx() {
+    return std::clamp(CVarGetInteger(kPauseGlyphPxCVar, 8), 4, 16);
+}
+
+float ReadScaleFloat(const char* cvarName, float defaultValue) {
+    return CVarGetFloat(cvarName, defaultValue);
+}
+
+s32 TextWidthMonoPx(const char* text, s32 glyphPx) {
+    if (text == nullptr) {
+        return 0;
+    }
+
+    return static_cast<s32>(std::strlen(text)) * glyphPx;
+}
+
+std::string TruncateToPxEllipsis(const char* text, s32 maxPx, s32 glyphPx) {
     if (text == nullptr || maxPx <= 0) {
         return "";
     }
 
-    constexpr s32 kGlyphPx = 8;
-    const s32 maxChars = maxPx / kGlyphPx;
+    const s32 maxChars = maxPx / std::max(1, glyphPx);
     const std::string src(text);
 
     if (maxChars <= 0) {
@@ -401,7 +420,7 @@ std::string TruncateToPx(const char* text, s32 maxPx) {
     }
 
     if (maxChars <= 3) {
-        return std::string(static_cast<size_t>(maxChars), '.');
+        return "...";
     }
 
     return src.substr(0, static_cast<size_t>(maxChars - 3)) + "...";
@@ -440,8 +459,7 @@ void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx*& opa, const MaterialEntry& e
     const s32 textX = spriteX + kSpriteBoxSize + kRightCardInnerPad;
 
     const s32 nameY = cardY + kRightCardInnerPad + 2;
-    const s32 qtyX = cardX + cardW - kRightCardInnerPad - kQtyBoxW;
-    const s32 nameMaxPx = std::max(0, cardW - (kRightCardInnerPad * 3) - kSpriteBoxSize - kQtyBoxW - 2);
+    constexpr s32 kNameQtyGapPx = 6;
 
     RestorePauseTextState(gfxCtx, &opa);
 
@@ -455,15 +473,29 @@ void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx*& opa, const MaterialEntry& e
         GfxPrint_SetColor(&printer, 255, 255, 255, 255);
     }
 
-    const std::string materialName = TruncateToPx(entry.def ? entry.def->name : "Unknown", nameMaxPx);
-    GfxPrint_SetPosPx(&printer, textX, nameY);
-    GfxPrint_Printf(&printer, "%s", materialName.c_str());
-
     char qtyText[16];
     std::snprintf(qtyText, sizeof(qtyText), "x%d", entry.quantity);
-    const s32 qtyTextLen = static_cast<s32>(std::string(qtyText).size());
-    constexpr s32 kGlyphPx = 8;
-    const s32 qtyDrawX = qtyX + std::max(0, kQtyBoxW - (qtyTextLen * kGlyphPx));
+
+    const s32 glyphPx = ReadGlyphPx();
+    const float nameScale = ReadScaleFloat(kPauseCardNameScaleCVar, 1.0f);
+    const float qtyScale = ReadScaleFloat(kPauseCardQtyScaleCVar, 1.0f);
+    const s32 scaledNameGlyphPx = std::max(1, static_cast<s32>(std::lround(static_cast<float>(glyphPx) * nameScale)));
+    const s32 scaledQtyGlyphPx = std::max(1, static_cast<s32>(std::lround(static_cast<float>(glyphPx) * qtyScale)));
+    const s32 qtyW = TextWidthMonoPx(qtyText, scaledQtyGlyphPx);
+    const s32 qtyRight = cardX + cardW - kRightCardInnerPad;
+    s32 qtyDrawX = qtyRight - qtyW;
+
+    const s32 nameX = textX;
+    const s32 minQtyX = nameX + (glyphPx * 3);
+    qtyDrawX = std::max(qtyDrawX, minQtyX);
+
+    const s32 nameMaxPx = std::max(0, qtyDrawX - kNameQtyGapPx - nameX);
+    const std::string materialName = TruncateToPxEllipsis(entry.def ? entry.def->name : "Unknown", nameMaxPx,
+                                                          scaledNameGlyphPx);
+
+    // TODO(FusePause): GfxPrint scale API not available in this TU; keeping scale CVARs for future integration.
+    GfxPrint_SetPosPx(&printer, nameX, nameY);
+    GfxPrint_Printf(&printer, "%s", materialName.c_str());
 
     GfxPrint_SetPosPx(&printer, qtyDrawX, nameY);
     GfxPrint_Printf(&printer, "%s", qtyText);
