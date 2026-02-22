@@ -184,8 +184,7 @@ constexpr s32 kVisibleRows = 7;
 constexpr s32 kRowBgYOffset = -2;
 
 constexpr s32 kCarouselInsetY = 12;
-constexpr s32 kCarouselLeftBound = 176;
-constexpr s32 kCarouselCardW = 132;
+constexpr s32 kCarouselLeftBound = 156;
 
 constexpr s32 kCarouselCardH = 44;
 constexpr s32 kCarouselGap = 10;
@@ -200,6 +199,11 @@ constexpr s32 kAttackBoxH = 14;
 constexpr s32 kModifierIconBoxSize = 6;
 constexpr s32 kModifierIconBoxGap = 2;
 constexpr s32 kModifierIconRowCount = 6;
+constexpr s32 kCardNameTopPad = 2;
+constexpr s32 kCardRowGap = 3;
+constexpr s32 kCardQtyRowExtraPad = 1;
+constexpr s32 kCardModifierBandPad = 6;
+constexpr s32 kOrderedGlyphBasePx = 16;
 
 constexpr s32 kHeaderY = leftCardY + kCardPaddingY;
 constexpr s32 kLeftTextX = leftCardX + kCardPaddingX;
@@ -553,27 +557,23 @@ void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx*& opa, const MaterialEntry& e
 
     const s32 textX = spriteX + kSpriteBoxSize + kRightCardInnerPad;
 
-    const s32 nameY = cardY + kRightCardInnerPad + 2;
-    constexpr s32 kNameQtyGapPx = 6;
-
     char qtyText[16];
     std::snprintf(qtyText, sizeof(qtyText), "x%d", entry.quantity);
 
     const float nameScale = ReadScaleFloat(kPauseCardNameScaleCVar, 1.0f);
     const float qtyScale = ReadScaleFloat(kPauseCardQtyScaleCVar, 0.70f);
-    const s32 scaledNameGlyphPx = std::max(1, static_cast<s32>(std::lround(static_cast<float>(kFontGlyphW) * nameScale)));
-    const s32 scaledQtyGlyphPx = std::max(1, static_cast<s32>(std::lround(static_cast<float>(kFontGlyphW) * qtyScale)));
-    const s32 qtyW = TextWidthMonoPx(qtyText, scaledQtyGlyphPx);
-    const s32 qtyRight = cardX + cardW - kRightCardInnerPad;
-    s32 qtyDrawX = qtyRight - qtyW;
 
-    const s32 nameX = textX;
-    const s32 minQtyX = nameX + (scaledNameGlyphPx * 3);
-    qtyDrawX = std::max(qtyDrawX, minQtyX);
+    const s32 nameY = cardY + kRightCardInnerPad + kCardNameTopPad;
+    const s32 nameH = std::max(1, static_cast<s32>(std::lround(static_cast<float>(kOrderedGlyphBasePx) * nameScale)));
+    const s32 qtyY = nameY + nameH + kCardRowGap + kCardQtyRowExtraPad;
 
-    const s32 nameMaxPx = std::max(0, qtyDrawX - kNameQtyGapPx - nameX);
-    const std::string materialName = TruncateToPxEllipsis(entry.def ? entry.def->name : "Unknown", nameMaxPx,
-                                                          scaledNameGlyphPx);
+    const s32 scaledNameGlyphPx =
+        std::max(1, static_cast<s32>(std::lround(static_cast<float>(kOrderedGlyphBasePx) * nameScale)));
+    const s32 nameMaxPx = std::max(0, cardW - (textX - cardX) - kRightCardInnerPad);
+    const std::string materialName =
+        TruncateToPxEllipsis(entry.def ? entry.def->name : "Unknown", nameMaxPx, scaledNameGlyphPx);
+
+    const s32 qtyX = textX;
 
     const bool useOrderedFont = CVarGetInteger(kPauseUseOrderedFontCVar, 1) != 0;
     const u8 textR = 255;
@@ -583,8 +583,8 @@ void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx*& opa, const MaterialEntry& e
 
     if (useOrderedFont) {
         RestorePauseTextState(gfxCtx, &opa);
-        FuseUi_DrawOrderedText(gfxCtx, opa, nameX, nameY, nameScale, materialName.c_str(), textR, textG, textB, textA);
-        FuseUi_DrawOrderedText(gfxCtx, opa, qtyDrawX, nameY, qtyScale, qtyText, textR, textG, textB, textA);
+        FuseUi_DrawOrderedText(gfxCtx, opa, textX, nameY, nameScale, materialName.c_str(), textR, textG, textB, textA);
+        FuseUi_DrawOrderedText(gfxCtx, opa, qtyX, qtyY, qtyScale, qtyText, textR, textG, textB, textA);
     } else {
         RestorePauseTextState(gfxCtx, &opa);
 
@@ -593,26 +593,27 @@ void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx*& opa, const MaterialEntry& e
         GfxPrint_Open(&printer, opa);
         GfxPrint_SetColor(&printer, textR, textG, textB, textA);
 
-        GfxPrint_SetPosPx(&printer, nameX, nameY);
+        GfxPrint_SetPosPx(&printer, textX, nameY);
         GfxPrint_Printf(&printer, "%s", materialName.c_str());
 
-        GfxPrint_SetPosPx(&printer, qtyDrawX, nameY);
+        GfxPrint_SetPosPx(&printer, qtyX, qtyY);
         GfxPrint_Printf(&printer, "%s", qtyText);
 
         opa = GfxPrint_Close(&printer);
         GfxPrint_Destroy(&printer);
     }
 
-    const s32 iconY = cardY + cardH - kRightCardInnerPad - kModifierIconBoxSize;
+    const s32 atkX = cardX + cardW - kRightCardInnerPad - kAttackBoxW;
+    const s32 atkY = qtyY;
+    DrawSolidRectOpa(gfxCtx, &opa, atkX, atkY, kAttackBoxW, kAttackBoxH, 24, 24, 24, 220);
+
+    const s32 iconY = cardY + cardH - kCardModifierBandPad - kModifierIconBoxSize;
     for (s32 i = 0; i < kModifierIconRowCount; i++) {
         const s32 iconX = textX + i * (kModifierIconBoxSize + kModifierIconBoxGap);
         DrawSolidRectOpa(gfxCtx, &opa, iconX, iconY, kModifierIconBoxSize, kModifierIconBoxSize, 24, 24, 24, 220);
     }
-
-    const s32 atkX = cardX + cardW - kRightCardInnerPad - kAttackBoxW;
-    const s32 atkY = cardY + cardH - kRightCardInnerPad - kAttackBoxH;
-    DrawSolidRectOpa(gfxCtx, &opa, atkX, atkY, kAttackBoxW, kAttackBoxH, 24, 24, 24, 220);
 }
+
 
 static const char* SwordNameFromEquip(EquipValueSword sword) {
     switch (sword) {
@@ -1458,14 +1459,15 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
     const s32 rightInnerY = rightCardY + kCardPaddingY;
     const s32 rightInnerH = rightCardH - (kCardPaddingY * 2);
     const s32 carouselX = kCarouselLeftBound;
-    const s32 carouselW = kCarouselCardW;
+    const s32 carouselRightBound = kPanelX + kPanelW - 10;
+    const s32 carouselW = std::max(0, carouselRightBound - kCarouselLeftBound);
     const s32 carouselY = rightInnerY + kCarouselInsetY;
     const s32 carouselH = std::max(0, rightInnerH - (kCarouselInsetY * 2));
     const s32 centerY = carouselY + (carouselH / 2);
     const s32 listClipY = rightInnerY;
     const s32 listClipH = rightInnerH;
 
-    SetScissorRect(OPA, kCarouselLeftBound - 8, listClipY, kCarouselCardW + 16, listClipH);
+    SetScissorRect(OPA, kCarouselLeftBound - 8, listClipY, carouselW + 16, listClipH);
 
     const int baseIndex = static_cast<int>(floorf(sModal.carouselPos));
     const int carouselHalfRange = kCarouselVisibleCards - 1;
