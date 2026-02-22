@@ -194,7 +194,7 @@ constexpr s32 kCarouselVisibleCards = 3;
 constexpr s32 kRightCardInnerPad = 6;
 constexpr s32 kSpriteBoxSize = 44;
 constexpr [[maybe_unused]] s32 kQtyBoxW = 24;
-constexpr s32 kAttackBoxW = 14;
+constexpr s32 kAttackBoxW = 24;
 constexpr s32 kAttackBoxH = 14;
 constexpr s32 kModifierIconBoxSize = 6;
 constexpr s32 kModifierIconBoxGap = 2;
@@ -226,6 +226,7 @@ constexpr const char* kPauseCardQtyScaleCVar = CVAR_DEVELOPER_TOOLS("Fuse.UiPaus
 constexpr const char* kPauseFooterPromptScaleCVar = CVAR_DEVELOPER_TOOLS("Fuse.UiPauseFooterPromptScale");
 constexpr const char* kPauseFooterStatusScaleCVar = CVAR_DEVELOPER_TOOLS("Fuse.UiPauseFooterStatusScale");
 constexpr const char* kPauseUseOrderedFontCVar = CVAR_DEVELOPER_TOOLS("Fuse.UiPauseUseOrderedFont");
+constexpr const char* kPauseOrderedTrackingCVar = CVAR_DEVELOPER_TOOLS("Fuse.Pause.OrderedTracking");
 
 static Font sFuseOrderedFont;
 static bool sFuseOrderedFontLoaded = false;
@@ -301,8 +302,8 @@ void FuseUi_DrawOrderedGlyph(GraphicsContext* gfxCtx, Gfx*& opa, int x, int y, i
                         dt);
 }
 
-void FuseUi_DrawOrderedText(GraphicsContext* gfxCtx, Gfx*& opa, int x, int y, float scale, const char* text, u8 r, u8 g,
-                            u8 b, u8 a) {
+void FuseUi_DrawOrderedTextTracked(GraphicsContext* gfxCtx, Gfx*& opa, int x, int y, float scale, const char* text,
+                                   u8 r, u8 g, u8 b, u8 a, float trackingPx) {
     if (text == nullptr) {
         return;
     }
@@ -311,8 +312,9 @@ void FuseUi_DrawOrderedText(GraphicsContext* gfxCtx, Gfx*& opa, int x, int y, fl
 
     const int w = std::max(1, static_cast<int>(std::lround(kFontGlyphW * scale)));
     const int h = std::max(1, static_cast<int>(std::lround(kFontGlyphH * scale)));
+    const float clampedTracking = std::max(-2.0f, trackingPx);
 
-    int penX = x;
+    float penX = static_cast<float>(x);
     for (const unsigned char* p = reinterpret_cast<const unsigned char*>(text); *p != '\0'; ++p) {
         const u8 ch = *p;
         int gi = -1;
@@ -329,15 +331,26 @@ void FuseUi_DrawOrderedText(GraphicsContext* gfxCtx, Gfx*& opa, int x, int y, fl
             gi = 0;
         }
 
-        FuseUi_DrawOrderedGlyph(gfxCtx, opa, penX, y, w, h, gi, r, g, b, a);
-        penX += w;
+        FuseUi_DrawOrderedGlyph(gfxCtx, opa, static_cast<int>(std::lround(penX)), y, w, h, gi, r, g, b, a);
+        penX += static_cast<float>(w) + clampedTracking;
     }
+}
+
+void FuseUi_DrawOrderedText(GraphicsContext* gfxCtx, Gfx*& opa, int x, int y, float scale, const char* text, u8 r, u8 g,
+                            u8 b, u8 a) {
+    FuseUi_DrawOrderedTextTracked(gfxCtx, opa, x, y, scale, text, r, g, b, a, 0.0f);
 }
 
 void FuseUi_DrawOrderedTextWithColor(GraphicsContext* gfxCtx, Gfx*& opa, s32 x, s32 y, float scale, u8 r, u8 g, u8 b,
                                      u8 a, const char* text) {
     gDPSetPrimColor(opa++, 0, 0, r, g, b, a);
     FuseUi_DrawOrderedText(gfxCtx, opa, x, y, scale, text, r, g, b, a);
+}
+
+void FuseUi_DrawOrderedTextTrackedWithColor(GraphicsContext* gfxCtx, Gfx*& opa, s32 x, s32 y, float scale, u8 r, u8 g,
+                                            u8 b, u8 a, const char* text, float trackingPx) {
+    gDPSetPrimColor(opa++, 0, 0, r, g, b, a);
+    FuseUi_DrawOrderedTextTracked(gfxCtx, opa, x, y, scale, text, r, g, b, a, trackingPx);
 }
 
 void SetScissorRect(Gfx*& opa, s32 x, s32 y, s32 w, s32 h) {
@@ -576,6 +589,13 @@ void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx*& opa, const MaterialEntry& e
     char qtyText[16];
     std::snprintf(qtyText, sizeof(qtyText), "x%d", entry.quantity);
 
+    char atkText[16];
+    if (entry.def != nullptr) {
+        std::snprintf(atkText, sizeof(atkText), "%d", entry.def->attackBonus);
+    } else {
+        std::snprintf(atkText, sizeof(atkText), "--");
+    }
+
     const float nameScale = ReadScaleFloat(kPauseCardNameScaleCVar, 1.0f);
     const float qtyScale = ReadScaleFloat(kPauseCardQtyScaleCVar, 0.70f);
 
@@ -592,15 +612,27 @@ void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx*& opa, const MaterialEntry& e
     const s32 qtyX = textX;
 
     const bool useOrderedFont = CVarGetInteger(kPauseUseOrderedFontCVar, 1) != 0;
+    const float orderedTracking = CVarGetFloat(kPauseOrderedTrackingCVar, 0.0f);
     const u8 textR = 255;
     const u8 textG = 255;
     const u8 textB = selected ? 0 : 255;
     const u8 textA = 255;
 
+    const s32 atkX = cardX + cardW - kRightCardInnerPad - kAttackBoxW;
+    const s32 atkY = qtyY;
+    DrawSolidRectOpa(gfxCtx, &opa, atkX, atkY, kAttackBoxW, kAttackBoxH, 24, 24, 24, 220);
+
+    const s32 qtyGlyphPx =
+        std::max(1, static_cast<s32>(std::lround(static_cast<float>(kOrderedGlyphBasePx) * qtyScale)));
+    const s32 atkTextPx = static_cast<s32>(std::strlen(atkText)) * qtyGlyphPx;
+    const s32 atkTextX = atkX + ((kAttackBoxW - atkTextPx) / 2);
+
     if (useOrderedFont) {
         RestorePauseTextState(gfxCtx, &opa);
-        FuseUi_DrawOrderedText(gfxCtx, opa, textX, nameY, nameScale, materialName.c_str(), textR, textG, textB, textA);
+        FuseUi_DrawOrderedTextTracked(gfxCtx, opa, textX, nameY, nameScale, materialName.c_str(), textR, textG,
+                                      textB, textA, orderedTracking);
         FuseUi_DrawOrderedText(gfxCtx, opa, qtyX, qtyY, qtyScale, qtyText, textR, textG, textB, textA);
+        FuseUi_DrawOrderedText(gfxCtx, opa, atkTextX, qtyY, qtyScale, atkText, textR, textG, textB, textA);
     } else {
         RestorePauseTextState(gfxCtx, &opa);
 
@@ -615,13 +647,12 @@ void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx*& opa, const MaterialEntry& e
         GfxPrint_SetPosPx(&printer, qtyX, qtyY);
         GfxPrint_Printf(&printer, "%s", qtyText);
 
+        GfxPrint_SetPosPx(&printer, atkTextX, qtyY);
+        GfxPrint_Printf(&printer, "%s", atkText);
+
         opa = GfxPrint_Close(&printer);
         GfxPrint_Destroy(&printer);
     }
-
-    const s32 atkX = cardX + cardW - kRightCardInnerPad - kAttackBoxW;
-    const s32 atkY = qtyY;
-    DrawSolidRectOpa(gfxCtx, &opa, atkX, atkY, kAttackBoxW, kAttackBoxH, 24, 24, 24, 220);
 
     const s32 iconY = cardY + cardH - kCardModifierBandPad - kModifierIconBoxSize;
     for (s32 i = 0; i < kModifierIconRowCount; i++) {
@@ -1581,11 +1612,13 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
             promptText = "A: Confirm   B: Cancel";
         }
 
-        FuseUi_DrawOrderedTextWithColor(gfxCtx, OPA, promptX, promptY, promptScale, 255, 255, 255, 255, promptText);
+        const float orderedTracking = CVarGetFloat(kPauseOrderedTrackingCVar, 0.0f);
+        FuseUi_DrawOrderedTextTrackedWithColor(gfxCtx, OPA, promptX, promptY, promptScale, 255, 255, 255, 255,
+                                               promptText, orderedTracking);
 
         if (locked || (sModal.promptTimer > 0 && sModal.promptType == FusePromptType::AlreadyFused)) {
-            FuseUi_DrawOrderedTextWithColor(gfxCtx, OPA, promptX, nextPromptLineY, statusScale, 255, 120, 120, 255,
-                                            "ITEM ALREADY FUSED");
+            FuseUi_DrawOrderedTextTrackedWithColor(gfxCtx, OPA, promptX, nextPromptLineY, statusScale, 255, 120, 120,
+                                                   255, "ITEM ALREADY FUSED", orderedTracking);
         }
     }
 
