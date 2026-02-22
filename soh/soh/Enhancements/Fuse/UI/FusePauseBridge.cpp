@@ -225,6 +225,8 @@ static Font sFuseOrderedFont;
 static bool sFuseOrderedFontLoaded = false;
 static bool sFuseOrderedMapBuilt = false;
 static s16 sFuseOrderedGlyphForByte[256];
+static constexpr u8 kFuseMsgNewline = 0x01;
+static constexpr u8 kFuseMsgEnd = 0x02;
 
 void FuseUi_EnsureOrderedFontLoaded() {
     if (sFuseOrderedFontLoaded) {
@@ -237,10 +239,10 @@ void FuseUi_EnsureOrderedFontLoaded() {
     int glyph = 0;
     for (int i = 0;; i++) {
         const u8 ch = static_cast<u8>(sFuseOrderedFont.msgBuf[i]);
-        if (ch == MESSAGE_END) {
+        if (ch == 0 || ch == kFuseMsgEnd) {
             break;
         }
-        if (ch == MESSAGE_NEWLINE) {
+        if (ch == kFuseMsgNewline || ch == '\n') {
             continue;
         }
         if (glyph >= 0x8B) {
