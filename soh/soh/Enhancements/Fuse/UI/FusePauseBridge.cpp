@@ -303,9 +303,10 @@ void FuseUi_DrawOrderedText(GraphicsContext* gfxCtx, Gfx*& opa, int x, int y, fl
 
     int penX = x;
     for (const unsigned char* p = reinterpret_cast<const unsigned char*>(text); *p != '\0'; ++p) {
+        const u8 ch = *p;
         int gi = -1;
-        if (sFuseOrderedMapBuilt) {
-            gi = sFuseOrderedGlyphForByte[*p];
+        if (sFuseOrderedFontLoaded) {
+            gi = sFuseOrderedGlyphForByte[ch];
         }
         if (gi < 0) {
             gi = sFuseOrderedGlyphForByte[static_cast<u8>('?')];
@@ -562,7 +563,7 @@ void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx*& opa, const MaterialEntry& e
     std::snprintf(qtyText, sizeof(qtyText), "x%d", entry.quantity);
 
     const float nameScale = ReadScaleFloat(kPauseCardNameScaleCVar, 1.0f);
-    const float qtyScale = ReadScaleFloat(kPauseCardQtyScaleCVar, 1.0f);
+    const float qtyScale = ReadScaleFloat(kPauseCardQtyScaleCVar, 0.70f);
     const s32 scaledNameGlyphPx = std::max(1, static_cast<s32>(std::lround(static_cast<float>(kFontGlyphW) * nameScale)));
     const s32 scaledQtyGlyphPx = std::max(1, static_cast<s32>(std::lround(static_cast<float>(kFontGlyphW) * qtyScale)));
     const s32 qtyW = TextWidthMonoPx(qtyText, scaledQtyGlyphPx);
