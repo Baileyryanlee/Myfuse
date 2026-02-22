@@ -287,8 +287,16 @@ void FuseUi_DrawOrderedGlyph(GraphicsContext* gfxCtx, Gfx*& opa, int x, int y, i
     gDPSetRenderMode(opa++, G_RM_XLU_SURF, G_RM_XLU_SURF2);
     gDPLoadTextureBlock_4b(opa++, tex, G_IM_FMT_I, kFontGlyphW, kFontGlyphH, 0, G_TX_NOMIRROR | G_TX_CLAMP,
                            G_TX_NOMIRROR | G_TX_CLAMP, G_TX_NOMASK, G_TX_NOMASK, G_TX_NOLOD, G_TX_NOLOD);
-    gSPTextureRectangle(opa++, (x << 2), (y << 2), ((x + w) << 2), ((y + h) << 2), G_TX_RENDERTILE, 0, 0, (1 << 10),
-                        (1 << 10));
+    const s32 dstW = std::max(1, w);
+    const s32 dstH = std::max(1, h);
+
+    // 16.10 fixed-point step:
+    // How many texture subpixels to advance per screen pixel.
+    const s32 ds = (kFontGlyphW << 10) / dstW;
+    const s32 dt = (kFontGlyphH << 10) / dstH;
+
+    gSPTextureRectangle(opa++, (x << 2), (y << 2), ((x + dstW) << 2), ((y + dstH) << 2), G_TX_RENDERTILE, 0, 0, ds,
+                        dt);
 }
 
 void FuseUi_DrawOrderedText(GraphicsContext* gfxCtx, Gfx*& opa, int x, int y, float scale, const char* text, u8 r, u8 g,
