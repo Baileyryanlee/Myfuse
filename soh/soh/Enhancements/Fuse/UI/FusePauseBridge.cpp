@@ -217,9 +217,72 @@ constexpr s16 kPromptYOffset = 0;
 constexpr s16 kStatusYOffset = -16;
 
 constexpr const char* kDurabilityBarCVar = CVAR_DEVELOPER_TOOLS("Fuse.DurabilityBarEnabled");
-constexpr const char* kPauseGlyphPxCVar = CVAR_DEVELOPER_TOOLS("Fuse.UiPauseGlyphPx");
 constexpr const char* kPauseCardNameScaleCVar = CVAR_DEVELOPER_TOOLS("Fuse.UiPauseCardNameScale");
 constexpr const char* kPauseCardQtyScaleCVar = CVAR_DEVELOPER_TOOLS("Fuse.UiPauseCardQtyScale");
+constexpr const char* kPauseUseOrderedFontCVar = CVAR_DEVELOPER_TOOLS("Fuse.UiPauseUseOrderedFont");
+
+static Font sFuseOrderedFont;
+static bool sFuseOrderedFontLoaded = false;
+
+void FuseUi_EnsureOrderedFontLoaded() {
+    if (sFuseOrderedFontLoaded) {
+        return;
+    }
+
+    Font_LoadOrderedFont(&sFuseOrderedFont);
+    sFuseOrderedFontLoaded = true;
+}
+
+constexpr int kFontGlyphW = 16;
+constexpr int kFontGlyphH = 16;
+constexpr int kFontGlyphBytes = FONT_CHAR_TEX_SIZE;
+
+void FuseUi_DrawOrderedGlyph(GraphicsContext* gfxCtx, Gfx*& opa, int x, int y, int w, int h, int glyphIndex, u8 r, u8 g,
+                             u8 b, u8 a) {
+    (void)gfxCtx;
+
+    if (w <= 0 || h <= 0) {
+        return;
+    }
+
+    const int clampedGlyph = std::clamp(glyphIndex, 0, 0x8A);
+    void* tex = (void*)(sFuseOrderedFont.fontBuf + (clampedGlyph * kFontGlyphBytes));
+
+    gDPPipeSync(opa++);
+    gDPSetTextureLUT(opa++, G_TT_NONE);
+    gDPSetPrimColor(opa++, 0, 0, r, g, b, a);
+    gDPSetCombineMode(opa++, G_CC_MODULATEI_PRIM, G_CC_MODULATEI_PRIM);
+    gDPLoadTextureBlock_4b(opa++, tex, G_IM_FMT_I, kFontGlyphW, kFontGlyphH, 0, G_TX_NOMIRROR | G_TX_CLAMP,
+                           G_TX_NOMIRROR | G_TX_CLAMP, G_TX_NOMASK, G_TX_NOMASK, G_TX_NOLOD, G_TX_NOLOD);
+    gSPTextureRectangle(opa++, (x << 2), (y << 2), ((x + w) << 2), ((y + h) << 2), G_TX_RENDERTILE, 0, 0, (1 << 10),
+                        (1 << 10));
+}
+
+void FuseUi_DrawOrderedText(GraphicsContext* gfxCtx, Gfx*& opa, int x, int y, float scale, const char* text, u8 r, u8 g,
+                            u8 b, u8 a) {
+    if (text == nullptr) {
+        return;
+    }
+
+    FuseUi_EnsureOrderedFontLoaded();
+
+    const int w = std::max(1, static_cast<int>(std::lround(kFontGlyphW * scale)));
+    const int h = std::max(1, static_cast<int>(std::lround(kFontGlyphH * scale)));
+
+    int penX = x;
+    for (const unsigned char* p = reinterpret_cast<const unsigned char*>(text); *p != '\0'; ++p) {
+        int gi = static_cast<int>(*p) - 0x20;
+        if (gi < 0 || gi >= 0x8B) {
+            gi = static_cast<int>('?') - 0x20;
+            if (gi < 0 || gi >= 0x8B) {
+                gi = 0;
+            }
+        }
+
+        FuseUi_DrawOrderedGlyph(gfxCtx, opa, penX, y, w, h, gi, r, g, b, a);
+        penX += w;
+    }
+}
 
 void SetScissorRect(Gfx*& opa, s32 x, s32 y, s32 w, s32 h) {
     const s32 minX = std::clamp(x, 0, 320);
@@ -387,10 +450,6 @@ struct MaterialEntry {
     bool enabled;
 };
 
-int ReadGlyphPx() {
-    return std::clamp(CVarGetInteger(kPauseGlyphPxCVar, 8), 4, 16);
-}
-
 float ReadScaleFloat(const char* cvarName, float defaultValue) {
     return CVarGetFloat(cvarName, defaultValue);
 }
@@ -461,47 +520,52 @@ void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx*& opa, const MaterialEntry& e
     const s32 nameY = cardY + kRightCardInnerPad + 2;
     constexpr s32 kNameQtyGapPx = 6;
 
-    RestorePauseTextState(gfxCtx, &opa);
-
-    GfxPrint printer;
-    GfxPrint_Init(&printer);
-    GfxPrint_Open(&printer, opa);
-
-    if (selected) {
-        GfxPrint_SetColor(&printer, 255, 255, 0, 255);
-    } else {
-        GfxPrint_SetColor(&printer, 255, 255, 255, 255);
-    }
-
     char qtyText[16];
     std::snprintf(qtyText, sizeof(qtyText), "x%d", entry.quantity);
 
-    const s32 glyphPx = ReadGlyphPx();
     const float nameScale = ReadScaleFloat(kPauseCardNameScaleCVar, 1.0f);
     const float qtyScale = ReadScaleFloat(kPauseCardQtyScaleCVar, 1.0f);
-    const s32 scaledNameGlyphPx = std::max(1, static_cast<s32>(std::lround(static_cast<float>(glyphPx) * nameScale)));
-    const s32 scaledQtyGlyphPx = std::max(1, static_cast<s32>(std::lround(static_cast<float>(glyphPx) * qtyScale)));
+    const s32 scaledNameGlyphPx = std::max(1, static_cast<s32>(std::lround(static_cast<float>(kFontGlyphW) * nameScale)));
+    const s32 scaledQtyGlyphPx = std::max(1, static_cast<s32>(std::lround(static_cast<float>(kFontGlyphW) * qtyScale)));
     const s32 qtyW = TextWidthMonoPx(qtyText, scaledQtyGlyphPx);
     const s32 qtyRight = cardX + cardW - kRightCardInnerPad;
     s32 qtyDrawX = qtyRight - qtyW;
 
     const s32 nameX = textX;
-    const s32 minQtyX = nameX + (glyphPx * 3);
+    const s32 minQtyX = nameX + (scaledNameGlyphPx * 3);
     qtyDrawX = std::max(qtyDrawX, minQtyX);
 
     const s32 nameMaxPx = std::max(0, qtyDrawX - kNameQtyGapPx - nameX);
     const std::string materialName = TruncateToPxEllipsis(entry.def ? entry.def->name : "Unknown", nameMaxPx,
                                                           scaledNameGlyphPx);
 
-    // TODO(FusePause): GfxPrint scale API not available in this TU; keeping scale CVARs for future integration.
-    GfxPrint_SetPosPx(&printer, nameX, nameY);
-    GfxPrint_Printf(&printer, "%s", materialName.c_str());
+    const bool useOrderedFont = CVarGetInteger(kPauseUseOrderedFontCVar, 1) != 0;
+    const u8 textR = 255;
+    const u8 textG = 255;
+    const u8 textB = selected ? 0 : 255;
+    const u8 textA = 255;
 
-    GfxPrint_SetPosPx(&printer, qtyDrawX, nameY);
-    GfxPrint_Printf(&printer, "%s", qtyText);
+    if (useOrderedFont) {
+        RestorePauseTextState(gfxCtx, &opa);
+        FuseUi_DrawOrderedText(gfxCtx, opa, nameX, nameY, nameScale, materialName.c_str(), textR, textG, textB, textA);
+        FuseUi_DrawOrderedText(gfxCtx, opa, qtyDrawX, nameY, qtyScale, qtyText, textR, textG, textB, textA);
+    } else {
+        RestorePauseTextState(gfxCtx, &opa);
 
-    opa = GfxPrint_Close(&printer);
-    GfxPrint_Destroy(&printer);
+        GfxPrint printer;
+        GfxPrint_Init(&printer);
+        GfxPrint_Open(&printer, opa);
+        GfxPrint_SetColor(&printer, textR, textG, textB, textA);
+
+        GfxPrint_SetPosPx(&printer, nameX, nameY);
+        GfxPrint_Printf(&printer, "%s", materialName.c_str());
+
+        GfxPrint_SetPosPx(&printer, qtyDrawX, nameY);
+        GfxPrint_Printf(&printer, "%s", qtyText);
+
+        opa = GfxPrint_Close(&printer);
+        GfxPrint_Destroy(&printer);
+    }
 
     const s32 iconY = cardY + cardH - kRightCardInnerPad - kModifierIconBoxSize;
     for (s32 i = 0; i < kModifierIconRowCount; i++) {
