@@ -223,6 +223,8 @@ constexpr s16 kStatusYOffset = -16;
 constexpr const char* kDurabilityBarCVar = CVAR_DEVELOPER_TOOLS("Fuse.DurabilityBarEnabled");
 constexpr const char* kPauseCardNameScaleCVar = CVAR_DEVELOPER_TOOLS("Fuse.UiPauseCardNameScale");
 constexpr const char* kPauseCardQtyScaleCVar = CVAR_DEVELOPER_TOOLS("Fuse.UiPauseCardQtyScale");
+constexpr const char* kPauseFooterPromptScaleCVar = CVAR_DEVELOPER_TOOLS("Fuse.UiPauseFooterPromptScale");
+constexpr const char* kPauseFooterStatusScaleCVar = CVAR_DEVELOPER_TOOLS("Fuse.UiPauseFooterStatusScale");
 constexpr const char* kPauseUseOrderedFontCVar = CVAR_DEVELOPER_TOOLS("Fuse.UiPauseUseOrderedFont");
 
 static Font sFuseOrderedFont;
@@ -330,6 +332,12 @@ void FuseUi_DrawOrderedText(GraphicsContext* gfxCtx, Gfx*& opa, int x, int y, fl
         FuseUi_DrawOrderedGlyph(gfxCtx, opa, penX, y, w, h, gi, r, g, b, a);
         penX += w;
     }
+}
+
+void FuseUi_DrawOrderedTextWithColor(GraphicsContext* gfxCtx, Gfx*& opa, s32 x, s32 y, float scale, u8 r, u8 g, u8 b,
+                                     u8 a, const char* text) {
+    gDPSetPrimColor(opa++, 0, 0, r, g, b, a);
+    FuseUi_DrawOrderedText(gfxCtx, opa, x, y, scale, text, r, g, b, a);
 }
 
 void SetScissorRect(Gfx*& opa, s32 x, s32 y, s32 w, s32 h) {
@@ -1555,28 +1563,30 @@ void FusePause_DrawModal(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) 
         GfxPrint_SetPosPx(&printer, kTitleX, kTitleY + modalYOffsetPx);
         GfxPrint_Printf(&printer, "Fuse");
 
+        OPA = GfxPrint_Close(&printer);
+        GfxPrint_Destroy(&printer);
+    }
+
+    {
+        const float promptScale = ReadScaleFloat(kPauseFooterPromptScaleCVar, 0.90f);
+        const float statusScale = ReadScaleFloat(kPauseFooterStatusScaleCVar, 0.85f);
         const s32 promptX = kFooterX;
         const s32 promptY = kFooterY + modalYOffsetPx;
         const s32 nextPromptLineY = promptY + kPromptLineSpacing;
 
-        GfxPrint_SetPosPx(&printer, promptX, promptY);
+        const char* promptText = "A: Select   B: Back";
         if (locked) {
-            GfxPrint_Printf(&printer, "B: Back");
+            promptText = "B: Back";
         } else if (confirmMode) {
-            GfxPrint_Printf(&printer, "A: Confirm   B: Cancel");
-        } else {
-            GfxPrint_Printf(&printer, "A: Select   B: Back");
+            promptText = "A: Confirm   B: Cancel";
         }
+
+        FuseUi_DrawOrderedTextWithColor(gfxCtx, OPA, promptX, promptY, promptScale, 255, 255, 255, 255, promptText);
 
         if (locked || (sModal.promptTimer > 0 && sModal.promptType == FusePromptType::AlreadyFused)) {
-            GfxPrint_SetPosPx(&printer, promptX, nextPromptLineY);
-            GfxPrint_SetColor(&printer, 255, 120, 120, 255);
-            GfxPrint_Printf(&printer, "ITEM ALREADY FUSED");
-            GfxPrint_SetColor(&printer, 255, 255, 255, 255);
+            FuseUi_DrawOrderedTextWithColor(gfxCtx, OPA, promptX, nextPromptLineY, statusScale, 255, 120, 120, 255,
+                                            "ITEM ALREADY FUSED");
         }
-
-        OPA = GfxPrint_Close(&printer);
-        GfxPrint_Destroy(&printer);
     }
 
     const char* selectedItemName = PauseItemName(sModal.activeItem, context.hoveredSword);
