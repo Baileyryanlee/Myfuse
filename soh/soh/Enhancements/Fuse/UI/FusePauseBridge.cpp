@@ -203,6 +203,8 @@ constexpr s32 kCardNameTopPad = 2;
 constexpr s32 kCardRowGap = 3;
 constexpr s32 kCardQtyRowExtraPad = 1;
 constexpr s32 kCardModifierBandPad = 6;
+constexpr s32 kCardVanillaIconSize = 24;
+constexpr s32 kCardVanillaIconGap = 4;
 constexpr s32 kOrderedGlyphBasePx = 16;
 
 constexpr s32 kHeaderY = leftCardY + kCardPaddingY;
@@ -423,6 +425,51 @@ void DrawSolidRectOpa(GraphicsContext* gfxCtx, Gfx** gfxp, s32 x, s32 y, s32 w, 
     gSP2Triangles(opa++, 0, 1, 2, 0, 0, 2, 3, 0);
 }
 
+bool FusePause_TryGetVanillaItemIconForMaterial(MaterialId mat, ItemID* outItemId) {
+    if (outItemId == nullptr) {
+        return false;
+    }
+
+    switch (mat) {
+        case MaterialId::DekuNut:
+            *outItemId = ITEM_NUT;
+            return true;
+        case MaterialId::Stick:
+            *outItemId = ITEM_STICK;
+            return true;
+        case MaterialId::Bomb:
+            *outItemId = ITEM_BOMB;
+            return true;
+        default:
+            return false;
+    }
+}
+
+void FusePause_DrawVanillaItemIcon(GraphicsContext* gfxCtx, Gfx*& opa, ItemID itemId, s32 x, s32 y, s32 w, s32 h) {
+    if (gfxCtx == nullptr || w <= 0 || h <= 0) {
+        return;
+    }
+
+    const s32 srcW = 32;
+    const s32 srcH = 32;
+    void* texture = gItemIcons[itemId];
+    if (texture == nullptr) {
+        return;
+    }
+
+    const s32 ds = (srcW << 10) / w;
+    const s32 dt = (srcH << 10) / h;
+
+    gDPPipeSync(opa++);
+    Gfx_SetupDL_42Opa(gfxCtx);
+    gDPSetTextureLUT(opa++, G_TT_NONE);
+    gDPSetPrimColor(opa++, 0, 0, 255, 255, 255, 255);
+    gDPSetCombineMode(opa++, G_CC_MODULATEIA_PRIM, G_CC_MODULATEIA_PRIM);
+    gDPLoadTextureBlock(opa++, texture, G_IM_FMT_RGBA, G_IM_SIZ_32b, srcW, srcH, 0, G_TX_NOMIRROR | G_TX_CLAMP,
+                        G_TX_NOMIRROR | G_TX_CLAMP, G_TX_NOMASK, G_TX_NOMASK, G_TX_NOLOD, G_TX_NOLOD);
+    gSPTextureRectangle(opa++, (x << 2), (y << 2), ((x + w) << 2), ((y + h) << 2), G_TX_RENDERTILE, 0, 0, ds, dt);
+}
+
 // Durability bars must render exclusively through this helper to avoid stray duplicates.
 void DrawDurabilityBar(GraphicsContext* gfxCtx, Gfx** gfxp, s32 x, s32 y, s32 width, s32 height, s32 filled) {
     if (gfxCtx == nullptr || gfxp == nullptr || *gfxp == nullptr) {
@@ -586,6 +633,9 @@ void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx*& opa, const MaterialEntry& e
 
     const s32 textX = spriteX + kSpriteBoxSize + kRightCardInnerPad;
 
+    ItemID vanillaIconItemId = ITEM_NONE;
+    const bool hasVanillaIcon = FusePause_TryGetVanillaItemIconForMaterial(entry.id, &vanillaIconItemId);
+
     char qtyText[16];
     std::snprintf(qtyText, sizeof(qtyText), "x%d", entry.quantity);
 
@@ -605,7 +655,8 @@ void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx*& opa, const MaterialEntry& e
 
     const s32 scaledNameGlyphPx =
         std::max(1, static_cast<s32>(std::lround(static_cast<float>(kOrderedGlyphBasePx) * nameScale)));
-    const s32 nameMaxPx = std::max(0, cardW - (textX - cardX) - kRightCardInnerPad);
+    const s32 iconReservedPx = hasVanillaIcon ? (kCardVanillaIconSize + kCardVanillaIconGap) : 0;
+    const s32 nameMaxPx = std::max(0, cardW - (textX - cardX) - kRightCardInnerPad - iconReservedPx);
     const std::string materialName =
         TruncateToPxEllipsis(entry.def ? entry.def->name : "Unknown", nameMaxPx, scaledNameGlyphPx);
 
@@ -620,7 +671,13 @@ void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx*& opa, const MaterialEntry& e
     const u8 textA = 255;
 
     const s32 atkX = cardX + cardW - kRightCardInnerPad - kAttackBoxW;
-    const s32 atkY = qtyY;
+
+    if (hasVanillaIcon) {
+        const s32 iconX = cardX + cardW - kRightCardInnerPad - kCardVanillaIconSize;
+        const s32 iconY = nameY;
+        FusePause_DrawVanillaItemIcon(gfxCtx, opa, vanillaIconItemId, iconX, iconY, kCardVanillaIconSize,
+                                      kCardVanillaIconSize);
+    }
 
     const s32 qtyGlyphPx =
         std::max(1, static_cast<s32>(std::lround(static_cast<float>(kOrderedGlyphBasePx) * qtyScale)));
