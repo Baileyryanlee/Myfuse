@@ -204,7 +204,6 @@ constexpr s32 kCardRowGap = 3;
 constexpr s32 kCardQtyRowExtraPad = 1;
 constexpr s32 kCardModifierBandPad = 6;
 constexpr s32 kCardVanillaIconSize = 24;
-constexpr s32 kCardVanillaIconGap = 4;
 constexpr s32 kOrderedGlyphBasePx = 16;
 
 constexpr s32 kHeaderY = leftCardY + kCardPaddingY;
@@ -655,8 +654,7 @@ void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx*& opa, const MaterialEntry& e
 
     const s32 scaledNameGlyphPx =
         std::max(1, static_cast<s32>(std::lround(static_cast<float>(kOrderedGlyphBasePx) * nameScale)));
-    const s32 iconReservedPx = hasVanillaIcon ? (kCardVanillaIconSize + kCardVanillaIconGap) : 0;
-    const s32 nameMaxPx = std::max(0, cardW - (textX - cardX) - kRightCardInnerPad - iconReservedPx);
+    const s32 nameMaxPx = std::max(0, cardW - (textX - cardX) - kRightCardInnerPad);
     const std::string materialName =
         TruncateToPxEllipsis(entry.def ? entry.def->name : "Unknown", nameMaxPx, scaledNameGlyphPx);
 
@@ -673,8 +671,8 @@ void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx*& opa, const MaterialEntry& e
     const s32 atkX = cardX + cardW - kRightCardInnerPad - kAttackBoxW;
 
     if (hasVanillaIcon) {
-        const s32 iconX = cardX + cardW - kRightCardInnerPad - kCardVanillaIconSize;
-        const s32 iconY = nameY;
+        const s32 iconX = spriteX + ((kSpriteBoxSize - kCardVanillaIconSize) / 2);
+        const s32 iconY = spriteY + ((kSpriteBoxSize - kCardVanillaIconSize) / 2);
         FusePause_DrawVanillaItemIcon(gfxCtx, opa, vanillaIconItemId, iconX, iconY, kCardVanillaIconSize,
                                       kCardVanillaIconSize);
     }
