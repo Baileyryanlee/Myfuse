@@ -621,7 +621,6 @@ void DrawMaterialCard(GraphicsContext* gfxCtx, Gfx*& opa, const MaterialEntry& e
 
     const s32 atkX = cardX + cardW - kRightCardInnerPad - kAttackBoxW;
     const s32 atkY = qtyY;
-    DrawSolidRectOpa(gfxCtx, &opa, atkX, atkY, kAttackBoxW, kAttackBoxH, 24, 24, 24, 220);
 
     const s32 qtyGlyphPx =
         std::max(1, static_cast<s32>(std::lround(static_cast<float>(kOrderedGlyphBasePx) * qtyScale)));
