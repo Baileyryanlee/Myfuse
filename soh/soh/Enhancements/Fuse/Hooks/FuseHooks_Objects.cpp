@@ -388,8 +388,10 @@ static void MaybeAwardFireKeeseEye(PlayState* play) {
                 continue;
             }
 
-            EnFirefly* firefly = reinterpret_cast<EnFirefly*>(actor);
-            if (!firefly || firefly->auraType != KEESE_AURA_FIRE) {
+            // z_en_firefly.c identifies fire-variant keese via params <= KEESE_FIRE_PERCH,
+            // with the high bit cleared via params &= 0x7FFF during init.
+            const int16_t fireflyParams = (actor->params & 0x7FFF);
+            if (fireflyParams > KEESE_FIRE_PERCH) {
                 continue;
             }
 
