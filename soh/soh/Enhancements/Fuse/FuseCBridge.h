@@ -15,6 +15,7 @@ typedef enum {
     FUSE_MATERIAL_BOMB = 5,
     FUSE_MATERIAL_KEESE_EYE = 6,
     FUSE_MATERIAL_FIRE_JELLY = 7,
+    FUSE_MATERIAL_FIRE_KEESE_EYE = 8,
 } FuseMaterialId;
 
 s32 Fuse_ShieldHasExplosion(PlayState* play, s32* outMaterialId, s32* outDurabilityCur, s32* outDurabilityMax,

@@ -2,6 +2,7 @@
 #include "z64.h"
 #include "z64actor.h"
 #include "overlays/actors/ovl_En_Fz/z_en_fz.h"
+#include "overlays/actors/ovl_En_Firefly/z_en_firefly.h"
 #include "functions.h"
 
 #include "soh/Enhancements/Fuse/Fuse.h"
@@ -17,6 +18,7 @@ static constexpr int16_t kTorchSlugActorId = ACTOR_EN_BW;
 
 // Thrown-rock acquisition timing
 static constexpr int kFramesAfterThrowToCheck = 18;
+static constexpr float kKeeseEyeDropChance = 0.5f;
 
 // Proximity gate for enabling hammer flags (does NOT break rocks by itself; still requires real hit)
 static constexpr float kRockGateRadius = 140.0f;
@@ -36,6 +38,7 @@ static bool gWasHammerAttacking = false;
 static std::unordered_set<void*> gSwordATVictimCooldown;
 static std::unordered_set<void*> gAwardedFrozenShards;
 static std::unordered_set<void*> gAwardedFireJellies;
+static std::unordered_set<void*> gAwardedFireKeeseEyes;
 static uint32_t gSwordBaseDmgFlags[4];
 static bool gSwordBaseValid = false;
 
@@ -270,6 +273,23 @@ static void CleanupAwardedFireJellies(PlayState* play) {
     }
 }
 
+static void CleanupAwardedFireKeeseEyes(PlayState* play) {
+    if (!play) {
+        gAwardedFireKeeseEyes.clear();
+        return;
+    }
+
+    for (auto it = gAwardedFireKeeseEyes.begin(); it != gAwardedFireKeeseEyes.end();) {
+        Actor* tracked = static_cast<Actor*>(*it);
+
+        if (!IsActorStillInLists(play, tracked)) {
+            it = gAwardedFireKeeseEyes.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
 static void MaybeAwardFrozenShard(PlayState* play) {
     if (!play) {
         return;
@@ -343,6 +363,48 @@ static void MaybeAwardFireJelly(PlayState* play) {
 
                 Fuse::Log("[FuseDBG] MatGain: mat=%d qty=%d actor=%p pos=(%.2f,%.2f,%.2f) reason=health0\n",
                           static_cast<int>(MaterialId::FireJelly), newCount, actor, actor->world.pos.x,
+                          actor->world.pos.y, actor->world.pos.z);
+            }
+        }
+    }
+}
+
+static void MaybeAwardFireKeeseEye(PlayState* play) {
+    if (!play) {
+        return;
+    }
+
+    CleanupAwardedFireKeeseEyes(play);
+
+    ActorContext* actorCtx = &play->actorCtx;
+
+    for (int cat = 0; cat < ACTORCAT_MAX; cat++) {
+        for (Actor* actor = actorCtx->actorLists[cat].head; actor; actor = actor->next) {
+            if (actor->id != ACTOR_EN_FIREFLY) {
+                continue;
+            }
+
+            if (gAwardedFireKeeseEyes.count(actor) > 0) {
+                continue;
+            }
+
+            EnFirefly* firefly = reinterpret_cast<EnFirefly*>(actor);
+            if (!firefly || firefly->auraType != KEESE_AURA_FIRE) {
+                continue;
+            }
+
+            if (actor->colChkInfo.health != 0) {
+                continue;
+            }
+
+            gAwardedFireKeeseEyes.insert(actor);
+
+            if (Rand_ZeroOne() < kKeeseEyeDropChance) {
+                Fuse::AddMaterial(MaterialId::FireKeeseEye, 1);
+                const int newCount = Fuse::GetMaterialCount(MaterialId::FireKeeseEye);
+
+                Fuse::Log("[FuseDBG] MatGain: mat=%d qty=%d actor=%p pos=(%.2f,%.2f,%.2f) reason=health0\n",
+                          static_cast<int>(MaterialId::FireKeeseEye), newCount, actor, actor->world.pos.x,
                           actor->world.pos.y, actor->world.pos.z);
             }
         }
@@ -636,6 +698,7 @@ void OnLoadGame_RestoreObjects() {
     gSwordATVictimCooldown.clear();
     gAwardedFrozenShards.clear();
     gAwardedFireJellies.clear();
+    gAwardedFireKeeseEyes.clear();
     gSwordBaseValid = false;
     Fuse::ResetSwordFreezeQueue();
 }
@@ -662,6 +725,7 @@ void OnFrame_Objects_Pre(PlayState* play) {
     UpdateThrownRockAcquisition(play, player);
     MaybeAwardFrozenShard(play);
     MaybeAwardFireJelly(play);
+    MaybeAwardFireKeeseEye(play);
 
     // Rock-breaking behavior (works): apply hammer flags only when rocks are nearby and fuse is active
     const uint8_t hammerLevel = Fuse::GetSwordModifierLevel(ModifierId::Hammerize);
