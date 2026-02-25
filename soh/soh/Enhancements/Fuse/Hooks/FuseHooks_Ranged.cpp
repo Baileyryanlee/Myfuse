@@ -13,6 +13,9 @@ int EnArrow_SetFireDmgFlagsOnly(EnArrow* thisx);
 
 void Fuse_GetRangedFuseStatus(RangedFuseSlot slot, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax);
 void Fuse_GetRangedQueuedStatus(RangedFuseSlot slot, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax);
+extern "C" void Fuse_RegisterRangedBeamEmitter(PlayState* play, RangedFuseSlot slot, Actor* projectile,
+                                                 int materialIdRaw, int durabilityCur, int durabilityMax);
+extern "C" void Fuse_UnregisterRangedBeamEmitter(Actor* projectile);
 static constexpr float kBombableAssistRadius = 120.0f;
 
 static const char* RangedSlotLabel(RangedFuseSlotId slot) {
@@ -344,6 +347,11 @@ extern "C" void FuseHooks_OnArrowProjectileSpawned(PlayState* play, Actor* proje
         return;
     }
 
+    uint8_t beamLevel = 0;
+    if (HasModifier(def->modifiers, def->modifierCount, ModifierId::Beam, &beamLevel) && beamLevel > 0) {
+        Fuse_RegisterRangedBeamEmitter(play, slot, projectile, materialIdRaw, curDurability, maxDurability);
+    }
+
     uint8_t burnLevel = 0;
     if (!HasModifier(def->modifiers, def->modifierCount, ModifierId::Burn, &burnLevel) || burnLevel == 0) {
         return;
@@ -389,6 +397,7 @@ extern "C" void FuseHooks_OnRangedProjectileHit(PlayState* play, Actor* projecti
     }
 
     Fuse::TryMarkRangedProjectileAsFire(fuseSlot, projectile, victim, "actor");
+    Fuse_UnregisterRangedBeamEmitter(projectile);
     Fuse_OnRangedHitActor(play, slot, victim, impactPos);
     Fuse::OnRangedProjectileHitFinalize(fuseSlot, "ProjectileHit");
 }
@@ -401,6 +410,7 @@ extern "C" void FuseHooks_OnRangedProjectileHitSurface(PlayState* play, Actor* p
 
     const RangedFuseSlot slot = isSeed ? RangedFuseSlot::Slingshot : RangedFuseSlot::Arrows;
     Fuse::CommitQueuedRangedFuse(slot, "ProjectileSurfaceHit");
+    Fuse_UnregisterRangedBeamEmitter(projectile);
     Fuse::TryMarkRangedProjectileAsFire(slot, projectile, nullptr, "bg");
     HandleRangedSurfaceHit(play, slot, impactPos, "ProjectileSurfaceHit");
     Fuse::MarkRangedHitResolved(slot, "ProjectileSurfaceHit");

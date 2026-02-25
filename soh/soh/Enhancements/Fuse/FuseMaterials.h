@@ -15,6 +15,7 @@ enum class MaterialId : uint16_t {
     KeeseEye = 6,
     FireJelly = 7,
     FireKeeseEye = 8,
+    BeamosHead = 9,
 };
 
 struct MaterialDef {
