@@ -69,7 +69,6 @@ struct FuseBurnState {
     u16 burnVfxParams = 0;
 };
 
-
 struct FuseBeamEmitterState {
     RangedFuseSlot slot = RangedFuseSlot::Arrows;
     MaterialId materialId = MaterialId::None;
@@ -1541,7 +1540,8 @@ void ApplyRangedFuseSlotMaterial(RangedFuseSlot slot, MaterialId mat) {
             Fuse::FuseArrowsWithMaterial(mat, GetMaterialEffectiveBaseDurabilityForItem(mat, FuseItemType::Arrows));
             return;
         case RangedFuseSlot::Slingshot:
-            Fuse::FuseSlingshotWithMaterial(mat, GetMaterialEffectiveBaseDurabilityForItem(mat, FuseItemType::Slingshot));
+            Fuse::FuseSlingshotWithMaterial(mat,
+                                            GetMaterialEffectiveBaseDurabilityForItem(mat, FuseItemType::Slingshot));
             return;
         case RangedFuseSlot::Hookshot:
             Fuse::FuseHookshotWithMaterial(mat, GetMaterialEffectiveBaseDurabilityForItem(mat, FuseItemType::Hookshot));
@@ -2596,7 +2596,6 @@ int Fuse::GetMaterialEffectiveBaseDurability(MaterialId id) {
     const int overrideValue = Fuse::GetMaterialDurabilityOverride(id);
     return overrideValue >= 0 ? overrideValue : base;
 }
-
 
 static int GetMaterialEffectiveBaseDurabilityForItem(MaterialId id, FuseItemType itemType) {
     int effective = Fuse::GetMaterialEffectiveBaseDurability(id);
@@ -4523,7 +4522,7 @@ void Fuse::TickRangedProjectileBombableProximity(PlayState* play) {
 }
 
 extern "C" void Fuse_RegisterRangedBeamEmitter(PlayState* play, RangedFuseSlot slot, Actor* projectile,
-                                                 int materialIdRaw, int durabilityCur, int durabilityMax) {
+                                               int materialIdRaw, int durabilityCur, int durabilityMax) {
     if (!play || !projectile || projectile->id != ACTOR_EN_ARROW) {
         return;
     }
@@ -4539,10 +4538,10 @@ extern "C" void Fuse_RegisterRangedBeamEmitter(PlayState* play, RangedFuseSlot s
     state.materialId = materialId;
     state.durabilityCur = durabilityCur;
     state.durabilityMax = durabilityMax;
-    state.nextTickFrame = std::max(0, play->gameplayFrames + kBeamTickIntervalFrames);
+    state.nextTickFrame = std::max<int>(0, static_cast<int>(play->gameplayFrames) + kBeamTickIntervalFrames);
 
-    Fuse::Log("[FuseDBG] BeamRegister: slot=%s proj=%p materialId=%d dura=%d/%d\n", RangedSlotName(slot), (void*)projectile,
-              materialIdRaw, durabilityCur, durabilityMax);
+    Fuse::Log("[FuseDBG] BeamRegister: slot=%s proj=%p materialId=%d dura=%d/%d\n", RangedSlotName(slot),
+              (void*)projectile, materialIdRaw, durabilityCur, durabilityMax);
 }
 
 extern "C" void Fuse_UnregisterRangedBeamEmitter(Actor* projectile) {
@@ -4573,7 +4572,8 @@ static void TickRangedProjectileBeam(PlayState* play) {
             continue;
         }
 
-        Vec3f dir = Fuse_Vec3fNormalize(Vec3f{ projectile->velocity.x, projectile->velocity.y, projectile->velocity.z });
+        Vec3f dir =
+            Fuse_Vec3fNormalize(Vec3f{ projectile->velocity.x, projectile->velocity.y, projectile->velocity.z });
         if (Fuse_Vec3fLength(dir) <= 0.001f) {
             dir.x = Math_SinS(projectile->world.rot.y);
             dir.z = Math_CosS(projectile->world.rot.y);
@@ -4595,8 +4595,10 @@ static void TickRangedProjectileBeam(PlayState* play) {
         CollisionPoly* bgPoly = nullptr;
         s32 bgId = -1;
         float maxDist = kBeamRange;
-        if (BgCheck_EntityLineTest1(&play->colCtx, &beamStart, &beamEnd, &bgHitPos, &bgPoly, true, true, true, true, &bgId)) {
-            maxDist = Fuse_Vec3fLength(Vec3f{ bgHitPos.x - beamStart.x, bgHitPos.y - beamStart.y, bgHitPos.z - beamStart.z });
+        if (BgCheck_EntityLineTest1(&play->colCtx, &beamStart, &beamEnd, &bgHitPos, &bgPoly, true, true, true, true,
+                                    &bgId)) {
+            maxDist =
+                Fuse_Vec3fLength(Vec3f{ bgHitPos.x - beamStart.x, bgHitPos.y - beamStart.y, bgHitPos.z - beamStart.z });
         }
 
         Actor* victim = nullptr;
@@ -4608,7 +4610,8 @@ static void TickRangedProjectileBeam(PlayState* play) {
                 continue;
             }
 
-            Vec3f toVictim{ actor->focus.pos.x - beamStart.x, actor->focus.pos.y - beamStart.y, actor->focus.pos.z - beamStart.z };
+            Vec3f toVictim{ actor->focus.pos.x - beamStart.x, actor->focus.pos.y - beamStart.y,
+                            actor->focus.pos.z - beamStart.z };
             const float dist = Fuse_Vec3fLength(toVictim);
             if (dist <= 1.0f || dist > maxDist || dist >= bestDist) {
                 actor = actor->next;
