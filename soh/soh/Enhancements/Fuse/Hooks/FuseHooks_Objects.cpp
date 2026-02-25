@@ -15,6 +15,7 @@
 // Liftable rock actor
 static constexpr int16_t kLiftableRockActorId = ACTOR_EN_ISHI;
 static constexpr int16_t kTorchSlugActorId = ACTOR_EN_BW;
+static constexpr int16_t kBeamosActorId = ACTOR_EN_VM;
 
 // Thrown-rock acquisition timing
 static constexpr int kFramesAfterThrowToCheck = 18;
@@ -39,6 +40,7 @@ static std::unordered_set<void*> gSwordATVictimCooldown;
 static std::unordered_set<void*> gAwardedFrozenShards;
 static std::unordered_set<void*> gAwardedFireJellies;
 static std::unordered_set<void*> gAwardedFireKeeseEyes;
+static std::unordered_set<Actor*> gAwardedBeamosHeads;
 static uint32_t gSwordBaseDmgFlags[4];
 static bool gSwordBaseValid = false;
 
@@ -290,6 +292,23 @@ static void CleanupAwardedFireKeeseEyes(PlayState* play) {
     }
 }
 
+static void CleanupAwardedBeamosHeads(PlayState* play) {
+    if (!play) {
+        gAwardedBeamosHeads.clear();
+        return;
+    }
+
+    for (auto it = gAwardedBeamosHeads.begin(); it != gAwardedBeamosHeads.end();) {
+        Actor* tracked = *it;
+
+        if (!IsActorStillInLists(play, tracked)) {
+            it = gAwardedBeamosHeads.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
 static void MaybeAwardFrozenShard(PlayState* play) {
     if (!play) {
         return;
@@ -408,6 +427,39 @@ static void MaybeAwardFireKeeseEye(PlayState* play) {
                 Fuse::Log("[FuseDBG] MatGain: mat=%d qty=%d actor=%p pos=(%.2f,%.2f,%.2f) reason=health0\n",
                           static_cast<int>(MaterialId::FireKeeseEye), newCount, actor, actor->world.pos.x,
                           actor->world.pos.y, actor->world.pos.z);
+            }
+        }
+    }
+}
+
+static void MaybeAwardBeamosHead(PlayState* play) {
+    if (!play) {
+        return;
+    }
+
+    CleanupAwardedBeamosHeads(play);
+
+    ActorContext* actorCtx = &play->actorCtx;
+
+    for (int cat = 0; cat < ACTORCAT_MAX; cat++) {
+        for (Actor* actor = actorCtx->actorLists[cat].head; actor; actor = actor->next) {
+            if (actor->id != kBeamosActorId) {
+                continue;
+            }
+
+            if (gAwardedBeamosHeads.count(actor) > 0) {
+                continue;
+            }
+
+            if (actor->colChkInfo.health != 0) {
+                continue;
+            }
+
+            gAwardedBeamosHeads.insert(actor);
+
+            if (Rand_ZeroOne() < 0.5f) {
+                Fuse::AddMaterial(MaterialId::BeamosHead, 1);
+                Fuse::Log("[FuseDBG] MatGain: BeamosHead actor=%p\n", actor);
             }
         }
     }
@@ -701,6 +753,7 @@ void OnLoadGame_RestoreObjects() {
     gAwardedFrozenShards.clear();
     gAwardedFireJellies.clear();
     gAwardedFireKeeseEyes.clear();
+    gAwardedBeamosHeads.clear();
     gSwordBaseValid = false;
     Fuse::ResetSwordFreezeQueue();
 }
@@ -728,6 +781,7 @@ void OnFrame_Objects_Pre(PlayState* play) {
     MaybeAwardFrozenShard(play);
     MaybeAwardFireJelly(play);
     MaybeAwardFireKeeseEye(play);
+    MaybeAwardBeamosHead(play);
 
     // Rock-breaking behavior (works): apply hammer flags only when rocks are nearby and fuse is active
     const uint8_t hammerLevel = Fuse::GetSwordModifierLevel(ModifierId::Hammerize);

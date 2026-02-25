@@ -795,7 +795,7 @@ void FuseMenuWindow::DrawElement() {
 
                 const MaterialId inventoryMaterials[] = { MaterialId::Rock, MaterialId::Stick, MaterialId::FrozenShard,
                                                           MaterialId::KeeseEye, MaterialId::FireJelly,
-                                                          MaterialId::FireKeeseEye };
+                                                          MaterialId::FireKeeseEye, MaterialId::BeamosHead };
                 const size_t inventoryMaterialCount = sizeof(inventoryMaterials) / sizeof(inventoryMaterials[0]);
                 for (size_t index = 0; index < inventoryMaterialCount; index++) {
                     const MaterialId id = inventoryMaterials[index];
