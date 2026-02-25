@@ -41,6 +41,10 @@ static const ModifierSpec kFireKeeseEyeMods[] = {
     { ModifierId::Burn, 1 },
 };
 
+static const ModifierSpec kBeamosHeadMods[] = {
+    { ModifierId::Beam, 1 },
+};
+
 constexpr MaterialDef kMaterialDefs[] = {
     { MaterialId::None, "None", 0, 0, nullptr, 0 },
     { MaterialId::Rock, "ROCK", 1, 10, kRockMods, 4 },
@@ -51,6 +55,7 @@ constexpr MaterialDef kMaterialDefs[] = {
     { MaterialId::KeeseEye, "Keese Eye", 0, 4, kKeeseEyeMods, 1 },
     { MaterialId::FireJelly, "Fire Jelly", 0, 10, kFireJellyMods, 1 },
     { MaterialId::FireKeeseEye, "Fire Keese Eye", 0, 1, kFireKeeseEyeMods, 2 },
+    { MaterialId::BeamosHead, "Beamos Head", 4, 100, kBeamosHeadMods, 1 },
 };
 
 } // namespace

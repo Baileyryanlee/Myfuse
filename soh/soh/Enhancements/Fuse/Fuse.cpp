@@ -69,6 +69,15 @@ struct FuseBurnState {
     u16 burnVfxParams = 0;
 };
 
+
+struct FuseBeamEmitterState {
+    RangedFuseSlot slot = RangedFuseSlot::Arrows;
+    MaterialId materialId = MaterialId::None;
+    int durabilityCur = 0;
+    int durabilityMax = 0;
+    int nextTickFrame = -1;
+};
+
 static FuseSaveData gFuseSave; // persistent-ready (not serialized yet)
 static FuseRuntimeState gFuseRuntime;
 static bool sSwordSlotsLoadedFromSaveManager = false;
@@ -95,6 +104,10 @@ static constexpr s16 kBurnVfxColorFlag = 0x4000;
 static constexpr s16 kBurnVfxIntensity = 200;
 static constexpr s16 kBurnVfxXlu = 0;
 static constexpr s16 kBurnVfxDurationFrames = 30;
+static constexpr float kBeamRange = 1600.0f;
+static constexpr int kBeamTickIntervalFrames = 5;
+static constexpr int kBeamDamagePerTick = 2;
+static constexpr float kBeamMinForwardDot = 0.85f;
 static constexpr int kShatterImpulseFrames = 5;
 static constexpr float kShatterImpulseStep = 3.5f;
 static constexpr float kShatterImpulseY = 0.0f;
@@ -119,6 +132,7 @@ static std::unordered_map<Actor*, Vec3f> sFuseFrozenPos;
 static std::unordered_map<Actor*, bool> sFuseFrozenPinned;
 static std::unordered_map<uintptr_t, Vec3f> sProjPrevPos;
 static std::unordered_map<Actor*, FuseSeekState> sSeekStates;
+static std::unordered_map<Actor*, FuseBeamEmitterState> sBeamEmitters;
 static int gLastSwordBgExplodeFrame = -999;
 static int gLastSwordActorExplodeFrame = -999999;
 
@@ -564,6 +578,9 @@ static void ClearFuseFreeze(Actor* actor) {
 }
 
 static bool IsActorAliveInPlay(PlayState* play, Actor* target);
+static FuseItemType RangedSlotItemType(RangedFuseSlot slot);
+static int GetMaterialEffectiveBaseDurabilityForItem(MaterialId id, FuseItemType itemType);
+static void TickRangedProjectileBeam(PlayState* play);
 
 void TickBurnTimers(PlayState* play);
 
@@ -1521,13 +1538,13 @@ void ApplyRangedFuseSlotMaterial(RangedFuseSlot slot, MaterialId mat) {
 
     switch (slot) {
         case RangedFuseSlot::Arrows:
-            Fuse::FuseArrowsWithMaterial(mat, Fuse::GetMaterialEffectiveBaseDurability(mat));
+            Fuse::FuseArrowsWithMaterial(mat, GetMaterialEffectiveBaseDurabilityForItem(mat, FuseItemType::Arrows));
             return;
         case RangedFuseSlot::Slingshot:
-            Fuse::FuseSlingshotWithMaterial(mat, Fuse::GetMaterialEffectiveBaseDurability(mat));
+            Fuse::FuseSlingshotWithMaterial(mat, GetMaterialEffectiveBaseDurabilityForItem(mat, FuseItemType::Slingshot));
             return;
         case RangedFuseSlot::Hookshot:
-            Fuse::FuseHookshotWithMaterial(mat, Fuse::GetMaterialEffectiveBaseDurability(mat));
+            Fuse::FuseHookshotWithMaterial(mat, GetMaterialEffectiveBaseDurabilityForItem(mat, FuseItemType::Hookshot));
             return;
     }
 }
@@ -2580,6 +2597,15 @@ int Fuse::GetMaterialEffectiveBaseDurability(MaterialId id) {
     return overrideValue >= 0 ? overrideValue : base;
 }
 
+
+static int GetMaterialEffectiveBaseDurabilityForItem(MaterialId id, FuseItemType itemType) {
+    int effective = Fuse::GetMaterialEffectiveBaseDurability(id);
+    if (id == MaterialId::BeamosHead && (itemType == FuseItemType::Arrows || itemType == FuseItemType::Slingshot)) {
+        effective = 1;
+    }
+    return effective;
+}
+
 int Fuse::GetMaterialAttackBonusDelta(MaterialId id) {
     auto it = sMaterialDebugOverrides.find(id);
     if (it == sMaterialDebugOverrides.end()) {
@@ -2727,6 +2753,8 @@ static bool Fuse_ModifierAppliesForItem(ModifierId id, FuseItemType itemType) {
                    itemType == FuseItemType::Boomerang || itemType == FuseItemType::Hammer ||
                    itemType == FuseItemType::Arrows || itemType == FuseItemType::Slingshot ||
                    itemType == FuseItemType::Hookshot;
+        case ModifierId::Beam:
+            return itemType == FuseItemType::Arrows || itemType == FuseItemType::Slingshot;
         default:
             return true;
     }
@@ -3526,7 +3554,7 @@ Fuse::FuseResult Fuse::TryQueueRangedFuse(RangedFuseSlot slot, MaterialId mat, c
     if (!Fuse::HasMaterial(mat, 1) || !Fuse::ConsumeMaterial(mat, 1)) {
         if (hasPendingSwap && pendingMat != MaterialId::None) {
             state.materialId = pendingMat;
-            state.durabilityMax = Fuse::GetMaterialEffectiveBaseDurability(pendingMat);
+            state.durabilityMax = GetMaterialEffectiveBaseDurabilityForItem(pendingMat, RangedSlotItemType(slot));
             state.durabilityCur = state.durabilityMax;
             state.inFlight = false;
             state.hadSuccess = false;
@@ -3547,7 +3575,7 @@ Fuse::FuseResult Fuse::TryQueueRangedFuse(RangedFuseSlot slot, MaterialId mat, c
     }
 
     state.materialId = mat;
-    state.durabilityMax = Fuse::GetMaterialEffectiveBaseDurability(mat);
+    state.durabilityMax = GetMaterialEffectiveBaseDurabilityForItem(mat, RangedSlotItemType(slot));
     state.durabilityCur = state.durabilityMax;
     state.inFlight = false;
     state.hadSuccess = false;
@@ -3883,6 +3911,7 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
     sFuseFrozenPinned.clear();
     sBurnStates.clear();
     sSeekStates.clear();
+    sBeamEmitters.clear();
     sShatterImpulseUntilFrame.clear();
     sShatterImpulseDir.clear();
     sShatterImpulseYaw.clear();
@@ -4493,6 +4522,124 @@ void Fuse::TickRangedProjectileBombableProximity(PlayState* play) {
     }
 }
 
+extern "C" void Fuse_RegisterRangedBeamEmitter(PlayState* play, RangedFuseSlot slot, Actor* projectile,
+                                                 int materialIdRaw, int durabilityCur, int durabilityMax) {
+    if (!play || !projectile || projectile->id != ACTOR_EN_ARROW) {
+        return;
+    }
+
+    const MaterialId materialId = static_cast<MaterialId>(materialIdRaw);
+    const uint8_t beamLevel = Fuse::GetMaterialModifierLevel(materialId, RangedSlotItemType(slot), ModifierId::Beam);
+    if (beamLevel == 0 || durabilityCur <= 0) {
+        return;
+    }
+
+    FuseBeamEmitterState& state = sBeamEmitters[projectile];
+    state.slot = slot;
+    state.materialId = materialId;
+    state.durabilityCur = durabilityCur;
+    state.durabilityMax = durabilityMax;
+    state.nextTickFrame = std::max(0, play->gameplayFrames + kBeamTickIntervalFrames);
+
+    Fuse::Log("[FuseDBG] BeamRegister: slot=%s proj=%p materialId=%d dura=%d/%d\n", RangedSlotName(slot), (void*)projectile,
+              materialIdRaw, durabilityCur, durabilityMax);
+}
+
+extern "C" void Fuse_UnregisterRangedBeamEmitter(Actor* projectile) {
+    if (!projectile) {
+        return;
+    }
+
+    sBeamEmitters.erase(projectile);
+}
+
+static void TickRangedProjectileBeam(PlayState* play) {
+    if (!play || sBeamEmitters.empty()) {
+        return;
+    }
+
+    const int frame = play->gameplayFrames;
+    for (auto it = sBeamEmitters.begin(); it != sBeamEmitters.end();) {
+        Actor* projectile = it->first;
+        FuseBeamEmitterState& state = it->second;
+        if (!IsActorAliveInPlay(play, projectile) || projectile->id != ACTOR_EN_ARROW) {
+            Fuse::Log("[FuseDBG] BeamPrune: proj=%p reason=dead\n", (void*)projectile);
+            it = sBeamEmitters.erase(it);
+            continue;
+        }
+
+        if (frame < 0 || frame < state.nextTickFrame) {
+            ++it;
+            continue;
+        }
+
+        Vec3f dir = Fuse_Vec3fNormalize(Vec3f{ projectile->velocity.x, projectile->velocity.y, projectile->velocity.z });
+        if (Fuse_Vec3fLength(dir) <= 0.001f) {
+            dir.x = Math_SinS(projectile->world.rot.y);
+            dir.z = Math_CosS(projectile->world.rot.y);
+            dir.y = 0.0f;
+            dir = Fuse_Vec3fNormalize(dir);
+        }
+
+        if (Fuse_Vec3fLength(dir) <= 0.001f) {
+            state.nextTickFrame = frame + kBeamTickIntervalFrames;
+            ++it;
+            continue;
+        }
+
+        Vec3f beamStart = projectile->world.pos;
+        Vec3f beamEnd{ beamStart.x + (dir.x * kBeamRange), beamStart.y + (dir.y * kBeamRange),
+                       beamStart.z + (dir.z * kBeamRange) };
+
+        Vec3f bgHitPos{ 0.0f, 0.0f, 0.0f };
+        CollisionPoly* bgPoly = nullptr;
+        s32 bgId = -1;
+        float maxDist = kBeamRange;
+        if (BgCheck_EntityLineTest1(&play->colCtx, &beamStart, &beamEnd, &bgHitPos, &bgPoly, true, true, true, true, &bgId)) {
+            maxDist = Fuse_Vec3fLength(Vec3f{ bgHitPos.x - beamStart.x, bgHitPos.y - beamStart.y, bgHitPos.z - beamStart.z });
+        }
+
+        Actor* victim = nullptr;
+        float bestDist = maxDist + 1.0f;
+        Actor* actor = play->actorCtx.actorLists[ACTORCAT_ENEMY].head;
+        while (actor != nullptr) {
+            if (!IsActorAliveInPlay(play, actor) || !FuseBash_IsEnemyActor(actor)) {
+                actor = actor->next;
+                continue;
+            }
+
+            Vec3f toVictim{ actor->focus.pos.x - beamStart.x, actor->focus.pos.y - beamStart.y, actor->focus.pos.z - beamStart.z };
+            const float dist = Fuse_Vec3fLength(toVictim);
+            if (dist <= 1.0f || dist > maxDist || dist >= bestDist) {
+                actor = actor->next;
+                continue;
+            }
+
+            Vec3f toVictimDir = Fuse_Vec3fNormalize(toVictim);
+            if (Fuse_Vec3fDot(dir, toVictimDir) < kBeamMinForwardDot) {
+                actor = actor->next;
+                continue;
+            }
+
+            victim = actor;
+            bestDist = dist;
+            actor = actor->next;
+        }
+
+        if (victim) {
+            const int prevDamage = victim->colChkInfo.damage;
+            victim->colChkInfo.damage = kBeamDamagePerTick;
+            Actor_ApplyDamage(victim);
+            victim->colChkInfo.damage = prevDamage;
+            Fuse::Log("[FuseDBG] BeamTickHit: victimId=0x%04X damage=%d proj=%p\n", victim->id, kBeamDamagePerTick,
+                      (void*)projectile);
+        }
+
+        state.nextTickFrame = frame + kBeamTickIntervalFrames;
+        ++it;
+    }
+}
+
 void Fuse::OnGameFrameUpdate(PlayState* play) {
     if (CVarGetInteger("gFuse.DebugEnemyHpOverride.Reset", 0) != 0) {
         sHpOverrideApplied.clear();
@@ -4506,6 +4653,7 @@ void Fuse::OnGameFrameUpdate(PlayState* play) {
     UpdateRangedFuseLifecycle(play);
     TickSwordBgExplosions(play);
     TickRangedProjectileSeek(play);
+    TickRangedProjectileBeam(play);
     TickRangedProjectileBombableProximity(play);
 
     if (play != nullptr) {
