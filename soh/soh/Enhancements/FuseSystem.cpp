@@ -170,7 +170,7 @@ static void RegisterFuseMod() {
         FuseHooks::OnPlayerUpdate(gPlayState);
     });
 
-    COND_HOOK(OnPlayDrawEnd, true, []() {
+    COND_HOOK(OnPlayDrawBegin, true, []() {
         if (!IsInGameplay()) {
             return;
         }
@@ -180,8 +180,12 @@ static void RegisterFuseMod() {
             Gfx* polyOpa = play->state.gfxCtx->polyOpa.p;
             Gfx* polyXlu = play->state.gfxCtx->polyXlu.p;
             Fuse_DrawRangedBeamEmitters_Hook(play, &polyOpa, &polyXlu);
-            play->state.gfxCtx->polyOpa.p = polyOpa;
-            play->state.gfxCtx->polyXlu.p = polyXlu;
+        }
+    });
+
+    COND_HOOK(OnPlayDrawEnd, true, []() {
+        if (!IsInGameplay()) {
+            return;
         }
 
         RangedFuseMenu::Draw(gPlayState);
