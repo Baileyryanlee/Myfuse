@@ -31,6 +31,8 @@ extern "C" {
 #include "functions.h"
 }
 
+#include "objects/object_vm/object_vm.h"
+
 #include "src/overlays/actors/ovl_En_Dekubaba/z_en_dekubaba.h"
 #include "src/overlays/actors/ovl_En_Bom/z_en_bom.h"
 #include "src/overlays/actors/ovl_En_Tite/z_en_tite.h"
@@ -75,6 +77,9 @@ struct FuseBeamEmitterState {
     int durabilityCur = 0;
     int durabilityMax = 0;
     int nextTickFrame = -1;
+    Vec3f beamStart{};
+    Vec3f beamEnd{};
+    bool hasBeamSegment = false;
 };
 
 static FuseSaveData gFuseSave; // persistent-ready (not serialized yet)
@@ -108,6 +113,8 @@ static constexpr float kBeamRange = 1600.0f;
 static constexpr int kBeamTickIntervalFrames = 5;
 static constexpr int kBeamDamagePerTick = 2;
 static constexpr float kBeamMinForwardDot = 0.85f;
+static constexpr s32 kBeamObjectSpawnRetryFrames = 30;
+static constexpr float kBeamDrawThickness = 1.0f;
 static constexpr int kShatterImpulseFrames = 5;
 static constexpr float kShatterImpulseStep = 3.5f;
 static constexpr float kShatterImpulseY = 0.0f;
@@ -135,6 +142,9 @@ static std::unordered_map<Actor*, FuseSeekState> sSeekStates;
 static std::unordered_map<Actor*, FuseBeamEmitterState> sBeamEmitters;
 static int gLastSwordBgExplodeFrame = -999;
 static int gLastSwordActorExplodeFrame = -999999;
+static s16 sBeamTexScroll = 0;
+
+extern "C" s32 Object_Spawn(ObjectContext* objectCtx, s16 objectId);
 
 static inline bool Fuse_LogDbgEnabled() {
     return CVarGetInteger("gFuseLogDbg", 0) != 0;
@@ -581,6 +591,45 @@ static bool IsActorAliveInPlay(PlayState* play, Actor* target);
 static FuseItemType RangedSlotItemType(RangedFuseSlot slot);
 static int GetMaterialEffectiveBaseDurabilityForItem(MaterialId id, FuseItemType itemType);
 static void TickRangedProjectileBeam(PlayState* play);
+static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp);
+
+static s32 Fuse_EnsureBeamObjectLoaded(PlayState* play) {
+    static s32 sBeamObjIndex = -2;
+    static bool sBeamObjLoaded = false;
+    static bool sBeamObjMissing = false;
+    static s32 sBeamLastSpawnFrame = -1000;
+
+    if (!play) {
+        return -1;
+    }
+
+    s32 objIdx = Object_GetIndex(&play->objectCtx, OBJECT_VM);
+    if (objIdx >= 0) {
+        const bool isLoaded = Object_IsLoaded(&play->objectCtx, objIdx);
+        sBeamObjIndex = objIdx;
+        sBeamObjLoaded = isLoaded;
+        sBeamObjMissing = false;
+        return objIdx;
+    }
+
+    if (play->gameplayFrames - sBeamLastSpawnFrame >= kBeamObjectSpawnRetryFrames) {
+        sBeamLastSpawnFrame = play->gameplayFrames;
+        s32 spawnedIdx = Object_Spawn(&play->objectCtx, OBJECT_VM);
+        sBeamObjIndex = spawnedIdx;
+        sBeamObjLoaded = false;
+        sBeamObjMissing = false;
+        return spawnedIdx;
+    }
+
+    if (!sBeamObjMissing || (play->gameplayFrames % 60) == 0) {
+        Fuse::Log("[FuseVisual] Beam: OBJECT_VM not loaded, skipping\n");
+        sBeamObjMissing = true;
+    }
+
+    (void)sBeamObjIndex;
+    (void)sBeamObjLoaded;
+    return -1;
+}
 
 void TickBurnTimers(PlayState* play);
 
@@ -4604,7 +4653,12 @@ static void TickRangedProjectileBeam(PlayState* play) {
         if (bgBlocked) {
             maxDist =
                 Fuse_Vec3fLength(Vec3f{ bgHitPos.x - beamStart.x, bgHitPos.y - beamStart.y, bgHitPos.z - beamStart.z });
+            beamEnd = bgHitPos;
         }
+
+        state.beamStart = beamStart;
+        state.beamEnd = beamEnd;
+        state.hasBeamSegment = true;
 
         Actor* victim = nullptr;
         float bestDist = maxDist + 1.0f;
@@ -4650,6 +4704,53 @@ static void TickRangedProjectileBeam(PlayState* play) {
         state.nextTickFrame = frame + kBeamTickIntervalFrames;
         ++it;
     }
+}
+
+static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) {
+    (void)polyXluDisp;
+
+    if (!play || !polyOpaDisp || !(*polyOpaDisp) || sBeamEmitters.empty() || !Fuse::IsEnabled()) {
+        return;
+    }
+
+    const s32 objIdx = Fuse_EnsureBeamObjectLoaded(play);
+    if (objIdx < 0 || !Object_IsLoaded(&play->objectCtx, objIdx)) {
+        return;
+    }
+
+    sBeamTexScroll += 0xC;
+    Gfx_SetupDL_25Opa(play->state.gfxCtx);
+
+    const uintptr_t restoreSeg06 = PHYSICAL_TO_VIRTUAL(gSegments[6]);
+    gSPSegment((*polyOpaDisp)++, 0x08, func_80094E78(play->state.gfxCtx, 0, sBeamTexScroll));
+    gSPSegment((*polyOpaDisp)++, 0x06, (uintptr_t)play->objectCtx.status[objIdx].segment);
+
+    for (auto& [projectile, state] : sBeamEmitters) {
+        if (!projectile || !IsActorAliveInPlay(play, projectile) || !state.hasBeamSegment) {
+            continue;
+        }
+
+        Vec3f start = state.beamStart;
+        Vec3f end = state.beamEnd;
+        const s16 yaw = Math_Vec3f_Yaw(&start, &end);
+        const s16 pitch = Math_Vec3f_Pitch(&start, &end);
+        const float dist = Math_Vec3f_DistXYZ(&start, &end);
+        if (dist <= 0.001f) {
+            continue;
+        }
+
+        Matrix_Translate(start.x, start.y, start.z, MTXMODE_NEW);
+        Matrix_RotateZYX(pitch, yaw, 0, MTXMODE_APPLY);
+        Matrix_Scale(kBeamDrawThickness * 0.1f, kBeamDrawThickness * 0.1f, dist * 0.0015f, MTXMODE_APPLY);
+        gSPMatrix((*polyOpaDisp)++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
+        gSPDisplayList((*polyOpaDisp)++, gBeamosLaserDL);
+    }
+
+    gSPSegment((*polyOpaDisp)++, 0x06, restoreSeg06);
+}
+
+extern "C" void Fuse_DrawRangedBeamEmitters_Hook(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) {
+    Fuse_DrawRangedBeamEmitters(play, polyOpaDisp, polyXluDisp);
 }
 
 void Fuse::OnGameFrameUpdate(PlayState* play) {
