@@ -4681,9 +4681,12 @@ static void TickRangedProjectileBeam(PlayState* play) {
 
 static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) {
     (void)polyOpaDisp;
-    (void)polyXluDisp;
 
     if (!play || sBeamEmitters.empty() || !Fuse::IsEnabled()) {
+        return;
+    }
+
+    if (!polyXluDisp || !*polyXluDisp) {
         return;
     }
 
@@ -4715,13 +4718,13 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
 
     sBeamTexScroll += 0xC;
 
-    OPEN_DISPS(play->state.gfxCtx);
     Gfx_SetupDL_25Xlu(play->state.gfxCtx);
+    Gfx* p = *polyXluDisp;
 
     const uintptr_t restoreSeg06 = gSegments[6];
 
-    gSPSegment(POLY_XLU_DISP++, 0x08, (uintptr_t)func_80094E78(play->state.gfxCtx, 0, sBeamTexScroll));
-    gSPSegment(POLY_XLU_DISP++, 0x06, seg06);
+    gSPSegment(p++, 0x08, (uintptr_t)func_80094E78(play->state.gfxCtx, 0, sBeamTexScroll));
+    gSPSegment(p++, 0x06, seg06);
 
     for (auto& [projectile, state] : sBeamEmitters) {
         if (!projectile || !IsActorAliveInPlay(play, projectile) || !state.hasBeamSegment) {
@@ -4740,12 +4743,12 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
         Matrix_Translate(start.x, start.y, start.z, MTXMODE_NEW);
         Matrix_RotateZYX(pitch, yaw, 0, MTXMODE_APPLY);
         Matrix_Scale(kBeamDrawThickness * 0.1f, kBeamDrawThickness * 0.1f, dist * 0.0015f, MTXMODE_APPLY);
-        gSPMatrix(POLY_XLU_DISP++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
-        gSPDisplayList(POLY_XLU_DISP++, (Gfx*)gBeamosLaserDL);
+        gSPMatrix(p++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
+        gSPDisplayList(p++, (Gfx*)gBeamosLaserDL);
     }
 
-    gSPSegment(POLY_XLU_DISP++, 0x06, restoreSeg06);
-    CLOSE_DISPS(play->state.gfxCtx);
+    gSPSegment(p++, 0x06, restoreSeg06);
+    *polyXluDisp = p;
 }
 
 extern "C" void Fuse_DrawRangedBeamEmitters_Hook(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) {
