@@ -103,6 +103,7 @@ static constexpr s16 kBurnVfxColorFlag = 0x4000;
 static constexpr s16 kBurnVfxIntensity = 200;
 static constexpr s16 kBurnVfxXlu = 0;
 static constexpr s16 kBurnVfxDurationFrames = 30;
+static constexpr float kBeamStartForwardOffset = 20.0f;
 static constexpr float kBeamRange = 1600.0f;
 static constexpr int kBeamTickIntervalFrames = 5;
 static constexpr int kBeamDamagePerTick = 2;
@@ -4587,7 +4588,9 @@ static void TickRangedProjectileBeam(PlayState* play) {
             continue;
         }
 
-        Vec3f beamStart = projectile->world.pos;
+        Vec3f beamStart{ projectile->world.pos.x + (dir.x * kBeamStartForwardOffset),
+                         projectile->world.pos.y + (dir.y * kBeamStartForwardOffset),
+                         projectile->world.pos.z + (dir.z * kBeamStartForwardOffset) };
         Vec3f beamEnd{ beamStart.x + (dir.x * kBeamRange), beamStart.y + (dir.y * kBeamRange),
                        beamStart.z + (dir.z * kBeamRange) };
 
