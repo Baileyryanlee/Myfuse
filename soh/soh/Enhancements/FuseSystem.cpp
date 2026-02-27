@@ -180,6 +180,8 @@ static void RegisterFuseMod() {
             Gfx* polyOpa = play->state.gfxCtx->polyOpa.p;
             Gfx* polyXlu = play->state.gfxCtx->polyXlu.p;
             Fuse_DrawRangedBeamEmitters_Hook(play, &polyOpa, &polyXlu);
+            play->state.gfxCtx->polyOpa.p = polyOpa;
+            play->state.gfxCtx->polyXlu.p = polyXlu;
         }
     });
 
