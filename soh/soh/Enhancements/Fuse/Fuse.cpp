@@ -4538,7 +4538,7 @@ extern "C" void Fuse_RegisterRangedBeamEmitter(PlayState* play, RangedFuseSlot s
     state.materialId = materialId;
     state.durabilityCur = durabilityCur;
     state.durabilityMax = durabilityMax;
-    state.nextTickFrame = std::max<int>(0, static_cast<int>(play->gameplayFrames) + kBeamTickIntervalFrames);
+    state.nextTickFrame = static_cast<int>(play->gameplayFrames);
 
     Fuse::Log("[FuseDBG] BeamRegister: slot=%s proj=%p materialId=%d dura=%d/%d\n", RangedSlotName(slot),
               (void*)projectile, materialIdRaw, durabilityCur, durabilityMax);
@@ -4595,8 +4595,10 @@ static void TickRangedProjectileBeam(PlayState* play) {
         CollisionPoly* bgPoly = nullptr;
         s32 bgId = -1;
         float maxDist = kBeamRange;
-        if (BgCheck_EntityLineTest1(&play->colCtx, &beamStart, &beamEnd, &bgHitPos, &bgPoly, true, true, true, true,
-                                    &bgId)) {
+        const bool bgBlocked =
+            BgCheck_EntityLineTest1(&play->colCtx, &beamStart, &beamEnd, &bgHitPos, &bgPoly, true, true, true, true,
+                                    &bgId);
+        if (bgBlocked) {
             maxDist =
                 Fuse_Vec3fLength(Vec3f{ bgHitPos.x - beamStart.x, bgHitPos.y - beamStart.y, bgHitPos.z - beamStart.z });
         }
@@ -4634,8 +4636,12 @@ static void TickRangedProjectileBeam(PlayState* play) {
             victim->colChkInfo.damage = kBeamDamagePerTick;
             Actor_ApplyDamage(victim);
             victim->colChkInfo.damage = prevDamage;
-            Fuse::Log("[FuseDBG] BeamTickHit: victimId=0x%04X damage=%d proj=%p\n", victim->id, kBeamDamagePerTick,
-                      (void*)projectile);
+            Fuse::Log("[FuseDBG] BeamHit: proj=%p victim=%p id=0x%04X dmg=%d\n", (void*)projectile, (void*)victim,
+                      victim->id, kBeamDamagePerTick);
+        } else if (bgBlocked) {
+            Fuse::Log("[FuseDBG] BeamTick: bgBlock proj=%p\n", (void*)projectile);
+        } else {
+            Fuse::Log("[FuseDBG] BeamTick: noTarget proj=%p\n", (void*)projectile);
         }
 
         state.nextTickFrame = frame + kBeamTickIntervalFrames;
