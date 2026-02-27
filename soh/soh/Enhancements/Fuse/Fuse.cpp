@@ -4709,19 +4709,18 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
         return;
     }
 
-    GfxContext* gfxCtx = play->state.gfxCtx;
-    if (gfxCtx == nullptr) {
+    if (play->state.gfxCtx == nullptr) {
         return;
     }
 
     sBeamTexScroll += 0xC;
 
-    OPEN_DISPS(gfxCtx);
-    Gfx_SetupDL_25Xlu(gfxCtx);
+    OPEN_DISPS(play->state.gfxCtx);
+    Gfx_SetupDL_25Xlu(play->state.gfxCtx);
 
     const uintptr_t restoreSeg06 = gSegments[6];
 
-    gSPSegment(POLY_XLU_DISP++, 0x08, (uintptr_t)func_80094E78(gfxCtx, 0, sBeamTexScroll));
+    gSPSegment(POLY_XLU_DISP++, 0x08, (uintptr_t)func_80094E78(play->state.gfxCtx, 0, sBeamTexScroll));
     gSPSegment(POLY_XLU_DISP++, 0x06, seg06);
 
     for (auto& [projectile, state] : sBeamEmitters) {
@@ -4741,12 +4740,12 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
         Matrix_Translate(start.x, start.y, start.z, MTXMODE_NEW);
         Matrix_RotateZYX(pitch, yaw, 0, MTXMODE_APPLY);
         Matrix_Scale(kBeamDrawThickness * 0.1f, kBeamDrawThickness * 0.1f, dist * 0.0015f, MTXMODE_APPLY);
-        gSPMatrix(POLY_XLU_DISP++, MATRIX_NEWMTX(gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
+        gSPMatrix(POLY_XLU_DISP++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
         gSPDisplayList(POLY_XLU_DISP++, (Gfx*)gBeamosLaserDL);
     }
 
     gSPSegment(POLY_XLU_DISP++, 0x06, restoreSeg06);
-    CLOSE_DISPS(gfxCtx);
+    CLOSE_DISPS(play->state.gfxCtx);
 }
 
 extern "C" void Fuse_DrawRangedBeamEmitters_Hook(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) {
