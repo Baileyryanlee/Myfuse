@@ -19,6 +19,7 @@ extern "C" {
 #include "z64.h"
 #include "variables.h"
 extern PlayState* gPlayState;
+void Fuse_DrawRangedBeamEmitters_Hook(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp);
 }
 
 static std::shared_ptr<FuseMenuWindow> sFuseMenuWindow;
@@ -171,6 +172,15 @@ static void RegisterFuseMod() {
     COND_HOOK(OnPlayDrawEnd, true, []() {
         if (!IsInGameplay()) {
             return;
+        }
+
+        PlayState* play = gPlayState;
+        if (play != nullptr && play->state.gfxCtx != nullptr) {
+            Gfx* polyOpa = play->state.gfxCtx->polyOpa.p;
+            Gfx* polyXlu = play->state.gfxCtx->polyXlu.p;
+            Fuse_DrawRangedBeamEmitters_Hook(play, &polyOpa, &polyXlu);
+            play->state.gfxCtx->polyOpa.p = polyOpa;
+            play->state.gfxCtx->polyXlu.p = polyXlu;
         }
 
         RangedFuseMenu::Draw(gPlayState);
