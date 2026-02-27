@@ -14,6 +14,15 @@
 #include <fast/Fast3dWindow.h>
 #include <fast/resource/ResourceType.h>
 #include <fast/resource/type/DisplayList.h>
+#include <unordered_map>
+
+#include "soh/Enhancements/Fuse/FuseState.h"
+
+extern "C" {
+#include "functions.h"
+#include "objects/object_vm/object_vm.h"
+s32 Object_Spawn(ObjectContext* objectCtx, s16 objectId);
+}
 
 extern "C" PlayState* gPlayState;
 
@@ -508,4 +517,102 @@ extern "C" void ResourceMgr_ClearSkeletons() {
 
 extern "C" s32* ResourceMgr_LoadCSByName(const char* path) {
     return (s32*)ResourceMgr_GetResourceDataByNameHandlingMQ(path);
+}
+
+namespace {
+struct FuseBeamEmitterState {
+    Vec3f beamStart{};
+    Vec3f beamEnd{};
+    bool hasBeamSegment = false;
+};
+
+std::unordered_map<Actor*, FuseBeamEmitterState> sBeamEmitters;
+
+static s32 Fuse_EnsureBeamObjectLoaded(PlayState* play) {
+    if (!play) {
+        return -1;
+    }
+
+    s32 slot = Object_GetIndex(&play->objectCtx, OBJECT_VM);
+    if (slot < 0) {
+        slot = Object_Spawn(&play->objectCtx, OBJECT_VM);
+    }
+    return slot;
+}
+} // namespace
+
+extern "C" void Fuse_RegisterRangedBeamEmitter(PlayState* play, RangedFuseSlot slot, Actor* projectile, int materialIdRaw,
+                                                 int durabilityCur, int durabilityMax) {
+    (void)play;
+    (void)slot;
+    (void)materialIdRaw;
+    (void)durabilityCur;
+    (void)durabilityMax;
+
+    if (!projectile) {
+        return;
+    }
+
+    sBeamEmitters[projectile] = FuseBeamEmitterState{};
+}
+
+extern "C" void Fuse_UnregisterRangedBeamEmitter(Actor* projectile) {
+    if (!projectile) {
+        return;
+    }
+    sBeamEmitters.erase(projectile);
+}
+
+extern "C" void Fuse_DrawRangedBeamEmitters_Hook(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) {
+    (void)polyXluDisp;
+
+    if (!play || !polyOpaDisp || !(*polyOpaDisp) || sBeamEmitters.empty()) {
+        return;
+    }
+
+    const s32 objSlot = Fuse_EnsureBeamObjectLoaded(play);
+    if (objSlot < 0 || !Object_IsLoaded(&play->objectCtx, objSlot)) {
+        if ((play->gameplayFrames % 60) == 0) {
+            osSyncPrintf("[FuseDBG] BeamDrawSkip: OBJECT_VM not loaded\n");
+        }
+        return;
+    }
+
+    void* segPtr = play->objectCtx.status[objSlot].segment;
+    if (!segPtr) {
+        return;
+    }
+
+    const uintptr_t seg06 = (uintptr_t)segPtr;
+    if (seg06 == 0 || seg06 == (uintptr_t)-1) {
+        return;
+    }
+
+    const uintptr_t restoreSeg06 = gSegments[6];
+
+    gSPSegment((*polyOpaDisp)++, 0x08, func_80094E78(play->state.gfxCtx, 0, 0));
+    gSPSegment((*polyOpaDisp)++, 0x06, seg06);
+
+    for (const auto& [projectile, state] : sBeamEmitters) {
+        if (!projectile || !state.hasBeamSegment) {
+            continue;
+        }
+
+        Vec3f start = state.beamStart;
+        Vec3f end = state.beamEnd;
+        const s16 yaw = Math_Vec3f_Yaw(&start, &end);
+        const s16 pitch = Math_Vec3f_Pitch(&start, &end);
+        const float dist = Math_Vec3f_DistXYZ(&start, &end);
+        if (dist <= 0.001f) {
+            continue;
+        }
+
+        Matrix_Translate(start.x, start.y, start.z, MTXMODE_NEW);
+        Matrix_RotateZYX(pitch, yaw, 0, MTXMODE_APPLY);
+        Matrix_Scale(0.1f, 0.1f, dist * 0.0015f, MTXMODE_APPLY);
+        gSPMatrix((*polyOpaDisp)++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
+        gSPDisplayList((*polyOpaDisp)++, gBeamosLaserDL);
+    }
+
+    gSPSegment((*polyOpaDisp)++, 0x06, restoreSeg06);
 }
