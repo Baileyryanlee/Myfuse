@@ -113,7 +113,6 @@ static constexpr float kBeamRange = 1600.0f;
 static constexpr int kBeamTickIntervalFrames = 5;
 static constexpr int kBeamDamagePerTick = 2;
 static constexpr float kBeamMinForwardDot = 0.85f;
-static constexpr s32 kBeamObjectSpawnRetryFrames = 30;
 static constexpr float kBeamDrawThickness = 1.0f;
 static constexpr int kShatterImpulseFrames = 5;
 static constexpr float kShatterImpulseStep = 3.5f;
@@ -594,41 +593,16 @@ static void TickRangedProjectileBeam(PlayState* play);
 static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp);
 
 static s32 Fuse_EnsureBeamObjectLoaded(PlayState* play) {
-    static s32 sBeamObjIndex = -2;
-    static bool sBeamObjLoaded = false;
-    static bool sBeamObjMissing = false;
-    static s32 sBeamLastSpawnFrame = -1000;
-
     if (!play) {
         return -1;
     }
 
-    s32 objIdx = Object_GetIndex(&play->objectCtx, OBJECT_VM);
-    if (objIdx >= 0) {
-        const bool isLoaded = Object_IsLoaded(&play->objectCtx, objIdx);
-        sBeamObjIndex = objIdx;
-        sBeamObjLoaded = isLoaded;
-        sBeamObjMissing = false;
-        return objIdx;
+    s32 objSlot = Object_GetIndex(&play->objectCtx, OBJECT_VM);
+    if (objSlot < 0) {
+        objSlot = Object_Spawn(&play->objectCtx, OBJECT_VM);
     }
 
-    if (play->gameplayFrames - sBeamLastSpawnFrame >= kBeamObjectSpawnRetryFrames) {
-        sBeamLastSpawnFrame = play->gameplayFrames;
-        s32 spawnedIdx = Object_Spawn(&play->objectCtx, OBJECT_VM);
-        sBeamObjIndex = spawnedIdx;
-        sBeamObjLoaded = false;
-        sBeamObjMissing = false;
-        return spawnedIdx;
-    }
-
-    if (!sBeamObjMissing || (play->gameplayFrames % 60) == 0) {
-        Fuse::Log("[FuseVisual] Beam: OBJECT_VM not loaded, skipping\n");
-        sBeamObjMissing = true;
-    }
-
-    (void)sBeamObjIndex;
-    (void)sBeamObjLoaded;
-    return -1;
+    return objSlot;
 }
 
 void TickBurnTimers(PlayState* play);
@@ -4709,21 +4683,34 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
     (void)polyXluDisp;
 
     if (!play || !polyOpaDisp || !(*polyOpaDisp) || sBeamEmitters.empty() || !Fuse::IsEnabled()) {
-    return;
-}
+        return;
+    }
 
-const s32 objIdx = Fuse_EnsureBeamObjectLoaded(play);
-if (objIdx < 0 || !Object_IsLoaded(&play->objectCtx, objIdx)) {
-    return;
-}
+    const s32 objSlot = Fuse_EnsureBeamObjectLoaded(play);
+    if (objSlot < 0 || !Object_IsLoaded(&play->objectCtx, objSlot)) {
+        if ((play->gameplayFrames % 60) == 0) {
+            Fuse::Log("[FuseDBG] BeamDrawSkip: OBJECT_VM not loaded\n");
+        }
+        return;
+    }
 
-sBeamTexScroll += 0xC;
-Gfx_SetupDL_25Opa(play->state.gfxCtx);
+    void* segPtr = play->objectCtx.status[objSlot].segment;
+    if (!segPtr) {
+        return;
+    }
 
-const uintptr_t restoreSeg06 = gSegments[6];
+    const uintptr_t seg06 = (uintptr_t)segPtr;
+    if (seg06 == 0 || seg06 == (uintptr_t)-1) {
+        return;
+    }
 
-gSPSegment((*polyOpaDisp)++, 0x08, (uintptr_t)func_80094E78(play->state.gfxCtx, 0, sBeamTexScroll));
-gSPSegment((*polyOpaDisp)++, 0x06, (uintptr_t)play->objectCtx.status[objIdx].segment);
+    sBeamTexScroll += 0xC;
+    Gfx_SetupDL_25Opa(play->state.gfxCtx);
+
+    const uintptr_t restoreSeg06 = gSegments[6];
+
+    gSPSegment((*polyOpaDisp)++, 0x08, (uintptr_t)func_80094E78(play->state.gfxCtx, 0, sBeamTexScroll));
+    gSPSegment((*polyOpaDisp)++, 0x06, seg06);
 
     for (auto& [projectile, state] : sBeamEmitters) {
         if (!projectile || !IsActorAliveInPlay(play, projectile) || !state.hasBeamSegment) {
