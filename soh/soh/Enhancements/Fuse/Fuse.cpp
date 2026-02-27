@@ -4680,13 +4680,7 @@ static void TickRangedProjectileBeam(PlayState* play) {
 }
 
 static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) {
-    (void)polyOpaDisp;
-
     if (!play || sBeamEmitters.empty() || !Fuse::IsEnabled()) {
-        return;
-    }
-
-    if (!polyXluDisp || !*polyXluDisp) {
         return;
     }
 
@@ -4716,15 +4710,24 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
         return;
     }
 
+    Gfx** targetDisp = nullptr;
+    if (polyXluDisp && *polyXluDisp) {
+        Gfx_SetupDL_25Xlu(play->state.gfxCtx);
+        targetDisp = polyXluDisp;
+    } else if (polyOpaDisp && *polyOpaDisp) {
+        Gfx_SetupDL_25Opa(play->state.gfxCtx);
+        targetDisp = polyOpaDisp;
+    } else {
+        return;
+    }
+
     sBeamTexScroll += 0xC;
 
-    Gfx_SetupDL_25Xlu(play->state.gfxCtx);
-    Gfx* p = *polyXluDisp;
-
+    Gfx* p = *targetDisp;
     const uintptr_t restoreSeg06 = gSegments[6];
 
     gSPSegment(p++, 0x08, (uintptr_t)func_80094E78(play->state.gfxCtx, 0, sBeamTexScroll));
-    gSPSegment(p++, 0x06, seg06);
+    gSPSegment(p++, 0x06, (uintptr_t)play->objectCtx.status[objSlot].segment);
 
     for (auto& [projectile, state] : sBeamEmitters) {
         if (!projectile || !IsActorAliveInPlay(play, projectile) || !state.hasBeamSegment) {
@@ -4748,7 +4751,7 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
     }
 
     gSPSegment(p++, 0x06, restoreSeg06);
-    *polyXluDisp = p;
+    *targetDisp = p;
 }
 
 extern "C" void Fuse_DrawRangedBeamEmitters_Hook(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) {
