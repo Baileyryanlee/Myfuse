@@ -225,7 +225,8 @@ FuseSlot& FuseSaveData::GetActiveShieldSlot([[maybe_unused]] const PlayState* pl
     const bool hasShield = IsShieldEquipValue(equipValue);
     const ShieldSlotKey key = hasShield ? ShieldSlotKeyFromEquipValue(equipValue) : ShieldSlotKey::Deku;
     FuseSlot& slot = swordSlots[ShieldSlotIndex(key)];
-    if (hasShield) {
+    // gFuseDbgEquipRestoreShield: enable shield equip/restore spam logs.
+    if (hasShield && CVarGetInteger("gFuseDbgEquipRestoreShield", 0) != 0) {
         Fuse::Log("[FuseDBG] Equip: shield=%s restore material=%d dura=%d/%d\n", ShieldSlotName(key),
                   static_cast<int>(slot.materialId), slot.durabilityCur, slot.durabilityMax);
     }
