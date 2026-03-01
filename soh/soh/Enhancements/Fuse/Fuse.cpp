@@ -4566,8 +4566,10 @@ static void Fuse_TickBeamSegmentAndDamage(PlayState* play, FuseBeamEmitterState&
     CollisionPoly* bgPoly = nullptr;
     s32 bgId = -1;
     float maxDist = kBeamRange;
+    Vec3f startTmp = beamStart;
+    Vec3f endTmp = beamEnd;
     const bool bgBlocked =
-        BgCheck_EntityLineTest1(&play->colCtx, &beamStart, &beamEnd, &bgHitPos, &bgPoly, true, true, true, true, &bgId);
+        BgCheck_EntityLineTest1(&play->colCtx, &startTmp, &endTmp, &bgHitPos, &bgPoly, true, true, true, true, &bgId);
     if (bgBlocked) {
         maxDist =
             Fuse_Vec3fLength(Vec3f{ bgHitPos.x - beamStart.x, bgHitPos.y - beamStart.y, bgHitPos.z - beamStart.z });
@@ -4843,7 +4845,7 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
     Gfx* p = *polyOpaDisp;
     const uintptr_t restoreSeg06 = gSegments[6];
 
-    gSPSegment(p++, 0x08, func_80094E78(play->state.gfxCtx, 0, sBeamTexScroll));
+    gSPSegment(p++, 0x08, (uintptr_t)func_80094E78(play->state.gfxCtx, 0, sBeamTexScroll));
     gSPSegment(p++, 0x06, (uintptr_t)play->objectCtx.status[objSlot].segment);
 
     auto drawState = [&](const FuseBeamEmitterState& state, bool valid) {
@@ -4865,10 +4867,11 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
         Matrix_Scale(kBeamDrawThickness * 0.1f, kBeamDrawThickness * 0.1f, dist * 0.0015f, MTXMODE_APPLY);
         gSPMatrix(p++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
 
-        Gfx* beamDl = gBeamosLaserDL;
-        const uintptr_t raw = (uintptr_t)beamDl;
+        const char* pipelineName = gBeamosLaserDL;
+        Gfx* beamDl = (Gfx*)SEGMENTED_TO_VIRTUAL(pipelineName);
+        const uintptr_t raw = (uintptr_t)pipelineName;
         if ((raw >> 24) != 0x06) {
-            beamDl = (Gfx*)SEGMENTED_TO_VIRTUAL(gBeamosLaserDL);
+            beamDl = (Gfx*)SEGMENTED_TO_VIRTUAL(pipelineName);
             if (!beamDl && (play->gameplayFrames - sLastBeamDrawInvalidDlLogFrame >= 60)) {
                 sLastBeamDrawInvalidDlLogFrame = play->gameplayFrames;
                 Fuse::Log("[FuseDBG] BeamDrawSkip: dl invalid raw=%p\n", (void*)raw);
