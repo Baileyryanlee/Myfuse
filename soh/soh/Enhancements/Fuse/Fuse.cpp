@@ -87,6 +87,8 @@ struct FuseBeamEmitterState {
     Vec3f beamStart{};
     Vec3f beamEnd{};
     bool hasBeamSegment = false;
+    bool pendingPrune = false;
+    int pruneAfterFrame = 0;
 };
 
 static FuseSaveData gFuseSave; // persistent-ready (not serialized yet)
@@ -152,6 +154,7 @@ static int gLastSwordActorExplodeFrame = -999999;
 static s16 sBeamTexScroll = 0;
 static int sLastBeamDrawInvalidDlLogFrame = -999999;
 static int sLastBeamShieldDrainLogFrame = -999999;
+static int sLastBeamDrawNoEmittersLogFrame = -999999;
 
 extern "C" s32 Object_Spawn(ObjectContext* objectCtx, s16 objectId);
 
@@ -4642,6 +4645,8 @@ extern "C" void Fuse_RegisterRangedBeamEmitter(PlayState* play, RangedFuseSlot s
     state.durabilityMax = durabilityMax;
     state.nextTickFrame = static_cast<int>(play->gameplayFrames);
     state.hasBeamSegment = false;
+    state.pendingPrune = false;
+    state.pruneAfterFrame = 0;
 
     Fuse::Log("[FuseDBG] BeamRegister: slot=%s proj=%p materialId=%d dura=%d/%d\n", RangedSlotName(slot),
               (void*)projectile, materialIdRaw, durabilityCur, durabilityMax);
@@ -4665,10 +4670,24 @@ static void TickRangedProjectileBeam(PlayState* play) {
         Actor* projectile = it->first;
         FuseBeamEmitterState& state = it->second;
         if (!IsActorAliveInPlay(play, projectile) || projectile->id != ACTOR_EN_ARROW) {
+            if (!state.pendingPrune) {
+                state.pendingPrune = true;
+                state.pruneAfterFrame = frame + 1;
+                ++it;
+                continue;
+            }
+
+            if (frame < state.pruneAfterFrame) {
+                ++it;
+                continue;
+            }
+
             Fuse::Log("[FuseDBG] BeamPrune: proj=%p reason=dead\n", (void*)projectile);
             it = sBeamEmitters.erase(it);
             continue;
         }
+
+        state.pendingPrune = false;
 
         if (frame < 0 || frame < state.nextTickFrame) {
             ++it;
@@ -4819,6 +4838,10 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
     }
 
     if (sBeamEmitters.empty() && sShieldBeamEmitters.empty()) {
+        if (play->gameplayFrames - sLastBeamDrawNoEmittersLogFrame >= 60) {
+            sLastBeamDrawNoEmittersLogFrame = play->gameplayFrames;
+            Fuse::Log("[FuseDBG] BeamDrawSkip: no_emitters\n");
+        }
         return;
     }
 
@@ -4842,8 +4865,30 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
 
     Gfx_SetupDL_25Opa(play->state.gfxCtx);
 
-    Gfx* p = *polyOpaDisp;
+    Gfx** targetDisp = polyOpaDisp;
+    Gfx* p = *targetDisp;
     const uintptr_t restoreSeg06 = gSegments[6];
+
+    bool hasAnyBeamSegment = false;
+    for (const auto& [projectile, state] : sBeamEmitters) {
+        (void)projectile;
+        if (state.hasBeamSegment) {
+            hasAnyBeamSegment = true;
+            break;
+        }
+    }
+    if (!hasAnyBeamSegment) {
+        for (const auto& [player, state] : sShieldBeamEmitters) {
+            (void)player;
+            if (state.hasBeamSegment) {
+                hasAnyBeamSegment = true;
+                break;
+            }
+        }
+    }
+    if (hasAnyBeamSegment) {
+        gDPNoOp(p++);
+    }
 
     gSPSegment(p++, 0x08, (uintptr_t)func_80094E78(play->state.gfxCtx, 0, sBeamTexScroll));
     gSPSegment(p++, 0x06, (uintptr_t)play->objectCtx.status[objSlot].segment);
@@ -4890,7 +4935,7 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
     }
 
     gSPSegment(p++, 0x06, restoreSeg06);
-    *polyOpaDisp = p;
+    *targetDisp = p;
 }
 
 extern "C" void Fuse_DrawRangedBeamEmitters_Hook(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) {
