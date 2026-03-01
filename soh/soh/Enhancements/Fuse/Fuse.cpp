@@ -4918,8 +4918,7 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
         Matrix_Scale(kBeamDrawThickness * 0.1f, kBeamDrawThickness * 0.1f, dist * 0.0015f, MTXMODE_APPLY);
         gSPMatrix(p++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
 
-        Gfx* beamDl = gBeamosLaserDL;
-        const uintptr_t raw = (uintptr_t)beamDl;
+        const uintptr_t raw = (uintptr_t)gBeamosLaserDL;
         if ((raw >> 24) != 0x06) {
             if (play->gameplayFrames - sLastBeamDrawInvalidDlLogFrame >= 60) {
                 sLastBeamDrawInvalidDlLogFrame = play->gameplayFrames;
@@ -4927,7 +4926,7 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
             }
         }
 
-        gSPDisplayList(p++, beamDl);
+        gSPDisplayList(p++, gBeamosLaserDL);
     };
 
     for (auto& [projectile, state] : sBeamEmitters) {
