@@ -2,6 +2,7 @@
 
 #include "Fuse.h"
 #include "soh/SaveManager.h"
+#include "libultraship/bridge/consolevariablebridge.h"
 
 #include <cstdint>
 #include <algorithm>
@@ -72,8 +73,8 @@ void LogShieldSlotPersistenceEvent(const char* prefix, ShieldSlotKey slotKey, co
     const int material = static_cast<int>(slot.materialId);
     const int durabilityCur = slot.durabilityCur;
     const int durabilityMax = slot.durabilityMax;
-    Fuse::Log("[FuseDBG] %s: shield=%s material=%d dura=%d/%d\n", prefix, ShieldSlotName(slotKey), material, durabilityCur,
-              durabilityMax);
+    Fuse::Log("[FuseDBG] %s: shield=%s material=%d dura=%d/%d\n", prefix, ShieldSlotName(slotKey), material,
+              durabilityCur, durabilityMax);
 }
 
 SwordFuseSlot BuildSlotFromLegacy(int materialId, int curDurability, bool hasCurDurability) {
@@ -202,11 +203,10 @@ const SwordFuseSlot& FuseSaveData::GetSwordSlot(SwordSlotKey key) const {
 }
 
 SwordFuseSlot& FuseSaveData::GetActiveSwordSlot([[maybe_unused]] const PlayState* play) {
-    const int32_t equipValue =
-        (static_cast<int32_t>(gSaveContext.equips.equipment & gEquipMasks[EQUIP_TYPE_SWORD]) >>
-         gEquipShifts[EQUIP_TYPE_SWORD]);
-    const SwordSlotKey key = IsSwordEquipValue(equipValue) ? SwordSlotKeyFromEquipValue(equipValue)
-                                                           : SwordSlotKey::Kokiri;
+    const int32_t equipValue = (static_cast<int32_t>(gSaveContext.equips.equipment & gEquipMasks[EQUIP_TYPE_SWORD]) >>
+                                gEquipShifts[EQUIP_TYPE_SWORD]);
+    const SwordSlotKey key =
+        IsSwordEquipValue(equipValue) ? SwordSlotKeyFromEquipValue(equipValue) : SwordSlotKey::Kokiri;
     return this->swordSlots[static_cast<size_t>(key)];
 }
 
@@ -219,9 +219,8 @@ const FuseSlot& FuseSaveData::GetShieldSlot(ShieldSlotKey key) const {
 }
 
 FuseSlot& FuseSaveData::GetActiveShieldSlot([[maybe_unused]] const PlayState* play) {
-    const int32_t equipValue =
-        (static_cast<int32_t>(gSaveContext.equips.equipment & gEquipMasks[EQUIP_TYPE_SHIELD]) >>
-         gEquipShifts[EQUIP_TYPE_SHIELD]);
+    const int32_t equipValue = (static_cast<int32_t>(gSaveContext.equips.equipment & gEquipMasks[EQUIP_TYPE_SHIELD]) >>
+                                gEquipShifts[EQUIP_TYPE_SHIELD]);
     const bool hasShield = IsShieldEquipValue(equipValue);
     const ShieldSlotKey key = hasShield ? ShieldSlotKeyFromEquipValue(equipValue) : ShieldSlotKey::Deku;
     FuseSlot& slot = swordSlots[ShieldSlotIndex(key)];
