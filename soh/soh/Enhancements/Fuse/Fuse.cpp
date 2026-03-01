@@ -155,6 +155,7 @@ static s16 sBeamTexScroll = 0;
 static int sLastBeamDrawInvalidDlLogFrame = -999999;
 static int sLastBeamShieldDrainLogFrame = -999999;
 static int sLastBeamDrawNoEmittersLogFrame = -999999;
+static int sLastBeamDrawEmitLogFrame = -999999;
 
 extern "C" s32 Object_Spawn(ObjectContext* objectCtx, s16 objectId);
 
@@ -4870,22 +4871,27 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
     const uintptr_t restoreSeg06 = gSegments[6];
 
     bool hasAnyBeamSegment = false;
+    int segmentCount = 0;
     for (const auto& [projectile, state] : sBeamEmitters) {
         (void)projectile;
         if (state.hasBeamSegment) {
             hasAnyBeamSegment = true;
-            break;
+            ++segmentCount;
         }
     }
-    if (!hasAnyBeamSegment) {
-        for (const auto& [player, state] : sShieldBeamEmitters) {
-            (void)player;
-            if (state.hasBeamSegment) {
-                hasAnyBeamSegment = true;
-                break;
-            }
+    for (const auto& [player, state] : sShieldBeamEmitters) {
+        (void)player;
+        if (state.hasBeamSegment) {
+            hasAnyBeamSegment = true;
+            ++segmentCount;
         }
     }
+
+    if (hasAnyBeamSegment && (play->gameplayFrames - sLastBeamDrawEmitLogFrame >= 60)) {
+        sLastBeamDrawEmitLogFrame = play->gameplayFrames;
+        Fuse::Log("[FuseDBG] BeamDrawEmit: segments=%d\n", segmentCount);
+    }
+
     if (hasAnyBeamSegment) {
         gDPNoOp(p++);
     }
@@ -4893,8 +4899,8 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
     gSPSegment(p++, 0x08, (uintptr_t)func_80094E78(play->state.gfxCtx, 0, sBeamTexScroll));
     gSPSegment(p++, 0x06, (uintptr_t)play->objectCtx.status[objSlot].segment);
 
-    auto drawState = [&](const FuseBeamEmitterState& state, bool valid) {
-        if (!valid || !state.hasBeamSegment) {
+    auto drawState = [&](const FuseBeamEmitterState& state, bool canDraw) {
+        if (!canDraw || !state.hasBeamSegment) {
             return;
         }
 
@@ -4912,15 +4918,12 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
         Matrix_Scale(kBeamDrawThickness * 0.1f, kBeamDrawThickness * 0.1f, dist * 0.0015f, MTXMODE_APPLY);
         gSPMatrix(p++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
 
-        const char* pipelineName = gBeamosLaserDL;
-        Gfx* beamDl = (Gfx*)SEGMENTED_TO_VIRTUAL(pipelineName);
-        const uintptr_t raw = (uintptr_t)pipelineName;
+        Gfx* beamDl = gBeamosLaserDL;
+        const uintptr_t raw = (uintptr_t)beamDl;
         if ((raw >> 24) != 0x06) {
-            beamDl = (Gfx*)SEGMENTED_TO_VIRTUAL(pipelineName);
-            if (!beamDl && (play->gameplayFrames - sLastBeamDrawInvalidDlLogFrame >= 60)) {
+            if (play->gameplayFrames - sLastBeamDrawInvalidDlLogFrame >= 60) {
                 sLastBeamDrawInvalidDlLogFrame = play->gameplayFrames;
-                Fuse::Log("[FuseDBG] BeamDrawSkip: dl invalid raw=%p\n", (void*)raw);
-                return;
+                Fuse::Log("[FuseDBG] BeamDrawWarn: dl nonseg06 raw=%p\n", (void*)raw);
             }
         }
 
@@ -4928,7 +4931,9 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
     };
 
     for (auto& [projectile, state] : sBeamEmitters) {
-        drawState(state, projectile && IsActorAliveInPlay(play, projectile));
+        const bool actorAlive = projectile && IsActorAliveInPlay(play, projectile);
+        const bool canDraw = state.hasBeamSegment && (actorAlive || state.pendingPrune);
+        drawState(state, canDraw);
     }
     for (auto& [player, state] : sShieldBeamEmitters) {
         drawState(state, player == GET_PLAYER(play));
