@@ -4835,7 +4835,7 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
     Gfx* p = *polyOpaDisp;
     const uintptr_t restoreSeg06 = gSegments[6];
 
-    gSPSegment(p++, 0x08, func_80094E78(play->state.gfxCtx, 0, sBeamTexScroll));
+    gSPSegment(p++, 0x08, Gfx_TexScroll(play->state.gfxCtx, 0, sBeamTexScroll, 32, 32));
     gSPSegment(p++, 0x06, (uintptr_t)play->objectCtx.status[objSlot].segment);
 
     auto drawState = [&](const FuseBeamEmitterState& state, bool valid) {
