@@ -4557,7 +4557,6 @@ void Fuse::TickRangedProjectileBombableProximity(PlayState* play) {
     }
 }
 
-
 static void Fuse_TickBeamSegmentAndDamage(PlayState* play, FuseBeamEmitterState& state, const Vec3f& beamStart,
                                           const Vec3f& dir, const void* logHandle, const char* logPrefix) {
     Vec3f beamEnd{ beamStart.x + (dir.x * kBeamRange), beamStart.y + (dir.y * kBeamRange),
@@ -4567,10 +4566,11 @@ static void Fuse_TickBeamSegmentAndDamage(PlayState* play, FuseBeamEmitterState&
     CollisionPoly* bgPoly = nullptr;
     s32 bgId = -1;
     float maxDist = kBeamRange;
-    const bool bgBlocked = BgCheck_EntityLineTest1(&play->colCtx, &beamStart, &beamEnd, &bgHitPos, &bgPoly, true, true,
-                                                   true, true, &bgId);
+    const bool bgBlocked =
+        BgCheck_EntityLineTest1(&play->colCtx, &beamStart, &beamEnd, &bgHitPos, &bgPoly, true, true, true, true, &bgId);
     if (bgBlocked) {
-        maxDist = Fuse_Vec3fLength(Vec3f{ bgHitPos.x - beamStart.x, bgHitPos.y - beamStart.y, bgHitPos.z - beamStart.z });
+        maxDist =
+            Fuse_Vec3fLength(Vec3f{ bgHitPos.x - beamStart.x, bgHitPos.y - beamStart.y, bgHitPos.z - beamStart.z });
         beamEnd = bgHitPos;
     }
 
@@ -4587,7 +4587,8 @@ static void Fuse_TickBeamSegmentAndDamage(PlayState* play, FuseBeamEmitterState&
             continue;
         }
 
-        Vec3f toVictim{ actor->focus.pos.x - beamStart.x, actor->focus.pos.y - beamStart.y, actor->focus.pos.z - beamStart.z };
+        Vec3f toVictim{ actor->focus.pos.x - beamStart.x, actor->focus.pos.y - beamStart.y,
+                        actor->focus.pos.z - beamStart.z };
         const float dist = Fuse_Vec3fLength(toVictim);
         if (dist <= 1.0f || dist > maxDist || dist >= bestDist) {
             actor = actor->next;
@@ -4672,7 +4673,8 @@ static void TickRangedProjectileBeam(PlayState* play) {
             continue;
         }
 
-        Vec3f dir = Fuse_Vec3fNormalize(Vec3f{ projectile->velocity.x, projectile->velocity.y, projectile->velocity.z });
+        Vec3f dir =
+            Fuse_Vec3fNormalize(Vec3f{ projectile->velocity.x, projectile->velocity.y, projectile->velocity.z });
         if (Fuse_Vec3fLength(dir) <= 0.001f) {
             dir.x = Math_SinS(projectile->world.rot.y);
             dir.z = Math_CosS(projectile->world.rot.y);
@@ -4721,9 +4723,8 @@ static void TickShieldGuardBeam(PlayState* play) {
     const bool guarding = (player->stateFlags1 & PLAYER_STATE1_SHIELDING) != 0;
     FuseSlot& slot = gFuseSave.GetActiveShieldSlot(play);
     const bool hasBeamosMaterial = slot.materialId == MaterialId::BeamosHead;
-    const uint8_t beamLevel = hasBeamosMaterial
-                                  ? Fuse::GetMaterialModifierLevel(slot.materialId, FuseItemType::Shield, ModifierId::Beam)
-                                  : 0;
+    const uint8_t beamLevel =
+        hasBeamosMaterial ? Fuse::GetMaterialModifierLevel(slot.materialId, FuseItemType::Shield, ModifierId::Beam) : 0;
 
     auto stopShieldBeam = [&](const char* reason) {
         const auto it = sShieldBeamEmitters.find(player);
@@ -4789,10 +4790,17 @@ static void TickShieldGuardBeam(PlayState* play) {
         return;
     }
 
-    Vec3f beamStart{ player->shieldQuad.dim.quad[0].x, player->shieldQuad.dim.quad[0].y, player->shieldQuad.dim.quad[0].z };
-    beamStart.x = (beamStart.x + player->shieldQuad.dim.quad[1].x + player->shieldQuad.dim.quad[2].x + player->shieldQuad.dim.quad[3].x) * 0.25f;
-    beamStart.y = (beamStart.y + player->shieldQuad.dim.quad[1].y + player->shieldQuad.dim.quad[2].y + player->shieldQuad.dim.quad[3].y) * 0.25f;
-    beamStart.z = (beamStart.z + player->shieldQuad.dim.quad[1].z + player->shieldQuad.dim.quad[2].z + player->shieldQuad.dim.quad[3].z) * 0.25f;
+    Vec3f beamStart{ player->shieldQuad.dim.quad[0].x, player->shieldQuad.dim.quad[0].y,
+                     player->shieldQuad.dim.quad[0].z };
+    beamStart.x = (beamStart.x + player->shieldQuad.dim.quad[1].x + player->shieldQuad.dim.quad[2].x +
+                   player->shieldQuad.dim.quad[3].x) *
+                  0.25f;
+    beamStart.y = (beamStart.y + player->shieldQuad.dim.quad[1].y + player->shieldQuad.dim.quad[2].y +
+                   player->shieldQuad.dim.quad[3].y) *
+                  0.25f;
+    beamStart.z = (beamStart.z + player->shieldQuad.dim.quad[1].z + player->shieldQuad.dim.quad[2].z +
+                   player->shieldQuad.dim.quad[3].z) *
+                  0.25f;
     beamStart.x += dir.x * kBeamStartForwardOffset;
     beamStart.y += dir.y * kBeamStartForwardOffset;
     beamStart.z += dir.z * kBeamStartForwardOffset;
@@ -4835,7 +4843,7 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
     Gfx* p = *polyOpaDisp;
     const uintptr_t restoreSeg06 = gSegments[6];
 
-    gSPSegment(p++, 0x08, Gfx_TexScroll(play->state.gfxCtx, 0, sBeamTexScroll, 32, 32));
+    gSPSegment(p++, 0x08, func_80094E78(play->state.gfxCtx, 0, sBeamTexScroll));
     gSPSegment(p++, 0x06, (uintptr_t)play->objectCtx.status[objSlot].segment);
 
     auto drawState = [&](const FuseBeamEmitterState& state, bool valid) {
