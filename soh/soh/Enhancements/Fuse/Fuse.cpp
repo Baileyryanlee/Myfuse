@@ -143,6 +143,8 @@ static FuseShieldBeamState sShieldBeamState;
 static int gLastSwordBgExplodeFrame = -999;
 static int gLastSwordActorExplodeFrame = -999999;
 static s16 sBeamTexScroll = 0;
+static s32 sBeamObjSlot = -1;
+static s32 sBeamObjFailCount = 0;
 
 extern "C" s32 Object_Spawn(ObjectContext* objectCtx, s16 objectId);
 
@@ -591,16 +593,70 @@ static bool IsActorAliveInPlay(PlayState* play, Actor* target);
 static FuseItemType RangedSlotItemType(RangedFuseSlot slot);
 static int GetMaterialEffectiveBaseDurabilityForItem(MaterialId id, FuseItemType itemType);
 static void TickShieldGuardBeam(PlayState* play);
-static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp);
+static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx**);
 
 static s32 Fuse_EnsureBeamObjectLoaded(PlayState* play) {
     if (!play) {
         return -1;
     }
 
-    s32 objSlot = Object_GetIndex(&play->objectCtx, OBJECT_VM);
-    if (objSlot < 0) {
-        objSlot = Object_Spawn(&play->objectCtx, OBJECT_VM);
+    ObjectContext* objectCtx = &play->objectCtx;
+    auto IsValidSlot = [](s32 slot) {
+        return slot >= 0 && slot < OBJECT_EXCHANGE_BANK_MAX;
+    };
+
+    s32 objSlot = -1;
+
+    if (IsValidSlot(sBeamObjSlot)) {
+        if (objectCtx->status[sBeamObjSlot].id == OBJECT_VM && Object_IsLoaded(objectCtx, sBeamObjSlot) &&
+            objectCtx->status[sBeamObjSlot].segment != nullptr) {
+            objSlot = sBeamObjSlot;
+        }
+    } else {
+        sBeamObjSlot = -1;
+    }
+
+    if (objSlot < 0 && sBeamObjSlot < 0) {
+        const s32 foundSlot = Object_GetIndex(objectCtx, OBJECT_VM);
+        if (foundSlot >= 0) {
+            sBeamObjSlot = foundSlot;
+        }
+    }
+
+    if (objSlot < 0 && sBeamObjSlot < 0) {
+        const s32 spawnedSlot = Object_Spawn(objectCtx, OBJECT_VM);
+        if (spawnedSlot >= 0) {
+            sBeamObjSlot = spawnedSlot;
+        }
+    }
+
+    if (objSlot < 0 && IsValidSlot(sBeamObjSlot)) {
+        if (objectCtx->status[sBeamObjSlot].id == OBJECT_VM && Object_IsLoaded(objectCtx, sBeamObjSlot) &&
+            objectCtx->status[sBeamObjSlot].segment != nullptr) {
+            objSlot = sBeamObjSlot;
+        } else {
+            for (s32 i = 0; i < OBJECT_EXCHANGE_BANK_MAX; ++i) {
+                if (objectCtx->status[i].id == OBJECT_VM && objectCtx->status[i].segment != nullptr &&
+                    Object_IsLoaded(objectCtx, i)) {
+                    objSlot = i;
+                    break;
+                }
+            }
+            ++sBeamObjFailCount;
+        }
+    }
+
+    static s32 sBeamObjStateLogFrame = -999999;
+    const s32 frame = play->gameplayFrames;
+    if ((frame - sBeamObjStateLogFrame) >= 60) {
+        const s32 logSlot = (objSlot >= 0) ? objSlot : sBeamObjSlot;
+        const bool validLogSlot = IsValidSlot(logSlot);
+        const s32 loaded = validLogSlot ? Object_IsLoaded(objectCtx, logSlot) : 0;
+        const s16 objectId = validLogSlot ? objectCtx->status[logSlot].id : static_cast<s16>(-1);
+        void* segment = validLogSlot ? objectCtx->status[logSlot].segment : nullptr;
+        FUSE_LOG_DBG("[FuseDBG] BeamObjState frame=%d slot=%d loaded=%d id=0x%04X seg=%p fail=%d\n", frame, logSlot,
+                     loaded, static_cast<u16>(objectId), segment, sBeamObjFailCount);
+        sBeamObjStateLogFrame = frame;
     }
 
     return objSlot;
@@ -4703,8 +4759,7 @@ static void TickShieldGuardBeam(PlayState* play) {
     sShieldBeamState.nextDamageFrame = frame + kBeamTickIntervalFrames;
 }
 
-static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) {
-    (void)polyXluDisp;
+static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx**) {
     if (!play || !Fuse::IsEnabled() || !sShieldBeamState.active) {
         return;
     }
@@ -4717,8 +4772,10 @@ static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXl
     if (objSlot < 0 || !Object_IsLoaded(&play->objectCtx, objSlot) || !play->objectCtx.status[objSlot].segment) {
         static int sBeamShieldDrawSkipLogFrame = -999999;
         if ((play->gameplayFrames - sBeamShieldDrawSkipLogFrame) >= 60) {
-            FUSE_LOG_DBG("[FuseDBG] BeamShieldDrawSkip frame=%d reason=ObjNotLoaded slot=%d\n", play->gameplayFrames,
-                         objSlot);
+            const s16 objectId =
+                (objSlot >= 0 && objSlot < OBJECT_EXCHANGE_BANK_MAX) ? play->objectCtx.status[objSlot].id : -1;
+            FUSE_LOG_DBG("[FuseDBG] BeamShieldDrawSkip frame=%d reason=ObjNotLoaded slot=%d id=0x%04X\n",
+                         play->gameplayFrames, objSlot, static_cast<u16>(objectId));
             sBeamShieldDrawSkipLogFrame = play->gameplayFrames;
         }
         return;
