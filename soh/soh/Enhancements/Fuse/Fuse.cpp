@@ -4549,16 +4549,23 @@ void Fuse::TickRangedProjectileBombableProximity(PlayState* play) {
 static float Fuse_DistancePointToSegment(const Vec3f& point, const Vec3f& start, const Vec3f& end) {
     Vec3f seg{ end.x - start.x, end.y - start.y, end.z - start.z };
     const float segLenSq = (seg.x * seg.x) + (seg.y * seg.y) + (seg.z * seg.z);
+
+    // Make mutable copies for OoT math helpers that take Vec3f*
+    Vec3f p = point;
+    Vec3f s = start;
+    Vec3f e = end;
+
     if (segLenSq <= 0.001f) {
-        return Math_Vec3f_DistXYZ(&point, &start);
+        return Math_Vec3f_DistXYZ(&p, &s);
     }
 
-    Vec3f toPoint{ point.x - start.x, point.y - start.y, point.z - start.z };
-    float t = ((toPoint.x * seg.x) + (toPoint.y * seg.y) + (toPoint.z * seg.z)) / segLenSq;
+    Vec3f toPoint{ p.x - s.x, p.y - s.y, p.z - s.z };
+    float t = (toPoint.x * seg.x) + (toPoint.y * seg.y) + (toPoint.z * seg.z);
+    t /= segLenSq;
     t = std::clamp(t, 0.0f, 1.0f);
 
-    Vec3f closest{ start.x + (seg.x * t), start.y + (seg.y * t), start.z + (seg.z * t) };
-    return Math_Vec3f_DistXYZ(&point, &closest);
+    Vec3f closest{ s.x + (seg.x * t), s.y + (seg.y * t), s.z + (seg.z * t) };
+    return Math_Vec3f_DistXYZ(&p, &closest);
 }
 
 static bool Fuse_IsBeamShieldActive(const FuseSlot& slot) {
@@ -4597,7 +4604,8 @@ static void TickShieldGuardBeam(PlayState* play) {
         return;
     }
 
-    const float beamRadius = (frame < sShieldBeamState.boostUntilFrame) ? kBeamDamageRadiusBoosted : kBeamDamageRadiusNormal;
+    const float beamRadius =
+        (frame < sShieldBeamState.boostUntilFrame) ? kBeamDamageRadiusBoosted : kBeamDamageRadiusNormal;
 
     Vec3f beamStart = player->actor.focus.pos;
     beamStart.x += dir.x * kBeamStartForwardOffset;
@@ -4624,12 +4632,11 @@ static void TickShieldGuardBeam(PlayState* play) {
     }
 
     if (!wasActive || (frame % 60) == 0) {
-        FUSE_LOG_DBG(
-            "[FuseDBG] BeamShieldEnter frame=%d guarding=%d mat=%d dura=%d nextDrain=%d nextDmg=%d "
-            "start=(%.1f,%.1f,%.1f) end=(%.1f,%.1f,%.1f)\n",
-            frame, guarding ? 1 : 0, static_cast<int>(slot.materialId), slot.durabilityCur,
-            sShieldBeamState.nextDrainFrame, sShieldBeamState.nextDamageFrame, beamStart.x, beamStart.y, beamStart.z,
-            beamEnd.x, beamEnd.y, beamEnd.z);
+        FUSE_LOG_DBG("[FuseDBG] BeamShieldEnter frame=%d guarding=%d mat=%d dura=%d nextDrain=%d nextDmg=%d "
+                     "start=(%.1f,%.1f,%.1f) end=(%.1f,%.1f,%.1f)\n",
+                     frame, guarding ? 1 : 0, static_cast<int>(slot.materialId), slot.durabilityCur,
+                     sShieldBeamState.nextDrainFrame, sShieldBeamState.nextDamageFrame, beamStart.x, beamStart.y,
+                     beamStart.z, beamEnd.x, beamEnd.y, beamEnd.z);
     }
 
     if (frame >= sShieldBeamState.nextDrainFrame) {
@@ -4712,7 +4719,8 @@ static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXl
     const s16 pitch = Math_Vec3f_Pitch(&start, &end);
     const float dist = Math_Vec3f_DistXYZ(&start, &end);
     if (dist > 0.001f) {
-        const float width = (play->gameplayFrames < sShieldBeamState.boostUntilFrame) ? kBeamWidthBoosted : kBeamWidthNormal;
+        const float width =
+            (play->gameplayFrames < sShieldBeamState.boostUntilFrame) ? kBeamWidthBoosted : kBeamWidthNormal;
         Matrix_Translate(start.x, start.y, start.z, MTXMODE_NEW);
         Matrix_RotateZYX(pitch, yaw, 0, MTXMODE_APPLY);
         Matrix_Scale(width * 0.1f, width * 0.1f, dist * 0.0015f, MTXMODE_APPLY);
