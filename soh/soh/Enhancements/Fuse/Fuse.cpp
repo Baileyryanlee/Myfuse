@@ -4704,12 +4704,12 @@ static void TickShieldGuardBeam(PlayState* play) {
 }
 
 static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) {
-    (void)polyOpaDisp;
+    (void)polyXluDisp;
     if (!play || !Fuse::IsEnabled() || !sShieldBeamState.active) {
         return;
     }
 
-    if (!play->state.gfxCtx || !polyXluDisp || !*polyXluDisp) {
+    if (!play->state.gfxCtx || !polyOpaDisp || !*polyOpaDisp) {
         return;
     }
 
@@ -4726,8 +4726,9 @@ static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXl
 
     sBeamTexScroll += 0xC;
 
-    Gfx_SetupDL_25Xlu(play->state.gfxCtx);
-    Gfx* p = *polyXluDisp;
+    Gfx_SetupDL_25Opa(play->state.gfxCtx);
+    Gfx* p = *polyOpaDisp;
+    Gfx* pStart = p;
     const uintptr_t restoreSeg06 = gSegments[6];
 
     gSPSegment(p++, 0x08, (uintptr_t)func_80094E78(play->state.gfxCtx, 0, sBeamTexScroll));
@@ -4747,14 +4748,18 @@ static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXl
         gSPMatrix(p++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
         gSPDisplayList(p++, (Gfx*)gBeamosLaserDL);
 
-        if ((play->gameplayFrames % 120) == 0) {
-            FUSE_LOG_DBG("[FuseDBG] BeamShieldDraw frame=%d start=(%.1f,%.1f,%.1f) end=(%.1f,%.1f,%.1f)\n",
-                         play->gameplayFrames, start.x, start.y, start.z, end.x, end.y, end.z);
+        static int sBeamShieldDrawLogFrame = -999999;
+        if ((play->gameplayFrames - sBeamShieldDrawLogFrame) >= 120) {
+            FUSE_LOG_DBG(
+                "[FuseDBG] BeamDraw target=OPA objSlot=%d loaded=%d opaPtr=%p start=(%.1f,%.1f,%.1f) "
+                "end=(%.1f,%.1f,%.1f) dist=%.1f\n",
+                objSlot, 1, (void*)pStart, start.x, start.y, start.z, end.x, end.y, end.z, dist);
+            sBeamShieldDrawLogFrame = play->gameplayFrames;
         }
     }
 
     gSPSegment(p++, 0x06, restoreSeg06);
-    *polyXluDisp = p;
+    *polyOpaDisp = p;
 }
 
 extern "C" void Fuse_DrawShieldBeam_Hook(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) {
