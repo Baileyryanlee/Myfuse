@@ -4832,7 +4832,6 @@ static void TickShieldGuardBeam(PlayState* play) {
 }
 
 static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) {
-    (void)polyXluDisp;
     if (!play || !Fuse::IsEnabled()) {
         return;
     }
@@ -4857,16 +4856,27 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
         return;
     }
 
-    if (!play->objectCtx.status[objSlot].segment || play->state.gfxCtx == nullptr || !polyOpaDisp || !*polyOpaDisp) {
+    if (!play->objectCtx.status[objSlot].segment || play->state.gfxCtx == nullptr) {
         return;
     }
 
+    Gfx** outDisp = (polyXluDisp && *polyXluDisp) ? polyXluDisp : polyOpaDisp;
+    if (!outDisp || !*outDisp) {
+        return;
+    }
+
+    const bool usingXlu = (outDisp == polyXluDisp);
+
     sBeamTexScroll += 0xC;
 
-    Gfx_SetupDL_25Opa(play->state.gfxCtx);
+    if (usingXlu) {
+        Gfx_SetupDL_25Xlu(play->state.gfxCtx);
+    } else {
+        Gfx_SetupDL_25Opa(play->state.gfxCtx);
+    }
 
-    Gfx* const polyOpaStart = *polyOpaDisp;
-    Gfx* p = polyOpaStart;
+    Gfx* const outStart = *outDisp;
+    Gfx* p = outStart;
     const uintptr_t restoreSeg06 = gSegments[6];
 
     bool hasAnyBeamSegment = false;
@@ -4915,7 +4925,7 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
         Matrix_RotateZYX(pitch, yaw, 0, MTXMODE_APPLY);
         Matrix_Scale(kBeamDrawThickness * 0.1f, kBeamDrawThickness * 0.1f, dist * 0.0015f, MTXMODE_APPLY);
         gSPMatrix(p++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
-        gSPDisplayList(p++, gBeamosLaserDL);
+        gSPDisplayList(p++, (Gfx*)gBeamosLaserDL);
     };
 
     for (auto& [projectile, state] : sBeamEmitters) {
@@ -4928,10 +4938,10 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
     }
 
     gSPSegment(p++, 0x06, restoreSeg06);
-    if ((play->gameplayFrames % 60) == 0 && p > polyOpaStart) {
-        Fuse::Log("[FuseDBG] BeamDrawAppend: opaWords=%ld\n", (long)(p - polyOpaStart));
+    if ((play->gameplayFrames % 60) == 0 && p > outStart) {
+        Fuse::Log("[FuseDBG] BeamDrawCommit: list=%s words=%ld\n", usingXlu ? "xlu" : "opa", (long)(p - outStart));
     }
-    *polyOpaDisp = p;
+    *outDisp = p;
 }
 
 extern "C" void Fuse_DrawRangedBeamEmitters_Hook(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) {
