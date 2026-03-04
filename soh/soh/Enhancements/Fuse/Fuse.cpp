@@ -71,24 +71,13 @@ struct FuseBurnState {
     u16 burnVfxParams = 0;
 };
 
-struct FuseBeamEmitterState {
-    enum class Kind : uint8_t {
-        RangedProjectile = 0,
-        ShieldGuard = 1,
-    };
-
-    Kind kind = Kind::RangedProjectile;
-    RangedFuseSlot slot = RangedFuseSlot::Arrows;
-    MaterialId materialId = MaterialId::None;
-    int durabilityCur = 0;
-    int durabilityMax = 0;
-    int nextTickFrame = -1;
+struct FuseShieldBeamState {
+    bool active = false;
+    Vec3f start{};
+    Vec3f end{};
+    int nextDamageFrame = -1;
     int nextDrainFrame = -1;
-    Vec3f beamStart{};
-    Vec3f beamEnd{};
-    bool hasBeamSegment = false;
-    bool pendingPrune = false;
-    int pruneAfterFrame = 0;
+    int boostUntilFrame = -1;
 };
 
 static FuseSaveData gFuseSave; // persistent-ready (not serialized yet)
@@ -119,10 +108,13 @@ static constexpr s16 kBurnVfxXlu = 0;
 static constexpr s16 kBurnVfxDurationFrames = 30;
 static constexpr float kBeamStartForwardOffset = 20.0f;
 static constexpr float kBeamRange = 1600.0f;
-static constexpr int kBeamTickIntervalFrames = 5;
+static constexpr int kBeamTickIntervalFrames = 15;
 static constexpr int kBeamDamagePerTick = 2;
 static constexpr float kBeamMinForwardDot = 0.85f;
-static constexpr float kBeamDrawThickness = 1.0f;
+static constexpr float kBeamWidthNormal = 1.0f;
+static constexpr float kBeamWidthBoosted = 2.0f;
+static constexpr float kBeamDamageRadiusNormal = 55.0f;
+static constexpr float kBeamDamageRadiusBoosted = 110.0f;
 static constexpr int kShatterImpulseFrames = 5;
 static constexpr float kShatterImpulseStep = 3.5f;
 static constexpr float kShatterImpulseY = 0.0f;
@@ -147,14 +139,10 @@ static std::unordered_map<Actor*, Vec3f> sFuseFrozenPos;
 static std::unordered_map<Actor*, bool> sFuseFrozenPinned;
 static std::unordered_map<uintptr_t, Vec3f> sProjPrevPos;
 static std::unordered_map<Actor*, FuseSeekState> sSeekStates;
-static std::unordered_map<Actor*, FuseBeamEmitterState> sBeamEmitters;
-static std::unordered_map<Player*, FuseBeamEmitterState> sShieldBeamEmitters;
+static FuseShieldBeamState sShieldBeamState;
 static int gLastSwordBgExplodeFrame = -999;
 static int gLastSwordActorExplodeFrame = -999999;
 static s16 sBeamTexScroll = 0;
-static int sLastBeamShieldDrainLogFrame = -999999;
-static int sLastBeamDrawNoEmittersLogFrame = -999999;
-static int sLastBeamDrawEmitLogFrame = -999999;
 
 extern "C" s32 Object_Spawn(ObjectContext* objectCtx, s16 objectId);
 
@@ -602,9 +590,8 @@ static void ClearFuseFreeze(Actor* actor) {
 static bool IsActorAliveInPlay(PlayState* play, Actor* target);
 static FuseItemType RangedSlotItemType(RangedFuseSlot slot);
 static int GetMaterialEffectiveBaseDurabilityForItem(MaterialId id, FuseItemType itemType);
-static void TickRangedProjectileBeam(PlayState* play);
 static void TickShieldGuardBeam(PlayState* play);
-static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp);
+static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp);
 
 static s32 Fuse_EnsureBeamObjectLoaded(PlayState* play) {
     if (!play) {
@@ -3948,8 +3935,7 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
     sFuseFrozenPinned.clear();
     sBurnStates.clear();
     sSeekStates.clear();
-    sBeamEmitters.clear();
-    sShieldBeamEmitters.clear();
+    sShieldBeamState = FuseShieldBeamState{};
     sShatterImpulseUntilFrame.clear();
     sShatterImpulseDir.clear();
     sShatterImpulseYaw.clear();
@@ -4560,256 +4546,57 @@ void Fuse::TickRangedProjectileBombableProximity(PlayState* play) {
     }
 }
 
-static void Fuse_TickBeamSegmentAndDamage(PlayState* play, FuseBeamEmitterState& state, const Vec3f& beamStart,
-                                          const Vec3f& dir, const void* logHandle, const char* logPrefix) {
-    Vec3f beamEnd{ beamStart.x + (dir.x * kBeamRange), beamStart.y + (dir.y * kBeamRange),
-                   beamStart.z + (dir.z * kBeamRange) };
-
-    Vec3f bgHitPos{ 0.0f, 0.0f, 0.0f };
-    CollisionPoly* bgPoly = nullptr;
-    s32 bgId = -1;
-    float maxDist = kBeamRange;
-    Vec3f startTmp = beamStart;
-    Vec3f endTmp = beamEnd;
-    const bool bgBlocked =
-        BgCheck_EntityLineTest1(&play->colCtx, &startTmp, &endTmp, &bgHitPos, &bgPoly, true, true, true, true, &bgId);
-    if (bgBlocked) {
-        maxDist =
-            Fuse_Vec3fLength(Vec3f{ bgHitPos.x - beamStart.x, bgHitPos.y - beamStart.y, bgHitPos.z - beamStart.z });
-        beamEnd = bgHitPos;
+static float Fuse_DistancePointToSegment(const Vec3f& point, const Vec3f& start, const Vec3f& end) {
+    Vec3f seg{ end.x - start.x, end.y - start.y, end.z - start.z };
+    const float segLenSq = (seg.x * seg.x) + (seg.y * seg.y) + (seg.z * seg.z);
+    if (segLenSq <= 0.001f) {
+        return Math_Vec3f_DistXYZ(&point, &start);
     }
 
-    state.beamStart = beamStart;
-    state.beamEnd = beamEnd;
-    state.hasBeamSegment = true;
+    Vec3f toPoint{ point.x - start.x, point.y - start.y, point.z - start.z };
+    float t = ((toPoint.x * seg.x) + (toPoint.y * seg.y) + (toPoint.z * seg.z)) / segLenSq;
+    t = std::clamp(t, 0.0f, 1.0f);
 
-    Actor* victim = nullptr;
-    float bestDist = maxDist + 1.0f;
-    Actor* actor = play->actorCtx.actorLists[ACTORCAT_ENEMY].head;
-    while (actor != nullptr) {
-        if (!IsActorAliveInPlay(play, actor) || !FuseBash_IsEnemyActor(actor)) {
-            actor = actor->next;
-            continue;
-        }
-
-        Vec3f toVictim{ actor->focus.pos.x - beamStart.x, actor->focus.pos.y - beamStart.y,
-                        actor->focus.pos.z - beamStart.z };
-        const float dist = Fuse_Vec3fLength(toVictim);
-        if (dist <= 1.0f || dist > maxDist || dist >= bestDist) {
-            actor = actor->next;
-            continue;
-        }
-
-        Vec3f toVictimDir = Fuse_Vec3fNormalize(toVictim);
-        if (Fuse_Vec3fDot(dir, toVictimDir) < kBeamMinForwardDot) {
-            actor = actor->next;
-            continue;
-        }
-
-        victim = actor;
-        bestDist = dist;
-        actor = actor->next;
-    }
-
-    if (victim) {
-        const int prevDamage = victim->colChkInfo.damage;
-        victim->colChkInfo.damage = kBeamDamagePerTick;
-        Actor_ApplyDamage(victim);
-        victim->colChkInfo.damage = prevDamage;
-        Fuse::Log("[FuseDBG] BeamHit: src=%s handle=%p victim=%p id=0x%04X dmg=%d\n", logPrefix, logHandle,
-                  (void*)victim, victim->id, kBeamDamagePerTick);
-    } else if (bgBlocked) {
-        Fuse::Log("[FuseDBG] BeamTick: src=%s bgBlock handle=%p\n", logPrefix, logHandle);
-    } else {
-        Fuse::Log("[FuseDBG] BeamTick: src=%s noTarget handle=%p\n", logPrefix, logHandle);
-    }
+    Vec3f closest{ start.x + (seg.x * t), start.y + (seg.y * t), start.z + (seg.z * t) };
+    return Math_Vec3f_DistXYZ(&point, &closest);
 }
 
-extern "C" void Fuse_RegisterRangedBeamEmitter(PlayState* play, RangedFuseSlot slot, Actor* projectile,
-                                               int materialIdRaw, int durabilityCur, int durabilityMax) {
-    if (!play || !projectile || projectile->id != ACTOR_EN_ARROW) {
-        return;
+static bool Fuse_IsBeamShieldActive(const FuseSlot& slot) {
+    if (slot.materialId != MaterialId::BeamosHead || slot.durabilityCur <= 0) {
+        return false;
     }
 
-    const MaterialId materialId = static_cast<MaterialId>(materialIdRaw);
-    const uint8_t beamLevel = Fuse::GetMaterialModifierLevel(materialId, RangedSlotItemType(slot), ModifierId::Beam);
-    if (beamLevel == 0 || durabilityCur <= 0) {
-        return;
-    }
-
-    FuseBeamEmitterState& state = sBeamEmitters[projectile];
-    state.kind = FuseBeamEmitterState::Kind::RangedProjectile;
-    state.slot = slot;
-    state.materialId = materialId;
-    state.durabilityCur = durabilityCur;
-    state.durabilityMax = durabilityMax;
-    state.nextTickFrame = static_cast<int>(play->gameplayFrames);
-    state.hasBeamSegment = false;
-    state.pendingPrune = false;
-    state.pruneAfterFrame = 0;
-
-    Fuse::Log("[FuseDBG] BeamRegister: slot=%s proj=%p materialId=%d dura=%d/%d\n", RangedSlotName(slot),
-              (void*)projectile, materialIdRaw, durabilityCur, durabilityMax);
-}
-
-extern "C" void Fuse_UnregisterRangedBeamEmitter(Actor* projectile) {
-    if (!projectile) {
-        return;
-    }
-
-    sBeamEmitters.erase(projectile);
-}
-
-static void TickRangedProjectileBeam(PlayState* play) {
-    if (!play || sBeamEmitters.empty()) {
-        return;
-    }
-
-    const int frame = play->gameplayFrames;
-    for (auto it = sBeamEmitters.begin(); it != sBeamEmitters.end();) {
-        Actor* projectile = it->first;
-        FuseBeamEmitterState& state = it->second;
-        if (!IsActorAliveInPlay(play, projectile) || projectile->id != ACTOR_EN_ARROW) {
-            if (!state.pendingPrune) {
-                state.pendingPrune = true;
-                state.pruneAfterFrame = frame + 2;
-                ++it;
-                continue;
-            }
-
-            if (frame < state.pruneAfterFrame) {
-                ++it;
-                continue;
-            }
-
-            Fuse::Log("[FuseDBG] BeamPrune: proj=%p reason=dead\n", (void*)projectile);
-            it = sBeamEmitters.erase(it);
-            continue;
-        }
-
-        state.pendingPrune = false;
-
-        if (frame < 0 || frame < state.nextTickFrame) {
-            ++it;
-            continue;
-        }
-
-        Vec3f dir =
-            Fuse_Vec3fNormalize(Vec3f{ projectile->velocity.x, projectile->velocity.y, projectile->velocity.z });
-        if (Fuse_Vec3fLength(dir) <= 0.001f) {
-            dir.x = Math_SinS(projectile->world.rot.y);
-            dir.z = Math_CosS(projectile->world.rot.y);
-            dir.y = 0.0f;
-            dir = Fuse_Vec3fNormalize(dir);
-        }
-
-        if (Fuse_Vec3fLength(dir) <= 0.001f) {
-            state.nextTickFrame = frame + kBeamTickIntervalFrames;
-            ++it;
-            continue;
-        }
-
-        Vec3f beamStart{ projectile->world.pos.x + (dir.x * kBeamStartForwardOffset),
-                         projectile->world.pos.y + (dir.y * kBeamStartForwardOffset),
-                         projectile->world.pos.z + (dir.z * kBeamStartForwardOffset) };
-
-        Fuse_TickBeamSegmentAndDamage(play, state, beamStart, dir, projectile, "proj");
-
-        state.nextTickFrame = frame + kBeamTickIntervalFrames;
-        ++it;
-    }
+    const uint8_t beamLevel = Fuse::GetMaterialModifierLevel(slot.materialId, FuseItemType::Shield, ModifierId::Beam);
+    return beamLevel > 0;
 }
 
 static void TickShieldGuardBeam(PlayState* play) {
+    sShieldBeamState.active = false;
+
     if (!play || !Fuse::IsEnabled()) {
-        sShieldBeamEmitters.clear();
         return;
     }
 
     Player* player = GET_PLAYER(play);
     if (!player) {
-        sShieldBeamEmitters.clear();
         return;
-    }
-
-    for (auto it = sShieldBeamEmitters.begin(); it != sShieldBeamEmitters.end();) {
-        if (it->first != player) {
-            it = sShieldBeamEmitters.erase(it);
-        } else {
-            ++it;
-        }
     }
 
     const int frame = play->gameplayFrames;
     const bool guarding = (player->stateFlags1 & PLAYER_STATE1_SHIELDING) != 0;
     FuseSlot& slot = gFuseSave.GetActiveShieldSlot(play);
-    const bool hasBeamosMaterial = slot.materialId == MaterialId::BeamosHead;
-    const uint8_t beamLevel =
-        hasBeamosMaterial ? Fuse::GetMaterialModifierLevel(slot.materialId, FuseItemType::Shield, ModifierId::Beam) : 0;
 
-    auto stopShieldBeam = [&](const char* reason) {
-        const auto it = sShieldBeamEmitters.find(player);
-        if (it != sShieldBeamEmitters.end()) {
-            Fuse::Log("[FuseDBG] BeamShieldStop: reason=%s\n", reason);
-            sShieldBeamEmitters.erase(it);
-        }
-    };
-
-    if (!guarding) {
-        stopShieldBeam("not_guarding");
-        return;
-    }
-
-    if (!hasBeamosMaterial || beamLevel == 0) {
-        stopShieldBeam("unfused");
-        return;
-    }
-
-    if (slot.durabilityCur <= 0) {
-        stopShieldBeam("dura0");
-        return;
-    }
-
-    FuseBeamEmitterState& state = sShieldBeamEmitters[player];
-    if (state.kind != FuseBeamEmitterState::Kind::ShieldGuard) {
-        state = FuseBeamEmitterState{};
-        state.kind = FuseBeamEmitterState::Kind::ShieldGuard;
-        state.materialId = slot.materialId;
-        state.nextTickFrame = frame;
-        state.nextDrainFrame = frame + 60;
-        Fuse::Log("[FuseDBG] BeamShieldStart: shield=%d mat=%d dura=%d/%d\n", player->currentShield,
-                  static_cast<int>(slot.materialId), slot.durabilityCur, slot.durabilityMax);
-    }
-
-    state.durabilityCur = slot.durabilityCur;
-    state.durabilityMax = slot.durabilityMax;
-
-    if (frame >= state.nextDrainFrame) {
-        slot.durabilityCur = std::max(0, slot.durabilityCur - 1);
-        if (frame - sLastBeamShieldDrainLogFrame >= 60) {
-            sLastBeamShieldDrainLogFrame = frame;
-            Fuse::Log("[FuseDBG] BeamShieldDrain: dura=%d/%d\n", slot.durabilityCur, slot.durabilityMax);
-        }
-        if (slot.durabilityCur <= 0) {
-            slot.ResetToUnfused();
-            stopShieldBeam("dura0");
-            return;
-        }
-        state.nextDrainFrame = frame + 60;
-        state.durabilityCur = slot.durabilityCur;
-        state.durabilityMax = slot.durabilityMax;
-    }
-
-    if (frame < 0 || frame < state.nextTickFrame) {
+    if (!guarding || !Fuse_IsBeamShieldActive(slot)) {
         return;
     }
 
     Vec3f dir{ Math_SinS(player->actor.shape.rot.y), 0.0f, Math_CosS(player->actor.shape.rot.y) };
     dir = Fuse_Vec3fNormalize(dir);
     if (Fuse_Vec3fLength(dir) <= 0.001f) {
-        state.nextTickFrame = frame + kBeamTickIntervalFrames;
         return;
     }
+
+    const float beamRadius = (frame < sShieldBeamState.boostUntilFrame) ? kBeamDamageRadiusBoosted : kBeamDamageRadiusNormal;
 
     Vec3f beamStart{ player->shieldQuad.dim.quad[0].x, player->shieldQuad.dim.quad[0].y,
                      player->shieldQuad.dim.quad[0].z };
@@ -4823,40 +4610,86 @@ static void TickShieldGuardBeam(PlayState* play) {
                    player->shieldQuad.dim.quad[3].z) *
                   0.25f;
     beamStart.x += dir.x * kBeamStartForwardOffset;
-    beamStart.y += dir.y * kBeamStartForwardOffset;
+    beamStart.y += 8.0f;
     beamStart.z += dir.z * kBeamStartForwardOffset;
 
-    Fuse_TickBeamSegmentAndDamage(play, state, beamStart, dir, player, "shield");
+    // TODO: use reliable shield-aim pitch source for Beam once validated in this codebase.
+    Vec3f beamEnd{ beamStart.x + (dir.x * kBeamRange), beamStart.y + (dir.y * kBeamRange),
+                   beamStart.z + (dir.z * kBeamRange) };
 
-    state.nextTickFrame = frame + kBeamTickIntervalFrames;
+    if (Fuse_LogDbgEnabled() && (frame % 300) == 0) {
+        Fuse::Log("[FuseDBG] BeamShieldAimPitch: using_yaw_only frame=%d actor=%p\n", frame, (void*)player);
+    }
+
+    sShieldBeamState.active = true;
+    sShieldBeamState.start = beamStart;
+    sShieldBeamState.end = beamEnd;
+
+    if (sShieldBeamState.nextDrainFrame < 0) {
+        sShieldBeamState.nextDrainFrame = frame + 60;
+    }
+    if (sShieldBeamState.nextDamageFrame < 0) {
+        sShieldBeamState.nextDamageFrame = frame;
+    }
+
+    if (frame >= sShieldBeamState.nextDrainFrame) {
+        const int prevDura = slot.durabilityCur;
+        slot.durabilityCur = std::max(0, slot.durabilityCur - 1);
+        FUSE_LOG_DBG("[FuseDBG] BeamShieldDrain: mat=%d dura=%d->%d\n", static_cast<int>(slot.materialId), prevDura,
+                     slot.durabilityCur);
+
+        if (slot.durabilityCur <= 0) {
+            slot.ResetToUnfused();
+            sShieldBeamState.active = false;
+            sShieldBeamState.nextDamageFrame = -1;
+            sShieldBeamState.nextDrainFrame = -1;
+            return;
+        }
+
+        sShieldBeamState.nextDrainFrame = frame + 60;
+    }
+
+    if (frame < sShieldBeamState.nextDamageFrame) {
+        return;
+    }
+
+    Actor* actor = play->actorCtx.actorLists[ACTORCAT_ENEMY].head;
+    while (actor != nullptr) {
+        if (IsActorAliveInPlay(play, actor) && FuseBash_IsEnemyActor(actor)) {
+            Vec3f target = actor->focus.pos;
+            Vec3f toVictim{ target.x - beamStart.x, target.y - beamStart.y, target.z - beamStart.z };
+            const float dist = Fuse_Vec3fLength(toVictim);
+            if (dist > 1.0f && dist <= kBeamRange) {
+                Vec3f toVictimDir = Fuse_Vec3fNormalize(toVictim);
+                if (Fuse_Vec3fDot(dir, toVictimDir) >= kBeamMinForwardDot) {
+                    const float distanceToLine = Fuse_DistancePointToSegment(target, beamStart, beamEnd);
+                    if (distanceToLine <= beamRadius) {
+                        const int prevDamage = actor->colChkInfo.damage;
+                        actor->colChkInfo.damage = kBeamDamagePerTick;
+                        Actor_ApplyDamage(actor);
+                        actor->colChkInfo.damage = prevDamage;
+                    }
+                }
+            }
+        }
+
+        actor = actor->next;
+    }
+
+    sShieldBeamState.nextDamageFrame = frame + kBeamTickIntervalFrames;
 }
 
-static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) {
-    if (!play || !Fuse::IsEnabled()) {
+static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) {
+    if (!play || !Fuse::IsEnabled() || !sShieldBeamState.active) {
         return;
     }
 
-    if (sBeamEmitters.empty() && sShieldBeamEmitters.empty()) {
-        if (play->gameplayFrames - sLastBeamDrawNoEmittersLogFrame >= 60) {
-            sLastBeamDrawNoEmittersLogFrame = play->gameplayFrames;
-            Fuse::Log("[FuseDBG] BeamDrawSkip: no_emitters\n");
-        }
+    if (!play->state.gfxCtx || (!polyOpaDisp && !polyXluDisp)) {
         return;
-    }
-
-    if ((play->gameplayFrames % 60) == 0) {
-        Fuse::Log("[FuseDBG] BeamDraw: emitters=%zu shield=%zu\n", sBeamEmitters.size(), sShieldBeamEmitters.size());
     }
 
     const s32 objSlot = Fuse_EnsureBeamObjectLoaded(play);
-    if (objSlot < 0 || !Object_IsLoaded(&play->objectCtx, objSlot)) {
-        if ((play->gameplayFrames % 60) == 0) {
-            Fuse::Log("[FuseDBG] BeamDrawSkip: OBJECT_VM not loaded\n");
-        }
-        return;
-    }
-
-    if (!play->objectCtx.status[objSlot].segment || play->state.gfxCtx == nullptr) {
+    if (objSlot < 0 || !Object_IsLoaded(&play->objectCtx, objSlot) || !play->objectCtx.status[objSlot].segment) {
         return;
     }
 
@@ -4865,87 +4698,35 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
         return;
     }
 
-    const bool usingXlu = (outDisp == polyXluDisp);
-
     sBeamTexScroll += 0xC;
 
-    if (usingXlu) {
-        Gfx_SetupDL_25Xlu(play->state.gfxCtx);
-    } else {
-        Gfx_SetupDL_25Opa(play->state.gfxCtx);
-    }
-
-    Gfx* const outStart = *outDisp;
-    Gfx* p = outStart;
+    Gfx_SetupDL_25Opa(play->state.gfxCtx);
+    Gfx* p = *outDisp;
     const uintptr_t restoreSeg06 = gSegments[6];
-
-    bool hasAnyBeamSegment = false;
-    int segmentCount = 0;
-    for (const auto& [projectile, state] : sBeamEmitters) {
-        (void)projectile;
-        if (state.hasBeamSegment) {
-            hasAnyBeamSegment = true;
-            ++segmentCount;
-        }
-    }
-    for (const auto& [player, state] : sShieldBeamEmitters) {
-        (void)player;
-        if (state.hasBeamSegment) {
-            hasAnyBeamSegment = true;
-            ++segmentCount;
-        }
-    }
-
-    if (hasAnyBeamSegment && (play->gameplayFrames - sLastBeamDrawEmitLogFrame >= 60)) {
-        sLastBeamDrawEmitLogFrame = play->gameplayFrames;
-        Fuse::Log("[FuseDBG] BeamDrawEmit: segments=%d\n", segmentCount);
-    }
-
-    if (hasAnyBeamSegment) {
-        gDPNoOp(p++);
-    }
 
     gSPSegment(p++, 0x08, (uintptr_t)func_80094E78(play->state.gfxCtx, 0, sBeamTexScroll));
     gSPSegment(p++, 0x06, (uintptr_t)play->objectCtx.status[objSlot].segment);
-    auto drawState = [&](const FuseBeamEmitterState& state, bool canDraw) {
-        if (!canDraw || !state.hasBeamSegment) {
-            return;
-        }
 
-        Vec3f start = state.beamStart;
-        Vec3f end = state.beamEnd;
-        const s16 yaw = Math_Vec3f_Yaw(&start, &end);
-        const s16 pitch = Math_Vec3f_Pitch(&start, &end);
-        const float dist = Math_Vec3f_DistXYZ(&start, &end);
-        if (dist <= 0.001f) {
-            return;
-        }
-
+    Vec3f start = sShieldBeamState.start;
+    Vec3f end = sShieldBeamState.end;
+    const s16 yaw = Math_Vec3f_Yaw(&start, &end);
+    const s16 pitch = Math_Vec3f_Pitch(&start, &end);
+    const float dist = Math_Vec3f_DistXYZ(&start, &end);
+    if (dist > 0.001f) {
+        const float width = (play->gameplayFrames < sShieldBeamState.boostUntilFrame) ? kBeamWidthBoosted : kBeamWidthNormal;
         Matrix_Translate(start.x, start.y, start.z, MTXMODE_NEW);
         Matrix_RotateZYX(pitch, yaw, 0, MTXMODE_APPLY);
-        Matrix_Scale(kBeamDrawThickness * 0.1f, kBeamDrawThickness * 0.1f, dist * 0.0015f, MTXMODE_APPLY);
+        Matrix_Scale(width * 0.1f, width * 0.1f, dist * 0.0015f, MTXMODE_APPLY);
         gSPMatrix(p++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
         gSPDisplayList(p++, (Gfx*)gBeamosLaserDL);
-    };
-
-    for (auto& [projectile, state] : sBeamEmitters) {
-        const bool actorAlive = projectile && IsActorAliveInPlay(play, projectile);
-        const bool canDraw = state.hasBeamSegment && (actorAlive || state.pendingPrune);
-        drawState(state, canDraw);
-    }
-    for (auto& [player, state] : sShieldBeamEmitters) {
-        drawState(state, player == GET_PLAYER(play));
     }
 
     gSPSegment(p++, 0x06, restoreSeg06);
-    if ((play->gameplayFrames % 60) == 0 && p > outStart) {
-        Fuse::Log("[FuseDBG] BeamDrawCommit: list=%s words=%ld\n", usingXlu ? "xlu" : "opa", (long)(p - outStart));
-    }
     *outDisp = p;
 }
 
-extern "C" void Fuse_DrawRangedBeamEmitters_Hook(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) {
-    Fuse_DrawRangedBeamEmitters(play, polyOpaDisp, polyXluDisp);
+extern "C" void Fuse_DrawShieldBeam_Hook(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) {
+    Fuse_DrawShieldBeam(play, polyOpaDisp, polyXluDisp);
 }
 
 void Fuse::OnGameFrameUpdate(PlayState* play) {
@@ -4961,7 +4742,6 @@ void Fuse::OnGameFrameUpdate(PlayState* play) {
     UpdateRangedFuseLifecycle(play);
     TickSwordBgExplosions(play);
     TickRangedProjectileSeek(play);
-    TickRangedProjectileBeam(play);
     TickShieldGuardBeam(play);
     TickRangedProjectileBombableProximity(play);
 
