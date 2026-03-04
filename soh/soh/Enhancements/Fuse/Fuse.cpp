@@ -2778,7 +2778,8 @@ static bool Fuse_ModifierAppliesForItem(ModifierId id, FuseItemType itemType) {
                    itemType == FuseItemType::Arrows || itemType == FuseItemType::Slingshot ||
                    itemType == FuseItemType::Hookshot;
         case ModifierId::Beam:
-            return itemType == FuseItemType::Arrows || itemType == FuseItemType::Slingshot;
+            return itemType == FuseItemType::Shield || itemType == FuseItemType::Arrows ||
+                   itemType == FuseItemType::Slingshot;
         default:
             return true;
     }
@@ -4568,15 +4569,6 @@ static float Fuse_DistancePointToSegment(const Vec3f& point, const Vec3f& start,
     return Math_Vec3f_DistXYZ(&p, &closest);
 }
 
-static bool Fuse_IsBeamShieldActive(const FuseSlot& slot) {
-    if (slot.materialId != MaterialId::BeamosHead || slot.durabilityCur <= 0) {
-        return false;
-    }
-
-    const uint8_t beamLevel = Fuse::GetMaterialModifierLevel(slot.materialId, FuseItemType::Shield, ModifierId::Beam);
-    return beamLevel > 0;
-}
-
 static void TickShieldGuardBeam(PlayState* play) {
     const bool wasActive = sShieldBeamState.active;
     sShieldBeamState.active = false;
@@ -4591,10 +4583,30 @@ static void TickShieldGuardBeam(PlayState* play) {
     }
 
     const int frame = play->gameplayFrames;
-    const bool guarding = (player->stateFlags1 & PLAYER_STATE1_SHIELDING) != 0;
+    const uint32_t stateFlags1 = player->stateFlags1;
+    const bool guarding = (stateFlags1 & PLAYER_STATE1_SHIELDING) != 0;
     FuseSlot& slot = gFuseSave.GetActiveShieldSlot(play);
+    const bool beamosShield = slot.materialId == MaterialId::BeamosHead;
+    const uint8_t beamLevel = beamosShield
+                                  ? Fuse::GetMaterialModifierLevel(slot.materialId, FuseItemType::Shield,
+                                                                   ModifierId::Beam)
+                                  : 0;
 
-    if (!guarding || !Fuse_IsBeamShieldActive(slot)) {
+    static int sBeamShieldGateLogFrame = -999999;
+    if (beamosShield && (frame - sBeamShieldGateLogFrame) >= 60) {
+        FUSE_LOG_DBG("[FuseDBG] BeamShieldGate frame=%d guarding=%d mat=%d dura=%d beamLvl=%d stateFlags1=0x%08X\n",
+                     frame, guarding ? 1 : 0, static_cast<int>(slot.materialId), slot.durabilityCur, beamLevel,
+                     stateFlags1);
+        sBeamShieldGateLogFrame = frame;
+    }
+
+    if (!guarding || !beamosShield || slot.durabilityCur <= 0 || beamLevel == 0) {
+        if (wasActive) {
+            const char* reason = (!beamosShield || slot.durabilityCur <= 0 || beamLevel == 0) ? "Broken" : "GuardEnd";
+            FUSE_LOG_DBG("[FuseDBG] BeamShieldInactive reason=%s frame=%d guarding=%d mat=%d dura=%d beamLvl=%d\n",
+                         reason, frame, guarding ? 1 : 0, static_cast<int>(slot.materialId), slot.durabilityCur,
+                         beamLevel);
+        }
         return;
     }
 
@@ -4631,10 +4643,10 @@ static void TickShieldGuardBeam(PlayState* play) {
         sShieldBeamState.nextDamageFrame = frame;
     }
 
-    if (!wasActive || (frame % 60) == 0) {
-        FUSE_LOG_DBG("[FuseDBG] BeamShieldEnter frame=%d guarding=%d mat=%d dura=%d nextDrain=%d nextDmg=%d "
-                     "start=(%.1f,%.1f,%.1f) end=(%.1f,%.1f,%.1f)\n",
-                     frame, guarding ? 1 : 0, static_cast<int>(slot.materialId), slot.durabilityCur,
+    if (!wasActive) {
+        FUSE_LOG_DBG("[FuseDBG] BeamShieldActive frame=%d guarding=%d mat=%d dura=%d beamLvl=%d nextDrain=%d "
+                     "nextDmg=%d start=(%.1f,%.1f,%.1f) end=(%.1f,%.1f,%.1f)\n",
+                     frame, guarding ? 1 : 0, static_cast<int>(slot.materialId), slot.durabilityCur, beamLevel,
                      sShieldBeamState.nextDrainFrame, sShieldBeamState.nextDamageFrame, beamStart.x, beamStart.y,
                      beamStart.z, beamEnd.x, beamEnd.y, beamEnd.z);
     }
@@ -4647,6 +4659,8 @@ static void TickShieldGuardBeam(PlayState* play) {
 
         if (slot.durabilityCur <= 0) {
             slot.ResetToUnfused();
+            FUSE_LOG_DBG("[FuseDBG] BeamShieldInactive reason=Broken frame=%d guarding=%d mat=%d dura=%d beamLvl=%d\n",
+                         frame, guarding ? 1 : 0, static_cast<int>(slot.materialId), slot.durabilityCur, beamLevel);
             sShieldBeamState.active = false;
             sShieldBeamState.nextDamageFrame = -1;
             sShieldBeamState.nextDrainFrame = -1;
@@ -4701,6 +4715,12 @@ static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXl
 
     const s32 objSlot = Fuse_EnsureBeamObjectLoaded(play);
     if (objSlot < 0 || !Object_IsLoaded(&play->objectCtx, objSlot) || !play->objectCtx.status[objSlot].segment) {
+        static int sBeamShieldDrawSkipLogFrame = -999999;
+        if ((play->gameplayFrames - sBeamShieldDrawSkipLogFrame) >= 60) {
+            FUSE_LOG_DBG("[FuseDBG] BeamShieldDrawSkip frame=%d reason=ObjNotLoaded slot=%d\n", play->gameplayFrames,
+                         objSlot);
+            sBeamShieldDrawSkipLogFrame = play->gameplayFrames;
+        }
         return;
     }
 
