@@ -3,7 +3,6 @@
 #include "FuseState.h"
 #include "soh/Enhancements/Fuse/Hooks/FuseHooks_Objects.h"
 #include "soh/Enhancements/Fuse/ShieldBashRules.h"
-#include "soh/ResourceManagerHelpers.h"
 #include "soh/SaveManager.h"
 #include "libultraship/bridge/consolevariablebridge.h"
 
@@ -156,7 +155,6 @@ static s16 sBeamTexScroll = 0;
 static int sLastBeamShieldDrainLogFrame = -999999;
 static int sLastBeamDrawNoEmittersLogFrame = -999999;
 static int sLastBeamDrawEmitLogFrame = -999999;
-static int sLastBeamDrawNullDlLogFrame = -999999;
 
 extern "C" s32 Object_Spawn(ObjectContext* objectCtx, s16 objectId);
 
@@ -4833,14 +4831,6 @@ static void TickShieldGuardBeam(PlayState* play) {
     state.nextTickFrame = frame + kBeamTickIntervalFrames;
 }
 
-static Gfx* Fuse_GetBeamosLaserDl() {
-    static Gfx* sBeamosLaserDl = nullptr;
-    if (sBeamosLaserDl == nullptr) {
-        sBeamosLaserDl = ResourceMgr_LoadGfxByName(gBeamosLaserDL);
-    }
-    return sBeamosLaserDl;
-}
-
 static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) {
     (void)polyXluDisp;
     if (!play || !Fuse::IsEnabled()) {
@@ -4907,8 +4897,6 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
 
     gSPSegment(p++, 0x08, (uintptr_t)func_80094E78(play->state.gfxCtx, 0, sBeamTexScroll));
     gSPSegment(p++, 0x06, (uintptr_t)play->objectCtx.status[objSlot].segment);
-    Gfx* laserDl = Fuse_GetBeamosLaserDl();
-
     auto drawState = [&](const FuseBeamEmitterState& state, bool canDraw) {
         if (!canDraw || !state.hasBeamSegment) {
             return;
@@ -4927,13 +4915,7 @@ static void Fuse_DrawRangedBeamEmitters(PlayState* play, Gfx** polyOpaDisp, Gfx*
         Matrix_RotateZYX(pitch, yaw, 0, MTXMODE_APPLY);
         Matrix_Scale(kBeamDrawThickness * 0.1f, kBeamDrawThickness * 0.1f, dist * 0.0015f, MTXMODE_APPLY);
         gSPMatrix(p++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
-
-        if (laserDl != nullptr) {
-            gSPDisplayList(p++, laserDl);
-        } else if (play->gameplayFrames - sLastBeamDrawNullDlLogFrame >= 60) {
-            sLastBeamDrawNullDlLogFrame = play->gameplayFrames;
-            Fuse::Log("[FuseDBG] BeamDrawSkip: laserDl null\n");
-        }
+        gSPDisplayList(p++, gBeamosLaserDL);
     };
 
     for (auto& [projectile, state] : sBeamEmitters) {

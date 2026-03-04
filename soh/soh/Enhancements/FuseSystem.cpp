@@ -170,7 +170,7 @@ static void RegisterFuseMod() {
         FuseHooks::OnPlayerUpdate(gPlayState);
     });
 
-    COND_HOOK(OnPlayDrawBegin, true, []() {
+    COND_HOOK(OnPlayDrawEnd, true, []() {
         if (!IsInGameplay()) {
             return;
         }
@@ -184,7 +184,6 @@ static void RegisterFuseMod() {
 
             Fuse_DrawRangedBeamEmitters_Hook(play, &polyOpa, &polyXlu);
 
-            // Commit updated display-list pointers so appended beam draw commands are retained.
             play->state.gfxCtx->polyOpa.p = polyOpa;
             play->state.gfxCtx->polyXlu.p = polyXlu;
 
@@ -194,12 +193,6 @@ static void RegisterFuseMod() {
                 spdlog::info("[FuseDBG] BeamDrawCommit: opaDelta={} xluDelta={}", polyOpa - oldPolyOpa,
                              polyXlu - oldPolyXlu);
             }
-        }
-    });
-
-    COND_HOOK(OnPlayDrawEnd, true, []() {
-        if (!IsInGameplay()) {
-            return;
         }
 
         RangedFuseMenu::Draw(gPlayState);
