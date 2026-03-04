@@ -21,7 +21,7 @@ extern "C" {
 extern PlayState* gPlayState;
 }
 
-extern "C" void Fuse_DrawRangedBeamEmitters_Hook(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp);
+extern "C" void Fuse_DrawShieldBeam_Hook(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp);
 
 static std::shared_ptr<FuseMenuWindow> sFuseMenuWindow;
 static bool sFuseMenuShown = false;
@@ -179,20 +179,10 @@ static void RegisterFuseMod() {
         if (play != nullptr && play->state.gfxCtx != nullptr) {
             Gfx* polyOpa = play->state.gfxCtx->polyOpa.p;
             Gfx* polyXlu = play->state.gfxCtx->polyXlu.p;
-            Gfx* oldPolyOpa = polyOpa;
-            Gfx* oldPolyXlu = polyXlu;
-
-            Fuse_DrawRangedBeamEmitters_Hook(play, &polyOpa, &polyXlu);
+            Fuse_DrawShieldBeam_Hook(play, &polyOpa, &polyXlu);
 
             play->state.gfxCtx->polyOpa.p = polyOpa;
             play->state.gfxCtx->polyXlu.p = polyXlu;
-
-            static int sLastBeamCommitLogFrame = -60;
-            if (Fuse::IsEnabled() && play->gameplayFrames - sLastBeamCommitLogFrame >= 60) {
-                sLastBeamCommitLogFrame = play->gameplayFrames;
-                spdlog::info("[FuseDBG] BeamDrawCommit: opaDelta={} xluDelta={}", polyOpa - oldPolyOpa,
-                             polyXlu - oldPolyXlu);
-            }
         }
 
         RangedFuseMenu::Draw(gPlayState);
