@@ -130,9 +130,6 @@ static void* D_80B2EB88[] = {
     gEffEnemyDeathFlame9Tex, gEffEnemyDeathFlame10Tex,
 };
 
-// TEMP(FuseDBG): Diagnostic draw-path object context logging for EnVm.
-static s32 sEnVmDrawObjDbgLastFrame = -60;
-
 void EnVm_SetupAction(EnVm* this, EnVmActionFunc actionFunc) {
     this->actionFunc = actionFunc;
 }
@@ -530,14 +527,13 @@ void EnVm_Draw(Actor* thisx, PlayState* play2) {
     Vec3f actorPos;
     s16 objBankIndex = this->actor.objBankIndex;
 
-    if (((play->gameplayFrames - sEnVmDrawObjDbgLastFrame) >= 60) && (objBankIndex >= 0) &&
-        (objBankIndex < ARRAY_COUNT(play->objectCtx.status))) {
+    if ((objBankIndex >= 0) && (objBankIndex < ARRAY_COUNT(play->objectCtx.status))) {
         ObjectStatus* objectStatus = &play->objectCtx.status[objBankIndex];
 
-        sEnVmDrawObjDbgLastFrame = play->gameplayFrames;
-        osSyncPrintf("[FuseDBG] EnVmDrawObj actor=%p slot=%d id=0x%04X loaded=%d seg06=%p\n", (void*)this,
-                     objBankIndex, objectStatus->id, Object_IsLoaded(&play->objectCtx, objBankIndex),
-                     objectStatus->segment);
+        lusprintf(__FILE__, __LINE__, LOG_LEVEL_INFO,
+                  "[FuseDBG] EnVmDrawObj actor=%p slot=%d id=0x%04X loaded=%d seg06=%p\n", (void*)this,
+                  objBankIndex, objectStatus->id, Object_IsLoaded(&play->objectCtx, objBankIndex),
+                  objectStatus->segment);
     }
 
     OPEN_DISPS(play->state.gfxCtx);
