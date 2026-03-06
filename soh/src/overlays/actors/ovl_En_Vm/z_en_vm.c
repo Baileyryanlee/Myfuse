@@ -531,9 +531,9 @@ void EnVm_Draw(Actor* thisx, PlayState* play2) {
     if ((objBankIndex >= 0) && (objBankIndex < ARRAY_COUNT(play->objectCtx.status))) {
         ObjectStatus* objectStatus = &play->objectCtx.status[objBankIndex];
 
-        Fuse_DebugPrintf("[FuseDBG] EnVmDrawObj actor=%p slot=%d id=0x%04X loaded=%d seg06=%p\n", (void*)this,
-                         objBankIndex, objectStatus->id, Object_IsLoaded(&play->objectCtx, objBankIndex),
-                         objectStatus->segment);
+        Fuse_DebugPrintf("[FuseDBG] EnVmDrawObj actor=%p slot=%d id=0x%04X loaded=%d seg06=%p boundSeg06=%p\n",
+                         (void*)this, objBankIndex, objectStatus->id, Object_IsLoaded(&play->objectCtx, objBankIndex),
+                         objectStatus->segment, (void*)gSegments[6]);
     }
 
     OPEN_DISPS(play->state.gfxCtx);
@@ -563,6 +563,7 @@ void EnVm_Draw(Actor* thisx, PlayState* play2) {
     Matrix_RotateZYX(this->beamRot.x, this->beamRot.y, this->beamRot.z, MTXMODE_APPLY);
     Matrix_Scale(this->beamScale.x * 0.1f, this->beamScale.x * 0.1f, this->beamScale.z * 0.0015f, MTXMODE_APPLY);
     gSPMatrix(POLY_OPA_DISP++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
+    Fuse_DebugPrintf("[FuseDBG] EnVmLaserDraw actor=%p boundSeg06=%p\n", (void*)this, (void*)gSegments[6]);
     gSPDisplayList(POLY_OPA_DISP++, gBeamosLaserDL);
 
     CLOSE_DISPS(play->state.gfxCtx);
