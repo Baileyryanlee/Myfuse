@@ -146,8 +146,25 @@ static s16 sBeamTexScroll = 0;
 static s32 sBeamObjSlot = -1;
 static s32 sBeamObjFailCount = 0;
 static s32 sBeamObjSpawnRequestFrame = -999999;
+static uintptr_t sCachedBeamosVmSeg06 = 0;
+static int sCachedBeamosVmFrame = -1;
 
 extern "C" s32 Object_Spawn(ObjectContext* objectCtx, s16 objectId);
+
+extern "C" void Fuse_SetCachedBeamosVmSeg06(uintptr_t seg06, int frame) {
+    if (seg06 != 0) {
+        sCachedBeamosVmSeg06 = seg06;
+        sCachedBeamosVmFrame = frame;
+    }
+}
+
+extern "C" uintptr_t Fuse_GetCachedBeamosVmSeg06(void) {
+    return sCachedBeamosVmSeg06;
+}
+
+extern "C" int Fuse_GetCachedBeamosVmSeg06Frame(void) {
+    return sCachedBeamosVmFrame;
+}
 
 static inline bool Fuse_LogDbgEnabled() {
     return CVarGetInteger("gFuseLogDbg", 0) != 0;
@@ -683,7 +700,7 @@ static s32 Fuse_EnsureBeamObjectLoaded(PlayState* play) {
 
     static s32 sBeamObjPendingLogFrame = -999999;
     const s32 frame = play->gameplayFrames;
-    if (hasPendingBeamObject && (frame - sBeamObjPendingLogFrame) >= 60) {
+    if (hasPendingBeamObject && (frame - sBeamObjPendingLogFrame) >= 5) {
         const s32 pendingSlot = Fuse_IsValidObjectSlot(sBeamObjSlot) ? sBeamObjSlot : Object_GetIndex(objectCtx, OBJECT_VM);
         const bool validPendingSlot = Fuse_IsValidObjectSlot(pendingSlot);
         const s16 pendingObjectId = validPendingSlot ? objectCtx->status[pendingSlot].id : static_cast<s16>(-1);
@@ -4834,16 +4851,25 @@ static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx**) {
     void* objSeg = Fuse_GetObjectSegmentBase(play, objSlot, OBJECT_VM);
 
     if (objSeg == nullptr) {
-        static int sBeamDrawBlockedLogFrame = -999999;
-        if ((play->gameplayFrames - sBeamDrawBlockedLogFrame) >= 60) {
-            const bool validSlot = Fuse_IsValidObjectSlot(objSlot);
-            const s16 objectId = validSlot ? objectCtx->status[objSlot].id : static_cast<s16>(-1);
-            const s32 loaded = validSlot ? Object_IsLoaded(objectCtx, objSlot) : 0;
-            FUSE_LOG_DBG("[FuseDBG] BeamDrawBlocked frame=%d cachedSlot=%d idxSlot=%d objId=0x%04X loaded=%d seg06=%p\n",
-                         play->gameplayFrames, cachedSlot, idxSlot, static_cast<u16>(objectId), loaded, objSeg);
-            sBeamDrawBlockedLogFrame = play->gameplayFrames;
+        const uintptr_t cachedSeg = Fuse_GetCachedBeamosVmSeg06();
+        const int cachedFrame = Fuse_GetCachedBeamosVmSeg06Frame();
+        const int age = play->gameplayFrames - cachedFrame;
+        if ((cachedSeg != 0) && (age >= 0) && (age <= 10)) {
+            objSeg = reinterpret_cast<void*>(cachedSeg);
+            FUSE_LOG_DBG("[FuseDBG] BeamSegFallback frame=%d seg06=%p age=%d\n", play->gameplayFrames,
+                         (void*)cachedSeg, age);
+        } else {
+            static int sBeamDrawBlockedLogFrame = -999999;
+            if ((play->gameplayFrames - sBeamDrawBlockedLogFrame) >= 5) {
+                const bool validSlot = Fuse_IsValidObjectSlot(objSlot);
+                const s16 objectId = validSlot ? objectCtx->status[objSlot].id : static_cast<s16>(-1);
+                const s32 loaded = validSlot ? Object_IsLoaded(objectCtx, objSlot) : 0;
+                FUSE_LOG_DBG("[FuseDBG] BeamDrawBlocked frame=%d cachedSlot=%d idxSlot=%d objId=0x%04X loaded=%d seg06=%p\n",
+                             play->gameplayFrames, cachedSlot, idxSlot, static_cast<u16>(objectId), loaded, objSeg);
+                sBeamDrawBlockedLogFrame = play->gameplayFrames;
+            }
+            return;
         }
-        return;
     }
 
     sBeamTexScroll += 0xC;
@@ -4862,7 +4888,7 @@ static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx**) {
 
     if (objSeg == nullptr) {
         static int sBeamDrawBlockedLogFrame = -999999;
-        if ((play->gameplayFrames - sBeamDrawBlockedLogFrame) >= 60) {
+        if ((play->gameplayFrames - sBeamDrawBlockedLogFrame) >= 5) {
             const bool validSlot = Fuse_IsValidObjectSlot(objSlot);
             const s16 objectId = validSlot ? objectCtx->status[objSlot].id : static_cast<s16>(-1);
             const s32 loaded = validSlot ? Object_IsLoaded(objectCtx, objSlot) : 0;

@@ -5,6 +5,7 @@ extern "C" {
 #endif
 
 #include "z64.h"
+#include <stdint.h>
 
 typedef enum {
     FUSE_MATERIAL_NONE = 0,
@@ -27,6 +28,13 @@ void Fuse_ShieldTriggerExplosion(PlayState* play, s32 materialId, u8 level, cons
 void Fuse_AddMaterialById(s32 materialId, s32 amount);
 
 void Fuse_DebugPrintf(const char* fmt, ...);
+
+void Fuse_SetCachedBeamosVmSeg06(uintptr_t seg06, int frame);
+
+uintptr_t Fuse_GetCachedBeamosVmSeg06(void);
+
+int Fuse_GetCachedBeamosVmSeg06Frame(void);
+
 
 #ifdef __cplusplus
 }
