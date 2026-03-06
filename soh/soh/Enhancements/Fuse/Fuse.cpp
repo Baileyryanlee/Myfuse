@@ -4671,10 +4671,8 @@ static void TickShieldGuardBeam(PlayState* play) {
     const bool guarding = (stateFlags1 & PLAYER_STATE1_SHIELDING) != 0;
     FuseSlot& slot = gFuseSave.GetActiveShieldSlot(play);
     const bool beamosShield = slot.materialId == MaterialId::BeamosHead;
-    const uint8_t beamLevel = beamosShield
-                                  ? Fuse::GetMaterialModifierLevel(slot.materialId, FuseItemType::Shield,
-                                                                   ModifierId::Beam)
-                                  : 0;
+    const uint8_t beamLevel =
+        beamosShield ? Fuse::GetMaterialModifierLevel(slot.materialId, FuseItemType::Shield, ModifierId::Beam) : 0;
 
     static int sBeamShieldGateLogFrame = -999999;
     if (beamosShield && (frame - sBeamShieldGateLogFrame) >= 60) {
@@ -4823,11 +4821,18 @@ static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx**) {
     gSPSegment(p++, 0x06, (uintptr_t)objSeg);
 
     const Vec3f start = sShieldBeamState.start;
-    const Vec3f end = sShieldBeamState.end;
-    Vec3f beamVec{ end.x - start.x, end.y - start.y, end.z - start.z };
+    const Vec3f endConst = sShieldBeamState.end;
+    Vec3f beamVec{ endConst.x - start.x, endConst.y - start.y, endConst.z - start.z };
     const Vec3f beamDir = Fuse_Vec3fNormalize(beamVec);
-    Vec3f drawStart{ start.x + (beamDir.x * kBeamStartForwardOffset), start.y + (beamDir.y * kBeamStartForwardOffset),
-                    start.z + (beamDir.z * kBeamStartForwardOffset) };
+
+    Vec3f drawStart{
+        start.x + (beamDir.x * kBeamStartForwardOffset),
+        start.y + (beamDir.y * kBeamStartForwardOffset),
+        start.z + (beamDir.z * kBeamStartForwardOffset),
+    };
+
+    Vec3f end = endConst;
+
     const s16 yaw = Math_Vec3f_Yaw(&drawStart, &end);
     const s16 pitch = Math_Vec3f_Pitch(&drawStart, &end);
     const float dist = Math_Vec3f_DistXYZ(&drawStart, &end);
@@ -4840,8 +4845,8 @@ static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx**) {
 
             static int sBeamFixedTestLogFrame = -999999;
             if ((play->gameplayFrames - sBeamFixedTestLogFrame) >= 60) {
-                FUSE_LOG_DBG("[FuseDBG] BeamFixedTest frame=%d start=(%.1f,%.1f,%.1f)\n", play->gameplayFrames,
-                             start.x, start.y, start.z);
+                FUSE_LOG_DBG("[FuseDBG] BeamFixedTest frame=%d start=(%.1f,%.1f,%.1f)\n", play->gameplayFrames, start.x,
+                             start.y, start.z);
                 sBeamFixedTestLogFrame = play->gameplayFrames;
             }
         } else {
