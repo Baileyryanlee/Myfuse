@@ -4816,21 +4816,43 @@ static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx**) {
     Gfx_SetupDL_25Opa(play->state.gfxCtx);
     Gfx* p = *polyOpaDisp;
     const uintptr_t restoreSeg06 = gSegments[6];
+    const uintptr_t restoreSeg08 = gSegments[8];
+    static constexpr bool kBeamFixedTransformTest = true;
 
     gSPSegment(p++, 0x08, (uintptr_t)func_80094E78(play->state.gfxCtx, 0, sBeamTexScroll));
     gSPSegment(p++, 0x06, (uintptr_t)objSeg);
 
-    Vec3f start = sShieldBeamState.start;
-    Vec3f end = sShieldBeamState.end;
-    const s16 yaw = Math_Vec3f_Yaw(&start, &end);
-    const s16 pitch = Math_Vec3f_Pitch(&start, &end);
-    const float dist = Math_Vec3f_DistXYZ(&start, &end);
+    const Vec3f start = sShieldBeamState.start;
+    const Vec3f end = sShieldBeamState.end;
+    Vec3f beamVec{ end.x - start.x, end.y - start.y, end.z - start.z };
+    const Vec3f beamDir = Fuse_Vec3fNormalize(beamVec);
+    Vec3f drawStart{ start.x + (beamDir.x * kBeamStartForwardOffset), start.y + (beamDir.y * kBeamStartForwardOffset),
+                    start.z + (beamDir.z * kBeamStartForwardOffset) };
+    const s16 yaw = Math_Vec3f_Yaw(&drawStart, &end);
+    const s16 pitch = Math_Vec3f_Pitch(&drawStart, &end);
+    const float dist = Math_Vec3f_DistXYZ(&drawStart, &end);
     if (dist > 0.001f) {
-        const float width =
-            (play->gameplayFrames < sShieldBeamState.boostUntilFrame) ? kBeamWidthBoosted : kBeamWidthNormal;
-        Matrix_Translate(start.x, start.y, start.z, MTXMODE_NEW);
-        Matrix_RotateZYX(pitch, yaw, 0, MTXMODE_APPLY);
-        Matrix_Scale(width * 0.1f, width * 0.1f, dist * 0.0015f, MTXMODE_APPLY);
+        if (kBeamFixedTransformTest) {
+            Matrix_Translate(start.x, start.y + 20.0f, start.z, MTXMODE_NEW);
+            Matrix_RotateY(0, MTXMODE_APPLY);
+            Matrix_RotateX(0, MTXMODE_APPLY);
+            Matrix_Scale(1.0f, 1.0f, 1.0f, MTXMODE_APPLY);
+
+            static int sBeamFixedTestLogFrame = -999999;
+            if ((play->gameplayFrames - sBeamFixedTestLogFrame) >= 60) {
+                FUSE_LOG_DBG("[FuseDBG] BeamFixedTest frame=%d start=(%.1f,%.1f,%.1f)\n", play->gameplayFrames,
+                             start.x, start.y, start.z);
+                sBeamFixedTestLogFrame = play->gameplayFrames;
+            }
+        } else {
+            const float width =
+                (play->gameplayFrames < sShieldBeamState.boostUntilFrame) ? kBeamWidthBoosted : kBeamWidthNormal;
+            Matrix_Translate(drawStart.x, drawStart.y, drawStart.z, MTXMODE_NEW);
+            Matrix_RotateY(yaw, MTXMODE_APPLY);
+            Matrix_RotateX(pitch, MTXMODE_APPLY);
+            Matrix_Scale(width * 0.1f, width * 0.1f, dist * 0.0015f, MTXMODE_APPLY);
+        }
+
         gSPMatrix(p++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
         gSPDisplayList(p++, (Gfx*)gBeamosLaserDL);
 
@@ -4843,6 +4865,7 @@ static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx**) {
     }
 
     gSPSegment(p++, 0x06, restoreSeg06);
+    gSPSegment(p++, 0x08, restoreSeg08);
     *polyOpaDisp = p;
 }
 
