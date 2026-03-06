@@ -2235,17 +2235,14 @@ extern "C" void Fuse_ShieldTriggerMegaStun(PlayState* play, Player* player, int 
 // -----------------------------------------------------------------------------
 // Logging
 // -----------------------------------------------------------------------------
-void Fuse::Log(const char* fmt, ...) {
+static void Fuse_LogVPrintf(const char* fmt, va_list args) {
     char buf[1024];
 
-    va_list args;
-    va_start(args, fmt);
 #ifdef _WIN32
     _vsnprintf_s(buf, sizeof(buf), _TRUNCATE, fmt, args);
 #else
     vsnprintf(buf, sizeof(buf), fmt, args);
 #endif
-    va_end(args);
 
 #ifdef _WIN32
     OutputDebugStringA(buf);
@@ -2253,6 +2250,20 @@ void Fuse::Log(const char* fmt, ...) {
 
     fputs(buf, stdout);
     fflush(stdout);
+}
+
+void Fuse::Log(const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    Fuse_LogVPrintf(fmt, args);
+    va_end(args);
+}
+
+extern "C" void Fuse_DebugPrintf(const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    Fuse_LogVPrintf(fmt, args);
+    va_end(args);
 }
 
 // -----------------------------------------------------------------------------

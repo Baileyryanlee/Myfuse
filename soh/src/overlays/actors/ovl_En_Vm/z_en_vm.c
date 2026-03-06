@@ -10,6 +10,7 @@
 #include "objects/gameplay_keep/gameplay_keep.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
 #include "soh/ResourceManagerHelpers.h"
+#include "soh/Enhancements/Fuse/FuseCBridge.h"
 
 #define FLAGS (ACTOR_FLAG_ATTENTION_ENABLED | ACTOR_FLAG_UPDATE_CULLING_DISABLED)
 
@@ -530,9 +531,9 @@ void EnVm_Draw(Actor* thisx, PlayState* play2) {
     if ((objBankIndex >= 0) && (objBankIndex < ARRAY_COUNT(play->objectCtx.status))) {
         ObjectStatus* objectStatus = &play->objectCtx.status[objBankIndex];
 
-        osSyncPrintf("[FuseDBG] EnVmDrawObj actor=%p slot=%d id=0x%04X loaded=%d seg06=%p\n", (void*)this,
-                     objBankIndex, objectStatus->id, Object_IsLoaded(&play->objectCtx, objBankIndex),
-                     objectStatus->segment);
+        Fuse_DebugPrintf("[FuseDBG] EnVmDrawObj actor=%p slot=%d id=0x%04X loaded=%d seg06=%p\n", (void*)this,
+                         objBankIndex, objectStatus->id, Object_IsLoaded(&play->objectCtx, objBankIndex),
+                         objectStatus->segment);
     }
 
     OPEN_DISPS(play->state.gfxCtx);

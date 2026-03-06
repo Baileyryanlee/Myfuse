@@ -26,6 +26,8 @@ void Fuse_ShieldTriggerExplosion(PlayState* play, s32 materialId, u8 level, cons
 
 void Fuse_AddMaterialById(s32 materialId, s32 amount);
 
+void Fuse_DebugPrintf(const char* fmt, ...);
+
 #ifdef __cplusplus
 }
 #endif
