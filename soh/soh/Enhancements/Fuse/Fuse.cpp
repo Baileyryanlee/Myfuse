@@ -31,8 +31,6 @@ extern "C" {
 #include "functions.h"
 }
 
-#include "objects/object_vm/object_vm.h"
-
 #include "src/overlays/actors/ovl_En_Dekubaba/z_en_dekubaba.h"
 #include "src/overlays/actors/ovl_En_Bom/z_en_bom.h"
 #include "src/overlays/actors/ovl_En_Tite/z_en_tite.h"
@@ -142,14 +140,8 @@ static std::unordered_map<Actor*, FuseSeekState> sSeekStates;
 static FuseShieldBeamState sShieldBeamState;
 static int gLastSwordBgExplodeFrame = -999;
 static int gLastSwordActorExplodeFrame = -999999;
-static s16 sBeamTexScroll = 0;
-static s32 sBeamObjSlot = -1;
-static s32 sBeamObjFailCount = 0;
-static s32 sBeamObjSpawnRequestFrame = -999999;
 static uintptr_t sCachedBeamosVmSeg06 = 0;
 static int sCachedBeamosVmFrame = -1;
-
-extern "C" s32 Object_Spawn(ObjectContext* objectCtx, s16 objectId);
 
 extern "C" void Fuse_SetCachedBeamosVmSeg06(uintptr_t seg06, int frame) {
     if (seg06 != 0) {
@@ -231,6 +223,7 @@ static inline Vec3f Fuse_Vec3fNormalize(const Vec3f& value, float* outLength = n
 static inline float Fuse_Vec3fDot(const Vec3f& a, const Vec3f& b) {
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
+
 
 static inline Vec3f Fuse_GetArrowEffectiveDir(Actor* proj, float* outSpeed) {
     const s16 yaw = proj->world.rot.y;
@@ -612,119 +605,6 @@ static FuseItemType RangedSlotItemType(RangedFuseSlot slot);
 static int GetMaterialEffectiveBaseDurabilityForItem(MaterialId id, FuseItemType itemType);
 static void TickShieldGuardBeam(PlayState* play);
 static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx**);
-
-static bool Fuse_IsValidObjectSlot(s32 slot) {
-    return slot >= 0 && slot < OBJECT_EXCHANGE_BANK_MAX;
-}
-
-static void* Fuse_GetObjectSegmentBase(PlayState* play, s32 slot, s16 objectId) {
-    if (!play || !Fuse_IsValidObjectSlot(slot)) {
-        return nullptr;
-    }
-
-    ObjectContext* objectCtx = &play->objectCtx;
-    const s16 slotObjectId = objectCtx->status[slot].id;
-    if (slotObjectId != objectId || !Object_IsLoaded(objectCtx, slot)) {
-        return nullptr;
-    }
-
-    // Canonical SoH draw path uses objectCtx.status[slot].segment as segment base for gSPSegment(0x06).
-    return objectCtx->status[slot].segment;
-}
-
-static s32 Fuse_EnsureBeamObjectLoaded(PlayState* play) {
-    if (!play) {
-        return -1;
-    }
-
-    ObjectContext* objectCtx = &play->objectCtx;
-
-    s32 objSlot = -1;
-    void* objSeg = nullptr;
-    bool hasPendingBeamObject = false;
-
-    if (Fuse_IsValidObjectSlot(sBeamObjSlot)) {
-        objSeg = Fuse_GetObjectSegmentBase(play, sBeamObjSlot, OBJECT_VM);
-        if (objSeg != nullptr) {
-            objSlot = sBeamObjSlot;
-        } else {
-            if (objectCtx->status[sBeamObjSlot].id == OBJECT_VM) {
-                hasPendingBeamObject = true;
-            } else {
-                sBeamObjSlot = -1;
-            }
-        }
-    } else {
-        sBeamObjSlot = -1;
-    }
-
-    if (objSlot < 0) {
-        const s32 foundSlot = Object_GetIndex(objectCtx, OBJECT_VM);
-        if (foundSlot >= 0) {
-            sBeamObjSlot = foundSlot;
-            objSeg = Fuse_GetObjectSegmentBase(play, foundSlot, OBJECT_VM);
-            if (objSeg != nullptr) {
-                objSlot = foundSlot;
-            } else if (objectCtx->status[foundSlot].id == OBJECT_VM) {
-                hasPendingBeamObject = true;
-            }
-        }
-    }
-
-    if (objSlot < 0 && !hasPendingBeamObject) {
-        const s32 frame = play->gameplayFrames;
-        if ((frame - sBeamObjSpawnRequestFrame) >= 30) {
-            sBeamObjSpawnRequestFrame = frame;
-            const s32 spawnedSlot = Object_Spawn(objectCtx, OBJECT_VM);
-            if (spawnedSlot >= 0) {
-                sBeamObjSlot = spawnedSlot;
-                objSeg = Fuse_GetObjectSegmentBase(play, spawnedSlot, OBJECT_VM);
-                if (objSeg != nullptr) {
-                    objSlot = spawnedSlot;
-                }
-            }
-        }
-    }
-
-    if (objSlot < 0) {
-        for (s32 i = 0; i < OBJECT_EXCHANGE_BANK_MAX; ++i) {
-            objSeg = Fuse_GetObjectSegmentBase(play, i, OBJECT_VM);
-            if (objSeg != nullptr) {
-                sBeamObjSlot = i;
-                objSlot = i;
-                break;
-            }
-        }
-        ++sBeamObjFailCount;
-    }
-
-    static s32 sBeamObjPendingLogFrame = -999999;
-    const s32 frame = play->gameplayFrames;
-    if (hasPendingBeamObject && (frame - sBeamObjPendingLogFrame) >= 5) {
-        const s32 pendingSlot = Fuse_IsValidObjectSlot(sBeamObjSlot) ? sBeamObjSlot : Object_GetIndex(objectCtx, OBJECT_VM);
-        const bool validPendingSlot = Fuse_IsValidObjectSlot(pendingSlot);
-        const s16 pendingObjectId = validPendingSlot ? objectCtx->status[pendingSlot].id : static_cast<s16>(-1);
-        const s32 pendingLoaded = validPendingSlot ? Object_IsLoaded(objectCtx, pendingSlot) : 0;
-        void* pendingSeg = validPendingSlot ? objectCtx->status[pendingSlot].segment : nullptr;
-        FUSE_LOG_DBG("[FuseDBG] BeamObjPending frame=%d slot=%d id=0x%04X loaded=%d seg06=%p\n", frame, pendingSlot,
-                     static_cast<u16>(pendingObjectId), pendingLoaded, pendingSeg);
-        sBeamObjPendingLogFrame = frame;
-    }
-
-    static s32 sBeamObjStateLogFrame = -999999;
-    if ((frame - sBeamObjStateLogFrame) >= 60) {
-        const s32 logSlot = (objSlot >= 0) ? objSlot : sBeamObjSlot;
-        const bool validLogSlot = Fuse_IsValidObjectSlot(logSlot);
-        const s32 loaded = validLogSlot ? Object_IsLoaded(objectCtx, logSlot) : 0;
-        const s16 objectId = validLogSlot ? objectCtx->status[logSlot].id : static_cast<s16>(-1);
-        void* segment = validLogSlot ? Fuse_GetObjectSegmentBase(play, logSlot, OBJECT_VM) : nullptr;
-        FUSE_LOG_DBG("[FuseDBG] BeamObj frame=%d id=0x%04X slot=%d loaded=%d seg06=%p fail=%d\n", frame,
-                     static_cast<u16>(objectId), logSlot, loaded, segment, sBeamObjFailCount);
-        sBeamObjStateLogFrame = frame;
-    }
-
-    return objSlot;
-}
 
 void TickBurnTimers(PlayState* play);
 
@@ -4764,7 +4644,6 @@ static void TickShieldGuardBeam(PlayState* play) {
     sShieldBeamState.active = true;
     sShieldBeamState.start = beamStart;
     sShieldBeamState.end = beamEnd;
-    Fuse_EnsureBeamObjectLoaded(play);
 
     if (sShieldBeamState.nextDrainFrame < frame) {
         sShieldBeamState.nextDrainFrame = frame + 60;
@@ -4842,111 +4721,77 @@ static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx**) {
         return;
     }
 
-    ObjectContext* objectCtx = &play->objectCtx;
-    const s32 cachedSlot = sBeamObjSlot;
-    const s32 idxSlot = Object_GetIndex(objectCtx, OBJECT_VM);
-    const s32 objSlot = Fuse_IsValidObjectSlot(cachedSlot) ? cachedSlot : idxSlot;
-
-    if (!Fuse_IsValidObjectSlot(objSlot)) {
-        static int sBeamDrawBlockedLogFrame = -999999;
-        if ((play->gameplayFrames - sBeamDrawBlockedLogFrame) >= 5) {
-            const s16 objectId = static_cast<s16>(-1);
-            const s32 loaded = 0;
-            FUSE_LOG_DBG("[FuseDBG] BeamDrawBlocked frame=%d cachedSlot=%d idxSlot=%d objId=0x%04X loaded=%d seg06=%p\n",
-                         play->gameplayFrames, cachedSlot, idxSlot, static_cast<u16>(objectId), loaded, nullptr);
-            sBeamDrawBlockedLogFrame = play->gameplayFrames;
-        }
+    const Vec3f start = sShieldBeamState.start;
+    const Vec3f end = sShieldBeamState.end;
+    const float dist = Math_Vec3f_DistXYZ(&start, &end);
+    if (dist <= 0.001f) {
         return;
     }
 
-    const s16 objectId = objectCtx->status[objSlot].id;
-    const s32 loaded = Object_IsLoaded(objectCtx, objSlot);
-    if ((objectId != OBJECT_VM) || !loaded) {
-        static int sBeamDrawBlockedLogFrame = -999999;
-        if ((play->gameplayFrames - sBeamDrawBlockedLogFrame) >= 5) {
-            FUSE_LOG_DBG("[FuseDBG] BeamDrawBlocked frame=%d cachedSlot=%d idxSlot=%d objId=0x%04X loaded=%d seg06=%p\n",
-                         play->gameplayFrames, cachedSlot, idxSlot, static_cast<u16>(objectId), loaded,
-                         objectCtx->status[objSlot].segment);
-            sBeamDrawBlockedLogFrame = play->gameplayFrames;
-        }
+    Vec3f beamVec{ end.x - start.x, end.y - start.y, end.z - start.z };
+    const Vec3f beamDir = Fuse_Vec3fNormalize(beamVec);
+    if (Fuse_Vec3fLength(beamDir) <= 0.001f) {
         return;
     }
 
-    sBeamTexScroll += 0xC;
+    const float widthScale = (play->gameplayFrames < sShieldBeamState.boostUntilFrame) ? kBeamWidthBoosted : kBeamWidthNormal;
+    const float beamHalfWidth = std::clamp(widthScale * 6.0f, 2.0f, 20.0f);
+
+    Vtx* beamVtx = (Vtx*)Graph_Alloc(play->state.gfxCtx, 8 * sizeof(Vtx));
+    if (beamVtx == nullptr) {
+        return;
+    }
+
+    const auto setVtx = [](Vtx& v, float x, float y, float z) {
+        v.v.ob[0] = static_cast<s16>(x);
+        v.v.ob[1] = static_cast<s16>(y);
+        v.v.ob[2] = static_cast<s16>(z);
+        v.v.flag = 0;
+        v.v.tc[0] = 0;
+        v.v.tc[1] = 0;
+        v.v.cn[0] = 96;
+        v.v.cn[1] = 235;
+        v.v.cn[2] = 255;
+        v.v.cn[3] = 255;
+    };
+
+    setVtx(beamVtx[0], -beamHalfWidth, 0.0f, 0.0f);
+    setVtx(beamVtx[1], beamHalfWidth, 0.0f, 0.0f);
+    setVtx(beamVtx[2], beamHalfWidth, 0.0f, dist);
+    setVtx(beamVtx[3], -beamHalfWidth, 0.0f, dist);
+
+    setVtx(beamVtx[4], 0.0f, -beamHalfWidth, 0.0f);
+    setVtx(beamVtx[5], 0.0f, beamHalfWidth, 0.0f);
+    setVtx(beamVtx[6], 0.0f, beamHalfWidth, dist);
+    setVtx(beamVtx[7], 0.0f, -beamHalfWidth, dist);
+
+    Vec3f startMutable = start;
+    Vec3f endMutable = end;
+    const s16 yaw = Math_Vec3f_Yaw(&startMutable, &endMutable);
+    const s16 pitch = Math_Vec3f_Pitch(&startMutable, &endMutable);
 
     Gfx_SetupDL_25Opa(play->state.gfxCtx);
     Gfx* p = *polyOpaDisp;
-    const uintptr_t restoreSeg08 = gSegments[8];
-    bool overrodeSeg08 = false;
+    gDPPipeSync(p++);
+    gDPSetCombineMode(p++, G_CC_PRIMITIVE, G_CC_PRIMITIVE);
+    gDPSetPrimColor(p++, 0, 0, 96, 235, 255, 255);
 
-    static constexpr bool kBeamFixedTransformTest = true;
+    Matrix_Translate(start.x, start.y, start.z, MTXMODE_NEW);
+    Matrix_RotateY(yaw, MTXMODE_APPLY);
+    Matrix_RotateX(pitch, MTXMODE_APPLY);
+    gSPMatrix(p++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
 
-    gSPSegment(p++, 0x08, (uintptr_t)func_80094E78(play->state.gfxCtx, 0, sBeamTexScroll));
-    overrodeSeg08 = true;
+    gSPVertex(p++, (uintptr_t)beamVtx, 8, 0);
+    gSP2Triangles(p++, 0, 1, 2, 0, 0, 2, 3, 0);
+    gSP2Triangles(p++, 4, 5, 6, 0, 4, 6, 7, 0);
 
-    Actor tempActor{};
-    tempActor.objBankIndex = objSlot;
-    Actor_SetObjectDependency(play, &tempActor);
-
-    static int sBeamActorDepDrawLogFrame = -999999;
-    if ((play->gameplayFrames - sBeamActorDepDrawLogFrame) >= 5) {
-        FUSE_LOG_DBG("[FuseDBG] BeamActorDepDraw frame=%d slot=%d boundSeg06=%p\n", play->gameplayFrames, objSlot,
-                     (void*)gSegments[6]);
-        sBeamActorDepDrawLogFrame = play->gameplayFrames;
+    static int sBeamShieldDrawLogFrame = -999999;
+    if ((play->gameplayFrames - sBeamShieldDrawLogFrame) >= 30) {
+        FUSE_LOG_DBG("[FuseDBG] BeamShieldDraw frame=%d dist=%.1f width=%.1f boost=%d\n", play->gameplayFrames, dist,
+                     beamHalfWidth * 2.0f, (play->gameplayFrames < sShieldBeamState.boostUntilFrame) ? 1 : 0);
+        sBeamShieldDrawLogFrame = play->gameplayFrames;
     }
 
-    const Vec3f start = sShieldBeamState.start;
-    const Vec3f endConst = sShieldBeamState.end;
-    Vec3f beamVec{ endConst.x - start.x, endConst.y - start.y, endConst.z - start.z };
-    const Vec3f beamDir = Fuse_Vec3fNormalize(beamVec);
-
-    Vec3f drawStart{
-        start.x + (beamDir.x * kBeamStartForwardOffset),
-        start.y + (beamDir.y * kBeamStartForwardOffset),
-        start.z + (beamDir.z * kBeamStartForwardOffset),
-    };
-
-    Vec3f end = endConst;
-
-    const s16 yaw = Math_Vec3f_Yaw(&drawStart, &end);
-    const s16 pitch = Math_Vec3f_Pitch(&drawStart, &end);
-    const float dist = Math_Vec3f_DistXYZ(&drawStart, &end);
-    if (dist > 0.001f) {
-        if (kBeamFixedTransformTest) {
-            Matrix_Translate(start.x, start.y + 20.0f, start.z, MTXMODE_NEW);
-            Matrix_RotateY(0, MTXMODE_APPLY);
-            Matrix_RotateX(0, MTXMODE_APPLY);
-            Matrix_Scale(1.0f, 1.0f, 1.0f, MTXMODE_APPLY);
-
-            static int sBeamFixedTestLogFrame = -999999;
-            if ((play->gameplayFrames - sBeamFixedTestLogFrame) >= 5) {
-                FUSE_LOG_DBG("[FuseDBG] BeamFixedTest frame=%d start=(%.1f,%.1f,%.1f)\n", play->gameplayFrames, start.x,
-                             start.y, start.z);
-                sBeamFixedTestLogFrame = play->gameplayFrames;
-            }
-        } else {
-            const float width =
-                (play->gameplayFrames < sShieldBeamState.boostUntilFrame) ? kBeamWidthBoosted : kBeamWidthNormal;
-            Matrix_Translate(drawStart.x, drawStart.y, drawStart.z, MTXMODE_NEW);
-            Matrix_RotateY(yaw, MTXMODE_APPLY);
-            Matrix_RotateX(pitch, MTXMODE_APPLY);
-            Matrix_Scale(width * 0.1f, width * 0.1f, dist * 0.0015f, MTXMODE_APPLY);
-        }
-
-        gSPMatrix(p++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
-        gSPDisplayList(p++, (Gfx*)gBeamosLaserDL);
-
-        static int sBeamShieldDrawLogFrame = -999999;
-        if ((play->gameplayFrames - sBeamShieldDrawLogFrame) >= 5) {
-            FUSE_LOG_DBG("[FuseDBG] BeamShieldDraw frame=%d target=OPA seg06=%p slot=%d dist=%.1f\n",
-                         play->gameplayFrames, (void*)gSegments[6], objSlot, dist);
-            sBeamShieldDrawLogFrame = play->gameplayFrames;
-        }
-    }
-
-    if (overrodeSeg08) {
-        gSPSegment(p++, 0x08, restoreSeg08);
-    }
     *polyOpaDisp = p;
 }
 
