@@ -4842,8 +4842,10 @@ static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx**) {
         return;
     }
 
-    // Previous proof-bypass path crashed immediately on guard because gSPSegment(0x06, ...)
-    // received a non-object-backed pointer; beam draw must remain gated on validated object segments.
+    // Runtime capture showed EnVm_Draw can expose a bound segment-06 value that is not a reusable
+    // raw object pointer in this build. Feeding that cached value back into gSPSegment(0x06, ...)
+    // crashed in ResourceMgr_OTRSigCheck, so fallback reuse is intentionally disabled until the
+    // true segment-setup source/path is fully understood.
     ObjectContext* objectCtx = &play->objectCtx;
     const s32 cachedSlot = sBeamObjSlot;
     const s32 idxSlot = Object_GetIndex(objectCtx, OBJECT_VM);
@@ -4851,25 +4853,16 @@ static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx**) {
     void* objSeg = Fuse_GetObjectSegmentBase(play, objSlot, OBJECT_VM);
 
     if (objSeg == nullptr) {
-        const uintptr_t cachedSeg = Fuse_GetCachedBeamosVmSeg06();
-        const int cachedFrame = Fuse_GetCachedBeamosVmSeg06Frame();
-        const int age = play->gameplayFrames - cachedFrame;
-        if ((cachedSeg != 0) && (age >= 0) && (age <= 10)) {
-            objSeg = reinterpret_cast<void*>(cachedSeg);
-            FUSE_LOG_DBG("[FuseDBG] BeamSegFallback frame=%d seg06=%p age=%d\n", play->gameplayFrames,
-                         (void*)cachedSeg, age);
-        } else {
-            static int sBeamDrawBlockedLogFrame = -999999;
-            if ((play->gameplayFrames - sBeamDrawBlockedLogFrame) >= 5) {
-                const bool validSlot = Fuse_IsValidObjectSlot(objSlot);
-                const s16 objectId = validSlot ? objectCtx->status[objSlot].id : static_cast<s16>(-1);
-                const s32 loaded = validSlot ? Object_IsLoaded(objectCtx, objSlot) : 0;
-                FUSE_LOG_DBG("[FuseDBG] BeamDrawBlocked frame=%d cachedSlot=%d idxSlot=%d objId=0x%04X loaded=%d seg06=%p\n",
-                             play->gameplayFrames, cachedSlot, idxSlot, static_cast<u16>(objectId), loaded, objSeg);
-                sBeamDrawBlockedLogFrame = play->gameplayFrames;
-            }
-            return;
+        static int sBeamDrawBlockedLogFrame = -999999;
+        if ((play->gameplayFrames - sBeamDrawBlockedLogFrame) >= 5) {
+            const bool validSlot = Fuse_IsValidObjectSlot(objSlot);
+            const s16 objectId = validSlot ? objectCtx->status[objSlot].id : static_cast<s16>(-1);
+            const s32 loaded = validSlot ? Object_IsLoaded(objectCtx, objSlot) : 0;
+            FUSE_LOG_DBG("[FuseDBG] BeamDrawBlocked frame=%d cachedSlot=%d idxSlot=%d objId=0x%04X loaded=%d seg06=%p\n",
+                         play->gameplayFrames, cachedSlot, idxSlot, static_cast<u16>(objectId), loaded, objSeg);
+            sBeamDrawBlockedLogFrame = play->gameplayFrames;
         }
+        return;
     }
 
     sBeamTexScroll += 0xC;
