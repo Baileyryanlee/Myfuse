@@ -4806,6 +4806,8 @@ static void TickShieldGuardBeam(PlayState* play) {
 }
 
 static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx**) {
+    static constexpr bool kBeamDrawBypassObjectGate = true;
+
     if (!play || !Fuse::IsEnabled() || !sShieldBeamState.active) {
         return;
     }
@@ -4816,7 +4818,8 @@ static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx**) {
 
     const s32 objSlot = sBeamObjSlot;
     void* objSeg = Fuse_GetObjectSegmentBase(play, objSlot, OBJECT_VM);
-    if (objSlot < 0 || objSeg == nullptr) {
+    const bool objMissing = (objSlot < 0 || objSeg == nullptr);
+    if (objMissing && !kBeamDrawBypassObjectGate) {
         static int sBeamShieldDrawSkipLogFrame = -999999;
         if ((play->gameplayFrames - sBeamShieldDrawSkipLogFrame) >= 60) {
             const s16 objectId =
@@ -4834,10 +4837,21 @@ static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx**) {
     Gfx* p = *polyOpaDisp;
     const uintptr_t restoreSeg06 = gSegments[6];
     const uintptr_t restoreSeg08 = gSegments[8];
+    void* drawSeg06 = objSeg;
+
+    if (objMissing && kBeamDrawBypassObjectGate) {
+        drawSeg06 = (void*)restoreSeg06;
+        static int sBeamProofDrawLogFrame = -999999;
+        if ((play->gameplayFrames - sBeamProofDrawLogFrame) >= 60) {
+            FUSE_LOG_DBG("[FuseDBG] BeamProofDraw frame=%d bypass=1\n", play->gameplayFrames);
+            sBeamProofDrawLogFrame = play->gameplayFrames;
+        }
+    }
+
     static constexpr bool kBeamFixedTransformTest = true;
 
     gSPSegment(p++, 0x08, (uintptr_t)func_80094E78(play->state.gfxCtx, 0, sBeamTexScroll));
-    gSPSegment(p++, 0x06, (uintptr_t)objSeg);
+    gSPSegment(p++, 0x06, (uintptr_t)drawSeg06);
 
     const Vec3f start = sShieldBeamState.start;
     const Vec3f endConst = sShieldBeamState.end;
@@ -4883,7 +4897,7 @@ static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx**) {
         static int sBeamShieldDrawLogFrame = -999999;
         if ((play->gameplayFrames - sBeamShieldDrawLogFrame) >= 120) {
             FUSE_LOG_DBG("[FuseDBG] BeamShieldDraw frame=%d target=OPA seg06=%p slot=%d dist=%.1f\n",
-                         play->gameplayFrames, objSeg, objSlot, dist);
+                         play->gameplayFrames, drawSeg06, objSlot, dist);
             sBeamShieldDrawLogFrame = play->gameplayFrames;
         }
     }
