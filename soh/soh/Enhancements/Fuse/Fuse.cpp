@@ -624,13 +624,18 @@ static s32 Fuse_EnsureBeamObjectLoaded(PlayState* play) {
 
     s32 objSlot = -1;
     void* objSeg = nullptr;
+    bool hasPendingBeamObject = false;
 
     if (Fuse_IsValidObjectSlot(sBeamObjSlot)) {
         objSeg = Fuse_GetObjectSegmentBase(play, sBeamObjSlot, OBJECT_VM);
         if (objSeg != nullptr) {
             objSlot = sBeamObjSlot;
-        } else if (objectCtx->status[sBeamObjSlot].id != OBJECT_VM) {
-            sBeamObjSlot = -1;
+        } else {
+            if (objectCtx->status[sBeamObjSlot].id == OBJECT_VM) {
+                hasPendingBeamObject = true;
+            } else {
+                sBeamObjSlot = -1;
+            }
         }
     } else {
         sBeamObjSlot = -1;
@@ -643,11 +648,13 @@ static s32 Fuse_EnsureBeamObjectLoaded(PlayState* play) {
             objSeg = Fuse_GetObjectSegmentBase(play, foundSlot, OBJECT_VM);
             if (objSeg != nullptr) {
                 objSlot = foundSlot;
+            } else if (objectCtx->status[foundSlot].id == OBJECT_VM) {
+                hasPendingBeamObject = true;
             }
         }
     }
 
-    if (objSlot < 0) {
+    if (objSlot < 0 && !hasPendingBeamObject) {
         const s32 frame = play->gameplayFrames;
         if ((frame - sBeamObjSpawnRequestFrame) >= 30) {
             sBeamObjSpawnRequestFrame = frame;
@@ -674,8 +681,20 @@ static s32 Fuse_EnsureBeamObjectLoaded(PlayState* play) {
         ++sBeamObjFailCount;
     }
 
-    static s32 sBeamObjStateLogFrame = -999999;
+    static s32 sBeamObjPendingLogFrame = -999999;
     const s32 frame = play->gameplayFrames;
+    if (hasPendingBeamObject && (frame - sBeamObjPendingLogFrame) >= 60) {
+        const s32 pendingSlot = Fuse_IsValidObjectSlot(sBeamObjSlot) ? sBeamObjSlot : Object_GetIndex(objectCtx, OBJECT_VM);
+        const bool validPendingSlot = Fuse_IsValidObjectSlot(pendingSlot);
+        const s16 pendingObjectId = validPendingSlot ? objectCtx->status[pendingSlot].id : static_cast<s16>(-1);
+        const s32 pendingLoaded = validPendingSlot ? Object_IsLoaded(objectCtx, pendingSlot) : 0;
+        void* pendingSeg = validPendingSlot ? objectCtx->status[pendingSlot].segment : nullptr;
+        FUSE_LOG_DBG("[FuseDBG] BeamObjPending frame=%d slot=%d id=0x%04X loaded=%d seg06=%p\n", frame, pendingSlot,
+                     static_cast<u16>(pendingObjectId), pendingLoaded, pendingSeg);
+        sBeamObjPendingLogFrame = frame;
+    }
+
+    static s32 sBeamObjStateLogFrame = -999999;
     if ((frame - sBeamObjStateLogFrame) >= 60) {
         const s32 logSlot = (objSlot >= 0) ? objSlot : sBeamObjSlot;
         const bool validLogSlot = Fuse_IsValidObjectSlot(logSlot);
