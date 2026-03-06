@@ -530,10 +530,9 @@ void EnVm_Draw(Actor* thisx, PlayState* play2) {
     if ((objBankIndex >= 0) && (objBankIndex < ARRAY_COUNT(play->objectCtx.status))) {
         ObjectStatus* objectStatus = &play->objectCtx.status[objBankIndex];
 
-        lusprintf(__FILE__, __LINE__, LOG_LEVEL_INFO,
-                  "[FuseDBG] EnVmDrawObj actor=%p slot=%d id=0x%04X loaded=%d seg06=%p\n", (void*)this,
-                  objBankIndex, objectStatus->id, Object_IsLoaded(&play->objectCtx, objBankIndex),
-                  objectStatus->segment);
+        osSyncPrintf("[FuseDBG] EnVmDrawObj actor=%p slot=%d id=0x%04X loaded=%d seg06=%p\n", (void*)this,
+                     objBankIndex, objectStatus->id, Object_IsLoaded(&play->objectCtx, objBankIndex),
+                     objectStatus->segment);
     }
 
     OPEN_DISPS(play->state.gfxCtx);
