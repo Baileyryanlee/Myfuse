@@ -127,18 +127,6 @@ static Vec3f D_80B2EB7C = { 0.4f, 0.4f, 0.4f };
 
 static s32 sFuseVmDbgLastFrame = -999999;
 
-#define EN_VM_PROXY_MODE_STATE 0x7F
-
-#define CVAR_FUSE_BEAMOS_PROXY_MODE CVAR_ENHANCEMENT("Fuse.BeamosProxy.Mode")
-#define CVAR_FUSE_BEAMOS_PROXY_ACTIVE CVAR_ENHANCEMENT("Fuse.BeamosProxy.Active")
-#define CVAR_FUSE_BEAMOS_PROXY_START_X CVAR_ENHANCEMENT("Fuse.BeamosProxy.StartX")
-#define CVAR_FUSE_BEAMOS_PROXY_START_Y CVAR_ENHANCEMENT("Fuse.BeamosProxy.StartY")
-#define CVAR_FUSE_BEAMOS_PROXY_START_Z CVAR_ENHANCEMENT("Fuse.BeamosProxy.StartZ")
-#define CVAR_FUSE_BEAMOS_PROXY_END_X CVAR_ENHANCEMENT("Fuse.BeamosProxy.EndX")
-#define CVAR_FUSE_BEAMOS_PROXY_END_Y CVAR_ENHANCEMENT("Fuse.BeamosProxy.EndY")
-#define CVAR_FUSE_BEAMOS_PROXY_END_Z CVAR_ENHANCEMENT("Fuse.BeamosProxy.EndZ")
-#define CVAR_FUSE_BEAMOS_PROXY_RADIUS CVAR_ENHANCEMENT("Fuse.BeamosProxy.Radius")
-
 static void* D_80B2EB88[] = {
     gEffEnemyDeathFlame1Tex, gEffEnemyDeathFlame2Tex,  gEffEnemyDeathFlame3Tex, gEffEnemyDeathFlame4Tex,
     gEffEnemyDeathFlame5Tex, gEffEnemyDeathFlame6Tex,  gEffEnemyDeathFlame7Tex, gEffEnemyDeathFlame8Tex,
@@ -149,84 +137,8 @@ void EnVm_SetupAction(EnVm* this, EnVmActionFunc actionFunc) {
     this->actionFunc = actionFunc;
 }
 
-static s32 EnVm_IsBeamProxy(const EnVm* this) {
-    return this->unk_21C == EN_VM_PROXY_MODE_STATE;
-}
-
-static void EnVm_UpdateBeamProxy(EnVm* this, PlayState* play) {
-    const s32 isActive = CVarGetInteger(CVAR_FUSE_BEAMOS_PROXY_ACTIVE, 0) != 0;
-    const Vec3f defaultStart = this->actor.world.pos;
-    Vec3f start;
-    Vec3f end;
-    Vec3f delta;
-    f32 xzDist;
-
-    start.x = CVarGetFloat(CVAR_FUSE_BEAMOS_PROXY_START_X, defaultStart.x);
-    start.y = CVarGetFloat(CVAR_FUSE_BEAMOS_PROXY_START_Y, defaultStart.y + 60.0f);
-    start.z = CVarGetFloat(CVAR_FUSE_BEAMOS_PROXY_START_Z, defaultStart.z);
-    end.x = CVarGetFloat(CVAR_FUSE_BEAMOS_PROXY_END_X, start.x);
-    end.y = CVarGetFloat(CVAR_FUSE_BEAMOS_PROXY_END_Y, start.y);
-    end.z = CVarGetFloat(CVAR_FUSE_BEAMOS_PROXY_END_Z, start.z + 600.0f);
-
-    if (isActive) {
-        if (this->timer == 0) {
-            this->timer = 1;
-            Fuse_DebugPrintf("[FuseDBG] EnVmBeamProxy active=1 actor=%p reused=%d\n", (void*)this, this->unk_25E != 0);
-            this->unk_25E = 1;
-        } else {
-            this->timer++;
-        }
-
-        this->beamPos1 = start;
-        this->beamPos3 = end;
-        this->beamPos2 = end;
-
-        delta.x = end.x - start.x;
-        delta.y = end.y - start.y;
-        delta.z = end.z - start.z;
-        xzDist = sqrtf(SQ(delta.x) + SQ(delta.z));
-
-        this->beamRot.y = Math_Atan2S(delta.x, delta.z);
-        this->beamRot.x = -Math_Atan2S(delta.y, xzDist);
-        this->beamRot.z = 0;
-        this->beamScale.x = CVarGetFloat(CVAR_FUSE_BEAMOS_PROXY_RADIUS, 0.1f);
-        this->beamScale.y = this->beamScale.x;
-        this->beamScale.z = Math_Vec3f_DistXYZ(&start, &end);
-        this->unk_260 = 3;
-
-        if ((play->gameplayFrames - sFuseVmDbgLastFrame) >= 5) {
-            Fuse_DebugPrintf(
-                "[FuseDBG] EnVmBeamProxy actor=%p active=1 duration=%d start=(%.1f, %.1f, %.1f) end=(%.1f, %.1f, %.1f)\n",
-                (void*)this, this->timer, start.x, start.y, start.z, end.x, end.y, end.z);
-            sFuseVmDbgLastFrame = play->gameplayFrames;
-        }
-    } else if (this->timer != 0) {
-        Fuse_DebugPrintf(
-            "[FuseDBG] EnVmBeamProxy active=0 actor=%p duration=%d start=(%.1f, %.1f, %.1f) end=(%.1f, %.1f, %.1f)\n",
-            (void*)this, this->timer, this->beamPos1.x, this->beamPos1.y, this->beamPos1.z, this->beamPos3.x,
-            this->beamPos3.y, this->beamPos3.z);
-        this->timer = 0;
-        this->unk_260 = 0;
-        this->beamScale.x = this->beamScale.y = this->beamScale.z = 0.0f;
-    }
-}
-
 void EnVm_Init(Actor* thisx, PlayState* play) {
     EnVm* this = (EnVm*)thisx;
-
-    if (CVarGetInteger(CVAR_FUSE_BEAMOS_PROXY_MODE, 0) != 0) {
-        this->unk_21C = EN_VM_PROXY_MODE_STATE;
-        this->timer = 0;
-        this->unk_25E = 0;
-        this->unk_260 = 0;
-        this->actor.flags &= ~ACTOR_FLAG_ATTENTION_ENABLED;
-        this->actor.naviEnemyId = NAVI_ENEMY_NONE;
-        this->actor.colChkInfo.health = 0;
-        this->actor.targetMode = 0;
-        Actor_SetScale(thisx, 0.01f);
-        Fuse_DebugPrintf("[FuseDBG] EnVmBeamProxy actor=%p spawned mode=proxy\n", (void*)this);
-        return;
-    }
 
     SkelAnime_Init(play, &this->skelAnime, &gBeamosSkel, &gBeamosAnim, this->jointTable, this->morphTable, 11);
     ActorShape_Init(&thisx->shape, 0.0f, NULL, 0.0f);
@@ -253,11 +165,6 @@ void EnVm_Init(Actor* thisx, PlayState* play) {
 
 void EnVm_Destroy(Actor* thisx, PlayState* play) {
     EnVm* this = (EnVm*)thisx;
-
-    if (EnVm_IsBeamProxy(this)) {
-        Fuse_DebugPrintf("[FuseDBG] EnVmBeamProxy actor=%p destroyed\n", (void*)this);
-        return;
-    }
 
     Collider_DestroyCylinder(play, &this->colliderCylinder);
 
@@ -522,13 +429,6 @@ void EnVm_Update(Actor* thisx, PlayState* play) {
     EnVm* this = (EnVm*)thisx;
     CollisionCheckContext* colChkCtx = &play->colChkCtx;
 
-    if (EnVm_IsBeamProxy(this)) {
-        EnVm_UpdateBeamProxy(this, play);
-        this->beamTexScroll += 0xC;
-        this->actor.focus.pos = this->beamPos1;
-        return;
-    }
-
     if (this->actor.colChkInfo.health != 0) {
         EnVm_CheckHealth(this, play);
     }
@@ -639,8 +539,9 @@ void EnVm_Draw(Actor* thisx, PlayState* play2) {
 
         if ((play->gameplayFrames - sFuseVmDbgLastFrame) >= 5) {
             Fuse_DebugPrintf("[FuseDBG] EnVmDrawObj actor=%p slot=%d id=0x%04X loaded=%d seg06=%p boundSeg06=%p\n",
-                             (void*)this, objBankIndex, objectStatus->id, Object_IsLoaded(&play->objectCtx, objBankIndex),
-                             objectStatus->segment, (void*)gSegments[6]);
+                             (void*)this, objBankIndex, objectStatus->id,
+                             Object_IsLoaded(&play->objectCtx, objBankIndex), objectStatus->segment,
+                             (void*)gSegments[6]);
             sFuseVmDbgLastFrame = play->gameplayFrames;
         }
     }
@@ -649,13 +550,11 @@ void EnVm_Draw(Actor* thisx, PlayState* play2) {
 
     Gfx_SetupDL_25Opa(play->state.gfxCtx);
     Gfx_SetupDL_25Xlu(play->state.gfxCtx);
-    if (!EnVm_IsBeamProxy(this)) {
-        SkelAnime_DrawSkeletonOpa(play, &this->skelAnime, EnVm_OverrideLimbDraw, EnVm_PostLimbDraw, this);
-        actorPos = this->actor.world.pos;
-        func_80033C30(&actorPos, &D_80B2EB7C, 255, play);
-    }
+    SkelAnime_DrawSkeletonOpa(play, &this->skelAnime, EnVm_OverrideLimbDraw, EnVm_PostLimbDraw, this);
+    actorPos = this->actor.world.pos;
+    func_80033C30(&actorPos, &D_80B2EB7C, 255, play);
 
-    if (!EnVm_IsBeamProxy(this) && this->unk_260 >= 3) {
+    if (this->unk_260 >= 3) {
         Matrix_Translate(this->beamPos3.x, this->beamPos3.y + 10.0f, this->beamPos3.z, MTXMODE_NEW);
         Matrix_Scale(0.8f, 0.8f, 0.8f, MTXMODE_APPLY);
         gSPMatrix(POLY_XLU_DISP++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
@@ -669,38 +568,13 @@ void EnVm_Draw(Actor* thisx, PlayState* play2) {
         gSPSegment(POLY_XLU_DISP++, 0x08, SEGMENTED_TO_VIRTUAL(D_80B2EB88[(play->gameplayFrames + 4) % 8]));
         gSPDisplayList(POLY_XLU_DISP++, gEffEnemyDeathFlameDL);
     }
-    if (EnVm_IsBeamProxy(this) && (this->unk_260 < 3 || this->beamScale.z <= 0.0f || this->beamScale.x <= 0.0f)) {
-        if ((play->gameplayFrames - sFuseVmDbgLastFrame) >= 5) {
-            Fuse_DebugPrintf("[FuseDBG] EnVmBeamProxy drawSkipped actor=%p reason=%s active=%d objectLoaded=%d\n",
-                             (void*)this,
-                             this->unk_260 < 3 ? "inactive" : ((this->beamScale.z <= 0.0f) ? "distance<=0" : "radius<=0"),
-                             this->unk_260 >= 3,
-                             (objBankIndex >= 0) && (objBankIndex < ARRAY_COUNT(play->objectCtx.status))
-                                 ? Object_IsLoaded(&play->objectCtx, objBankIndex)
-                                 : 0);
-            sFuseVmDbgLastFrame = play->gameplayFrames;
-        }
-        CLOSE_DISPS(play->state.gfxCtx);
-        return;
-    }
-
     gSPSegment(POLY_OPA_DISP++, 0x08, func_80094E78(play->state.gfxCtx, 0, this->beamTexScroll));
     Matrix_Translate(this->beamPos1.x, this->beamPos1.y, this->beamPos1.z, MTXMODE_NEW);
     Matrix_RotateZYX(this->beamRot.x, this->beamRot.y, this->beamRot.z, MTXMODE_APPLY);
     Matrix_Scale(this->beamScale.x * 0.1f, this->beamScale.x * 0.1f, this->beamScale.z * 0.0015f, MTXMODE_APPLY);
     gSPMatrix(POLY_OPA_DISP++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
     if ((play->gameplayFrames - sFuseVmDbgLastFrame) >= 5) {
-        if (EnVm_IsBeamProxy(this)) {
-            Fuse_DebugPrintf("[FuseDBG] EnVmBeamProxy draw actor=%p active=%d duration=%d start=(%.1f, %.1f, %.1f) "
-                             "end=(%.1f, %.1f, %.1f) objectLoaded=%d\n",
-                             (void*)this, this->unk_260 >= 3, this->timer, this->beamPos1.x, this->beamPos1.y,
-                             this->beamPos1.z, this->beamPos3.x, this->beamPos3.y, this->beamPos3.z,
-                             (objBankIndex >= 0) && (objBankIndex < ARRAY_COUNT(play->objectCtx.status))
-                                 ? Object_IsLoaded(&play->objectCtx, objBankIndex)
-                                 : 0);
-        } else {
-            Fuse_DebugPrintf("[FuseDBG] EnVmLaserDraw actor=%p boundSeg06=%p\n", (void*)this, (void*)gSegments[6]);
-        }
+        Fuse_DebugPrintf("[FuseDBG] EnVmLaserDraw actor=%p boundSeg06=%p\n", (void*)this, (void*)gSegments[6]);
         sFuseVmDbgLastFrame = play->gameplayFrames;
     }
     gSPDisplayList(POLY_OPA_DISP++, gBeamosLaserDL);
