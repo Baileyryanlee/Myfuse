@@ -136,8 +136,8 @@ list(APPEND soh__
     ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/Visuals/FuseVisual.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/UI/FuseMenuWindow.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/UI/FusePauseBridge.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/soh/src/overlays/actors/ovl_En_Fuse_Beam/z_en_fuse_beam.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/soh/src/overlays/actors/ovl_En_Fuse_Beam/z_en_fuse_beam.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/overlays/actors/ovl_En_Fuse_Beam/z_en_fuse_beam.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/overlays/actors/ovl_En_Fuse_Beam/z_en_fuse_beam.h
 )
 
 list(REMOVE_DUPLICATES soh__)
