@@ -6,7 +6,6 @@
 
 #include "z_en_fuse_beam.h"
 #include "objects/object_vm/object_vm.h"
-#include "soh/Enhancements/Fuse/FuseCBridge.h"
 
 #define FLAGS (ACTOR_FLAG_UPDATE_CULLING_DISABLED | ACTOR_FLAG_DRAW_CULLING_DISABLED)
 
@@ -43,8 +42,6 @@ void EnFuseBeam_Init(Actor* thisx, PlayState* play) {
     this->beamTexScroll = 0;
     this->loggedMissingObject = false;
 
-    Fuse_DebugPrintf("[FuseDBG] EnFuseBeam spawned actor=%p pos=(%.2f,%.2f,%.2f) rotY=%d\n", (void*)this,
-                     this->beamPos1.x, this->beamPos1.y, this->beamPos1.z, this->beamRot.y);
 }
 
 void EnFuseBeam_Destroy(Actor* thisx, PlayState* play) {
@@ -67,8 +64,6 @@ void EnFuseBeam_Draw(Actor* thisx, PlayState* play) {
 
     if ((this->actor.objBankIndex < 0) || !Object_IsLoaded(&play->objectCtx, this->actor.objBankIndex)) {
         if (!this->loggedMissingObject) {
-            Fuse_DebugPrintf("[FuseDBG] EnFuseBeam draw skipped actor=%p objBankIndex=%d\n", (void*)this,
-                             this->actor.objBankIndex);
             this->loggedMissingObject = true;
         }
         return;
