@@ -15,6 +15,7 @@
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
 #include "soh/Enhancements/nametag.h"
+#include "soh/Enhancements/Fuse/FuseCBridge.h"
 
 #include "soh/ActorDB.h"
 #include "soh/OTRGlobals.h"
@@ -1235,7 +1236,19 @@ void Actor_SetScale(Actor* actor, f32 scale) {
 }
 
 void Actor_SetObjectDependency(PlayState* play, Actor* actor) {
-    gSegments[6] = VIRTUAL_TO_PHYSICAL(play->objectCtx.status[actor->objBankIndex].segment);
+    void* segmentSrc = play->objectCtx.status[actor->objBankIndex].segment;
+    uintptr_t boundSeg06 = VIRTUAL_TO_PHYSICAL(segmentSrc);
+
+    gSegments[6] = boundSeg06;
+
+    if ((actor != NULL) && (actor->id == ACTOR_EN_VM)) {
+        static s32 sFuseActorObjDepLogFrame = -999999;
+        if ((play->gameplayFrames - sFuseActorObjDepLogFrame) >= 5) {
+            Fuse_DebugPrintf("[FuseDBG] ActorObjDep actor=%p id=0x%04X slot=%d src=%p srcType=objectCtx.status.segment boundSeg06=%p\n",
+                             (void*)actor, actor->id, actor->objBankIndex, segmentSrc, (void*)boundSeg06);
+            sFuseActorObjDepLogFrame = play->gameplayFrames;
+        }
+    }
 }
 
 void Actor_Init(Actor* actor, PlayState* play) {
@@ -1256,10 +1269,16 @@ void Actor_Init(Actor* actor, PlayState* play) {
     ActorShape_Init(&actor->shape, 0.0f, NULL, 0.0f);
     if (Object_IsLoaded(&play->objectCtx, actor->objBankIndex)) {
         Actor_SetObjectDependency(play, actor);
-        actor->init(actor, play);
-        actor->init = NULL;
 
-        GameInteractor_ExecuteOnActorInit(actor);
+        if (GameInteractor_ShouldActorInit(actor)) {
+            actor->init(actor, play);
+            actor->init = NULL;
+
+            GameInteractor_ExecuteOnActorInit(actor);
+        } else {
+            actor->init = NULL;
+            Actor_Kill(actor);
+        }
     }
 }
 
@@ -2244,6 +2263,10 @@ void Player_PlaySfx(Actor* actor, u16 sfxId) {
         Audio_PlaySoundGeneral(sfxId, &actor->projectedPos, 4, &freqMultiplier, &gSfxDefaultFreqAndVolScale,
                                &gSfxDefaultReverb);
     }
+
+    if (actor->id == ACTOR_PLAYER) {
+        GameInteractor_ExecuteOnPlayerSfx(sfxId);
+    }
 }
 
 void Audio_PlayActorSound2(Actor* actor, u16 sfxId) {
@@ -2624,10 +2647,16 @@ void Actor_UpdateAll(PlayState* play, ActorContext* actorCtx) {
             if (actor->init != NULL) {
                 if (Object_IsLoaded(&play->objectCtx, actor->objBankIndex)) {
                     Actor_SetObjectDependency(play, actor);
-                    actor->init(actor, play);
-                    actor->init = NULL;
 
-                    GameInteractor_ExecuteOnActorInit(actor);
+                    if (GameInteractor_ShouldActorInit(actor)) {
+                        actor->init(actor, play);
+                        actor->init = NULL;
+
+                        GameInteractor_ExecuteOnActorInit(actor);
+                    } else {
+                        actor->init = NULL;
+                        Actor_Kill(actor);
+                    }
                 }
                 actor = actor->next;
             } else if (!Object_IsLoaded(&play->objectCtx, actor->objBankIndex)) {
@@ -2670,8 +2699,10 @@ void Actor_UpdateAll(PlayState* play, ActorContext* actorCtx) {
                     if (actor->colorFilterTimer != 0) {
                         actor->colorFilterTimer--;
                     }
-                    actor->update(actor, play);
-                    GameInteractor_ExecuteOnActorUpdate(actor);
+                    if (GameInteractor_ShouldActorUpdate(actor)) {
+                        actor->update(actor, play);
+                        GameInteractor_ExecuteOnActorUpdate(actor);
+                    }
                     func_8003F8EC(play, &play->colCtx.dyna, actor);
                 }
 

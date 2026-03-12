@@ -15,9 +15,10 @@ typedef struct EnBoom {
     /* 0x01D0 */ Actor* grabbed; // actor grabbed by the boomerang
     /* 0x01D4 */ u8 returnTimer; // returns to Link when 0
     /* 0x01D5 */ u8 activeTimer; // increments once every update
-    /* 0x01D8 */ s32 effectIndex;
-    /* 0x01DC */ WeaponInfo boomerangInfo;
-    /* 0x01F8 */ EnBoomActionFunc actionFunc;
-} EnBoom; // size = 0x01FC
+    /* 0x01D8 */ f32 wideRangeScale;
+    /* 0x01DC */ s32 effectIndex;
+    /* 0x01E0 */ WeaponInfo boomerangInfo;
+    /* 0x01FC */ EnBoomActionFunc actionFunc;
+} EnBoom; // size = 0x0200
 
 #endif

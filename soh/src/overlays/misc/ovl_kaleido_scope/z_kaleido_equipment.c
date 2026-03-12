@@ -545,7 +545,6 @@ void KaleidoScope_DrawEquipment(PlayState* play) {
 
             if (CHECK_AGE_REQ_EQUIP(pauseCtx->cursorY[PAUSE_EQUIP], pauseCtx->cursorX[PAUSE_EQUIP])) {
                 if (CHECK_BTN_ALL(input->press.button, BTN_A)) {
-
                     // #Region SoH [Enhancements]
                     // Allow Link to remove his equipment from the equipment subscreen by toggling on/off
                     // Shields will be un-equipped entirely, and tunics/boots will revert to Kokiri Tunic/Kokiri Boots
@@ -642,8 +641,8 @@ void KaleidoScope_DrawEquipment(PlayState* play) {
                     pauseCtx->unk_1E4 = 7;
                     sEquipTimer = 10;
                 } else if (CVarGetInteger(CVAR_ENHANCEMENT("AssignableTunicsAndBoots"), 0) != 0) {
-                    // Only allow assigning tunic and boots to c-buttons
-                    if (pauseCtx->cursorY[PAUSE_EQUIP] > 1) {
+                    // Only allow assigning shield, tunic and boots to c-buttons
+                    if (pauseCtx->cursorY[PAUSE_EQUIP] > 0) {
                         if (CHECK_OWNED_EQUIP(pauseCtx->cursorY[PAUSE_EQUIP], pauseCtx->cursorX[PAUSE_EQUIP] - 1)) {
                             u16 slot = 0;
                             switch (cursorItem) {
@@ -664,6 +663,15 @@ void KaleidoScope_DrawEquipment(PlayState* play) {
                                     break;
                                 case ITEM_BOOTS_HOVER:
                                     slot = SLOT_BOOTS_HOVER;
+                                    break;
+                                case ITEM_SHIELD_DEKU:
+                                    slot = SLOT_SHIELD_DEKU;
+                                    break;
+                                case ITEM_SHIELD_HYLIAN:
+                                    slot = SLOT_SHIELD_HYLIAN;
+                                    break;
+                                case ITEM_SHIELD_MIRROR:
+                                    slot = SLOT_SHIELD_MIRROR;
                                     break;
                                 default:
                                     break;

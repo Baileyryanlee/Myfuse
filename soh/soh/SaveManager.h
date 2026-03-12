@@ -161,6 +161,7 @@ class SaveManager {
     void SaveFileThreaded(int fileNum, SaveContext* saveContext, int sectionID);
 
     void InitMeta(int slotNum);
+    void StartupCheckAndInitMeta(int slotNum);
     static void InitFileImpl(bool isDebug);
     static void InitFileNormal();
     static void InitFileDebug();
@@ -173,6 +174,7 @@ class SaveManager {
     static void LoadBaseVersion2();
     static void LoadBaseVersion3();
     static void LoadBaseVersion4();
+    static void LoadBaseVersion5();
     static void SaveBase(SaveContext* saveContext, int sectionID, bool fullSave);
 
     std::vector<InitFunc> initFuncs;

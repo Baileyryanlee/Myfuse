@@ -7,6 +7,7 @@
 #include "z_en_arrow.h"
 #include "objects/gameplay_keep/gameplay_keep.h"
 #include "objects/object_gi_nuts/object_gi_nuts.h"
+#include "soh/Enhancements/Fuse/Hooks/FuseHooks_Ranged.h"
 
 #define FLAGS (ACTOR_FLAG_UPDATE_CULLING_DISABLED | ACTOR_FLAG_DRAW_CULLING_DISABLED)
 
@@ -19,6 +20,8 @@ void EnArrow_Shoot(EnArrow* this, PlayState* play);
 void EnArrow_Fly(EnArrow* this, PlayState* play);
 void func_809B45E0(EnArrow* this, PlayState* play);
 void func_809B4640(EnArrow* this, PlayState* play);
+
+extern void FuseHooks_OnArrowProjectileSpawned(PlayState* play, Actor* projectile, int32_t isSeed);
 
 const ActorInit En_Arrow_InitVars = {
     ACTOR_EN_ARROW,
@@ -61,6 +64,44 @@ void EnArrow_SetupAction(EnArrow* this, EnArrowActionFunc actionFunc) {
     this->actionFunc = actionFunc;
 }
 
+int EnArrow_SetLitByFire(EnArrow* this) {
+    if (this == NULL) {
+        return 0;
+    }
+
+    if ((this->actor.params == ARROW_FIRE) || (this->actor.params == ARROW_ICE) || (this->actor.params == ARROW_LIGHT)) {
+        return 0;
+    }
+
+    this->actor.params = ARROW_NORMAL_LIT;
+    this->collider.info.toucher.dmgFlags = DMG_ARROW_FIRE;
+    return 1;
+}
+
+int EnArrow_SetFireDmgFlagsOnly(EnArrow* this) {
+    if (this == NULL) {
+        return 0;
+    }
+
+    this->collider.info.toucher.dmgFlags = DMG_ARROW_FIRE;
+    return 1;
+}
+
+Actor* EnArrow_TriggerDekuNutEffect(PlayState* play, const Vec3f* pos) {
+    Actor* flashActor;
+
+    if (play == NULL || pos == NULL) {
+        return NULL;
+    }
+
+    iREG(50) = -1;
+    flashActor = Actor_Spawn(&play->actorCtx, play, ACTOR_EN_M_FIRE1, pos->x, pos->y, pos->z, 0, 0, 0, 0, true);
+    EffectSsStone1_Spawn(play, pos, 0);
+    SoundSource_PlaySfxAtFixedWorldPos(play, pos, 20, NA_SE_IT_DEKU);
+
+    return flashActor;
+}
+
 void EnArrow_Init(Actor* thisx, PlayState* play) {
     static EffectBlureInit2 blureNormal = {
         0, 4, 0, { 0, 255, 200, 255 },   { 0, 255, 255, 255 }, { 0, 255, 200, 0 }, { 0, 255, 255, 0 }, 16,
@@ -83,6 +124,7 @@ void EnArrow_Init(Actor* thisx, PlayState* play) {
         0x00002000, 0x00010000, 0x00004000, 0x00008000, 0x00000004,
     };
     EnArrow* this = (EnArrow*)thisx;
+    this->fuseHitApplied = 0;
 
     if (CVarGetInteger(CVAR_COSMETIC("Arrows.NormalPrimary.Changed"), 0)) {
         blureNormal.altEnvColor =
@@ -231,6 +273,8 @@ void EnArrow_Shoot(EnArrow* this, PlayState* play) {
                 break;
         }
 
+        FuseHooks_OnArrowProjectileFired(play, (this->actor.params == ARROW_SEED));
+        FuseHooks_OnArrowProjectileSpawned(play, &this->actor, (this->actor.params == ARROW_SEED));
         EnArrow_SetupAction(this, EnArrow_Fly);
         Math_Vec3f_Copy(&this->unk_210, &this->actor.world.pos);
 
@@ -310,8 +354,7 @@ void EnArrow_Fly(EnArrow* this, PlayState* play) {
         this->actor.gravity = -0.4f;
     }
 
-    atTouched = (this->actor.params != ARROW_NORMAL_LIT) && (this->actor.params <= ARROW_SEED) &&
-                (this->collider.base.atFlags & AT_HIT);
+    atTouched = (this->actor.params <= ARROW_SEED) && (this->collider.base.atFlags & AT_HIT);
 
     if (atTouched || this->touchedPoly) {
         if (this->actor.params >= ARROW_SEED) {
@@ -319,25 +362,58 @@ void EnArrow_Fly(EnArrow* this, PlayState* play) {
                 this->actor.world.pos.x = (this->actor.world.pos.x + this->actor.prevPos.x) * 0.5f;
                 this->actor.world.pos.y = (this->actor.world.pos.y + this->actor.prevPos.y) * 0.5f;
                 this->actor.world.pos.z = (this->actor.world.pos.z + this->actor.prevPos.z) * 0.5f;
+
+                hitActor = this->collider.base.at;
+                if ((hitActor != NULL) && (hitActor->category == ACTORCAT_ENEMY) && !this->fuseHitApplied) {
+                    Vec3f impactPos;
+                    Vec3f* impactPosPtr = NULL;
+                    if (this->collider.info.atHitInfo != NULL) {
+                        impactPos.x = this->collider.info.atHitInfo->bumper.hitPos.x;
+                        impactPos.y = this->collider.info.atHitInfo->bumper.hitPos.y;
+                        impactPos.z = this->collider.info.atHitInfo->bumper.hitPos.z;
+                        impactPosPtr = &impactPos;
+                    } else {
+                        impactPos = this->actor.world.pos;
+                        impactPosPtr = &impactPos;
+                    }
+                    this->fuseHitApplied = 1;
+                    FuseHooks_OnRangedProjectileHit(play, &this->actor, hitActor, impactPosPtr, true);
+                }
+            }
+            if (this->touchedPoly && !this->fuseHitApplied) {
+                this->fuseHitApplied = 1;
+                FuseHooks_OnRangedProjectileHitSurface(play, &this->actor, &this->actor.world.pos, true);
             }
 
             if (this->actor.params == ARROW_NUT) {
-                iREG(50) = -1;
-                Actor_Spawn(&play->actorCtx, play, ACTOR_EN_M_FIRE1, this->actor.world.pos.x, this->actor.world.pos.y,
-                            this->actor.world.pos.z, 0, 0, 0, 0, true);
-                sfxId = NA_SE_IT_DEKU;
+                EnArrow_TriggerDekuNutEffect(play, &this->actor.world.pos);
             } else {
                 sfxId = NA_SE_IT_SLING_REFLECT;
+                EffectSsStone1_Spawn(play, &this->actor.world.pos, 0);
+                SoundSource_PlaySfxAtFixedWorldPos(play, &this->actor.world.pos, 20, sfxId);
             }
 
-            EffectSsStone1_Spawn(play, &this->actor.world.pos, 0);
-            SoundSource_PlaySfxAtFixedWorldPos(play, &this->actor.world.pos, 20, sfxId);
             Actor_Kill(&this->actor);
         } else {
             EffectSsHitMark_SpawnCustomScale(play, 0, 150, &this->actor.world.pos);
 
             if (atTouched && (this->collider.info.atHitInfo->elemType != ELEMTYPE_UNK4)) {
                 hitActor = this->collider.base.at;
+                if ((hitActor != NULL) && (hitActor->category == ACTORCAT_ENEMY) && !this->fuseHitApplied) {
+                    Vec3f impactPos;
+                    Vec3f* impactPosPtr = NULL;
+                    if (this->collider.info.atHitInfo != NULL) {
+                        impactPos.x = this->collider.info.atHitInfo->bumper.hitPos.x;
+                        impactPos.y = this->collider.info.atHitInfo->bumper.hitPos.y;
+                        impactPos.z = this->collider.info.atHitInfo->bumper.hitPos.z;
+                        impactPosPtr = &impactPos;
+                    } else {
+                        impactPos = this->actor.world.pos;
+                        impactPosPtr = &impactPos;
+                    }
+                    this->fuseHitApplied = 1;
+                    FuseHooks_OnRangedProjectileHit(play, &this->actor, hitActor, impactPosPtr, false);
+                }
 
                 if ((hitActor->update != NULL) && (!(this->collider.base.atFlags & AT_BOUNCED)) &&
                     (hitActor->flags & ACTOR_FLAG_CAN_ATTACH_TO_ARROW)) {
@@ -362,6 +438,10 @@ void EnArrow_Fly(EnArrow* this, PlayState* play) {
                     Audio_PlayActorSound2(&this->actor, NA_SE_IT_ARROW_STICK_CRE);
                 }
             } else if (this->touchedPoly) {
+                if (!this->fuseHitApplied) {
+                    this->fuseHitApplied = 1;
+                    FuseHooks_OnRangedProjectileHitSurface(play, &this->actor, &this->actor.world.pos, false);
+                }
                 EnArrow_SetupAction(this, func_809B45E0);
                 Animation_PlayOnce(&this->skelAnime, &gArrow2Anim);
 

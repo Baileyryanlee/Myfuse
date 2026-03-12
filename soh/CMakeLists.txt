@@ -122,6 +122,27 @@ source_group("include" FILES ${Header_Files__include})
 
 # soh (root)
 file(GLOB_RECURSE soh__ RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "soh/*.c" "soh/*.cpp" "soh/*.h" "soh/*.hpp")
+list(APPEND soh__
+    ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/FuseSystem.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/Fuse.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/RangedFuseMenu.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/FuseModifiers.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/FuseMaterials.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/FuseState.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/ShieldBashRules.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/Hooks/FuseHooks_Objects.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/Hooks/FuseHooks_Ranged.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/Hooks/FuseHooks_Boomerang.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/Visuals/FuseVisual.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/UI/FuseMenuWindow.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/Fuse/UI/FusePauseBridge.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/overlays/actors/ovl_En_Fuse_Beam/z_en_fuse_beam.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/overlays/actors/ovl_En_Fuse_Beam/z_en_fuse_beam.h
+)
+
+list(REMOVE_DUPLICATES soh__)
+
+
 
 # Add specific files that don't match the pattern
 list(APPEND soh__ ${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/savestates_extern.inc)
@@ -337,13 +358,15 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 				"ENABLE_DX11;"
 			">"
 			"$<$<CONFIG:Release>:"
-				"NDEBUG"
+				"NDEBUG;"
 			">"
             "$<$<BOOL:${BUILD_REMOTE_CONTROL}>:ENABLE_REMOTE_CONTROL>"
 			"INCLUDE_GAME_PRINTF;"
             "F3DEX_GBI_2"
 			"UNICODE;"
 			"_UNICODE"
+            SPDLOG_ACTIVE_LEVEL=${SPDLOG_MIN_CUTOFF}
+            LOG_LEVEL_GAME_PRINTS=${SPDLOG_LEVEL_OFF}
 			STORMLIB_NO_AUTO_LINK
 			"_CRT_SECURE_NO_WARNINGS;"
             NOMINMAX
@@ -354,7 +377,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 				"NOINCLUDE_GAME_PRINTF;"
 				"_DEBUG;"
 				"_CRT_SECURE_NO_WARNINGS;"
-				"ENABLE_OPENGL"
+				"ENABLE_OPENGL;"
 			">"
 			"$<$<CONFIG:Release>:"
 				"NDEBUG;"
@@ -363,7 +386,9 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
             "F3DEX_GBI_2"
 			"WIN32;"
 			"UNICODE;"
-			"_UNICODE"
+			"_UNICODE;"
+            SPDLOG_ACTIVE_LEVEL=${SPDLOG_MIN_CUTOFF}
+            LOG_LEVEL_GAME_PRINTS=${SPDLOG_LEVEL_OFF}
 			STORMLIB_NO_AUTO_LINK
             NOMINMAX
 		)
@@ -371,33 +396,35 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 elseif (CMAKE_SYSTEM_NAME STREQUAL "CafeOS")
 	target_compile_definitions(${PROJECT_NAME} PRIVATE
 		"$<$<CONFIG:Debug>:"
-			"_DEBUG"
+			"_DEBUG;"
 		">"
 		"$<$<CONFIG:Release>:"
-			"NDEBUG"
+			"NDEBUG;"
 		">"
-        "F3DEX_GBI_2"
-        "SPDLOG_ACTIVE_LEVEL=3;"
+        "F3DEX_GBI_2;"
 		"SPDLOG_NO_THREAD_ID;"
         "SPDLOG_NO_TLS;"
 		"STBI_NO_THREAD_LOCALS;"
+        SPDLOG_ACTIVE_LEVEL=${SPDLOG_MIN_CUTOFF}
+        LOG_LEVEL_GAME_PRINTS=${SPDLOG_LEVEL_OFF}
 	)
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU|Clang|AppleClang")
 	target_compile_definitions(${PROJECT_NAME} PRIVATE
 		"$<$<CONFIG:Debug>:"
-			"_DEBUG"
+			"_DEBUG;"
 		">"
 		"$<$<CONFIG:Release>:"
-			"NDEBUG"
+			"NDEBUG;"
 		">"
-        "F3DEX_GBI_2"
-        "$<$<BOOL:${BUILD_REMOTE_CONTROL}>:ENABLE_REMOTE_CONTROL>"
-		"SPDLOG_ACTIVE_LEVEL=0;"
+        "F3DEX_GBI_2;"
+        "$<$<BOOL:${BUILD_REMOTE_CONTROL}>:ENABLE_REMOTE_CONTROL>;"
 		"_CONSOLE;"
 		"_CRT_SECURE_NO_WARNINGS;"
 		"ENABLE_OPENGL;"
 		"UNICODE;"
-		"_UNICODE"
+		"_UNICODE;"
+        SPDLOG_ACTIVE_LEVEL=${SPDLOG_MIN_CUTOFF}
+        LOG_LEVEL_GAME_PRINTS=${SPDLOG_LEVEL_OFF}
 	)
 endif()
 ################################################################################

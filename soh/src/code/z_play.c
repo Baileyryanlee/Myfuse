@@ -682,6 +682,20 @@ void Play_Init(GameState* thisx) {
     }
 #endif
 
+    if (CVarGetInteger(CVAR_DEVELOPER_TOOLS("FuseBeamHostProof"), 0)) {
+        Player* player = GET_PLAYER(play);
+        s16 beamYaw = player->actor.shape.rot.y + 0x4000;
+
+        Actor* beamActor = Actor_Spawn(&play->actorCtx, play, ACTOR_UNSET_1AA, player->actor.world.pos.x + 120.0f,
+                                       player->actor.world.pos.y + 60.0f, player->actor.world.pos.z - 120.0f, 0,
+                                       beamYaw, 0, 0, true);
+
+        if (beamActor != NULL) {
+            Fuse_DebugPrintf("[FuseDBG] EnFuseBeam test spawn actor=%p scene=%d room=%d\n", (void*)beamActor,
+                             play->sceneNum, play->roomCtx.curRoom.num);
+        }
+    }
+
     if (CVarGetInteger(CVAR_ENHANCEMENT("IvanCoopModeEnabled"), 0)) {
         Actor_Spawn(&play->actorCtx, play, gEnPartnerId, GET_PLAYER(play)->actor.world.pos.x,
                     GET_PLAYER(play)->actor.world.pos.y + Player_GetHeight(GET_PLAYER(play)) + 5.0f,
@@ -1180,15 +1194,17 @@ void Play_Update(PlayState* play) {
                 }
 
                 if (play->actorCtx.freezeFlashTimer && (play->actorCtx.freezeFlashTimer-- < 5)) {
-                    osSyncPrintf("FINISH=%d\n", play->actorCtx.freezeFlashTimer);
+                    if (GameInteractor_Should(VB_FLASH_SCREEN_FOR_FINISHING_BLOW, true)) {
+                        osSyncPrintf("FINISH=%d\n", play->actorCtx.freezeFlashTimer);
 
-                    if ((play->actorCtx.freezeFlashTimer > 0) && ((play->actorCtx.freezeFlashTimer % 2) != 0)) {
-                        play->envCtx.fillScreen = true;
-                        play->envCtx.screenFillColor[0] = play->envCtx.screenFillColor[1] =
-                            play->envCtx.screenFillColor[2] = 150;
-                        play->envCtx.screenFillColor[3] = 80;
-                    } else {
-                        play->envCtx.fillScreen = false;
+                        if ((play->actorCtx.freezeFlashTimer > 0) && ((play->actorCtx.freezeFlashTimer % 2) != 0)) {
+                            play->envCtx.fillScreen = true;
+                            play->envCtx.screenFillColor[0] = play->envCtx.screenFillColor[1] =
+                                play->envCtx.screenFillColor[2] = 150;
+                            play->envCtx.screenFillColor[3] = 80;
+                        } else {
+                            play->envCtx.fillScreen = false;
+                        }
                     }
                 } else {
                     PLAY_LOG(3606);

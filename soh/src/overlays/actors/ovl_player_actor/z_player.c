@@ -29,14 +29,35 @@
 #include "soh/Enhancements/cosmetics/cosmeticsTypes.h"
 #include "soh/Enhancements/enhancementTypes.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
+#include "soh/Enhancements/Fuse/ShieldBashRules.h"
+#include "soh/Enhancements/Fuse/FuseCBridge.h"
 #include "soh/Enhancements/randomizer/randomizer_grotto.h"
 #include "soh/frame_interpolation.h"
 #include "soh/OTRGlobals.h"
 #include "soh/ResourceManagerHelpers.h"
+#include "soh/ActorDB.h"
 
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
+
+extern bool Fuse_ShieldHasNegateKnockback(PlayState* play, int* outMaterialId, int* outDurabilityCur,
+                                          int* outDurabilityMax, uint8_t* outLevel);
+extern bool Fuse_ShieldHasStun(PlayState* play, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax,
+                               uint8_t* outLevel);
+extern bool Fuse_ShieldHasFreeze(PlayState* play, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax,
+                                 uint8_t* outLevel);
+extern bool Fuse_ShieldHasBurn(PlayState* play, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax,
+                               uint8_t* outLevel);
+extern bool Fuse_ShieldHasMegaStun(PlayState* play, int* outMaterialId, int* outDurabilityCur, int* outDurabilityMax,
+                                   uint8_t* outLevel);
+extern void Fuse_ShieldGuardDrain(PlayState* play);
+extern void Fuse_ShieldEnqueuePendingStun(Actor* victim, uint8_t level, int materialId, int itemId);
+extern void Fuse_ShieldTriggerMegaStun(PlayState* play, Player* player, int materialId, int itemId);
+extern void Fuse_ShieldApplyFreeze(PlayState* play, Actor* victim, uint8_t level);
+extern void Fuse_ShieldApplyBurn(PlayState* play, Actor* victim, uint8_t level, int materialId);
+extern s16 Fuse_GetShieldBashDamage(int shieldItemId, int* outMaterialId, int* outHasBashMod, int* outMaterialAtk);
+extern bool Fuse_IsActorFuseFrozen(Actor* actor);
 
 // Some player animations are played at this reduced speed, for reasons yet unclear.
 // This is called "adjusted" for now.
@@ -86,10 +107,10 @@ typedef enum AnimSfxType {
 
 #define ANIMSFX_SHIFT_TYPE(type) ((type) << 11)
 
-#define ANIMSFX_DATA(type, frame) ((ANIMSFX_SHIFT_TYPE(type) | ((frame)&0x7FF)))
+#define ANIMSFX_DATA(type, frame) ((ANIMSFX_SHIFT_TYPE(type) | ((frame) & 0x7FF)))
 
-#define ANIMSFX_GET_TYPE(data) ((data)&0x7800)
-#define ANIMSFX_GET_FRAME(data) ((data)&0x7FF)
+#define ANIMSFX_GET_TYPE(data) ((data) & 0x7800)
+#define ANIMSFX_GET_FRAME(data) ((data) & 0x7FF)
 
 typedef struct AnimSfxEntry {
     /* 0x00 */ u16 sfxId;
@@ -157,6 +178,11 @@ s32 func_80835C08(Player* this, PlayState* play);
 
 void Player_UseItem(PlayState* play, Player* this, s32 item);
 void func_80839F90(Player* this, PlayState* play);
+void func_8083C0E8(Player* this, PlayState* play);
+static s32 Player_CanUseShieldBash(Player* this);
+static void Player_SetupShieldBash(Player* this, PlayState* play);
+static void Player_Action_ShieldBash(Player* this, PlayState* play);
+static void Player_ShieldBash_UpdateColliderAndHit(Player* this, PlayState* play);
 s32 func_8083C61C(PlayState* play, Player* this);
 void Player_StartMode_Idle(PlayState* play, Player* this);
 void Player_StartMode_MoveForwardSlow(PlayState* play, Player* this);
@@ -235,6 +261,39 @@ void func_808524B0(PlayState* play, Player* this, CsCmdActorCue* cue);
 void func_808524D0(PlayState* play, Player* this, CsCmdActorCue* cue);
 void func_80852514(PlayState* play, Player* this, CsCmdActorCue* cue);
 void func_80852544(PlayState* play, Player* this, CsCmdActorCue* cue);
+
+static ColliderCylinder sShieldBashOC;
+static s32 sShieldBashOCInit = 0;
+static Player* sShieldBashColliderOwner = NULL;
+static s16 sShieldBashColliderTimer = 0;
+static u8 sShieldBashHitOnce = 0;
+static Player* sShieldBashRecoveryOwner = NULL;
+static s16 sShieldBashRecoveryTimer = 0;
+enum {
+    PLAYER_BASH_HIT = 1 << 0,
+    PLAYER_BASH_AT_LOGGED = 1 << 1,
+    PLAYER_BASH_ENTER_LOGGED = 1 << 2,
+};
+
+static ColliderCylinderInit sShieldBashOCCylInit = {
+    {
+        COLTYPE_NONE,
+        AT_NONE,
+        AC_NONE,
+        OC1_ON | OC1_TYPE_ALL,
+        OC2_TYPE_PLAYER,
+        COLSHAPE_CYLINDER,
+    },
+    {
+        ELEMTYPE_UNK1,
+        { 0x00000000, 0x00, 0x00 },
+        { 0x00000000, 0x00, 0x00 },
+        TOUCH_NONE,
+        BUMP_NONE,
+        OCELEM_ON,
+    },
+    { 22, 50, 0, { 0, 0, 0 } },
+};
 void func_80852554(PlayState* play, Player* this, CsCmdActorCue* cue);
 void func_80852564(PlayState* play, Player* this, CsCmdActorCue* cue);
 void func_808525C0(PlayState* play, Player* this, CsCmdActorCue* cue);
@@ -318,6 +377,7 @@ void Player_Action_8084E368(Player* this, PlayState* play);
 void Player_Action_8084E3C4(Player* this, PlayState* play);
 void Player_Action_8084E604(Player* this, PlayState* play);
 void Player_Action_8084E6D4(Player* this, PlayState* play);
+
 void Player_Action_8084E9AC(Player* this, PlayState* play);
 void Player_Action_8084EAC0(Player* this, PlayState* play);
 void Player_Action_SwingBottle(Player* this, PlayState* play);
@@ -2756,17 +2816,18 @@ LinkAnimationHeader* func_808346C4(PlayState* play, Player* this) {
 s32 func_80834758(PlayState* play, Player* this) {
     LinkAnimationHeader* anim;
     f32 frame;
+    s32 isChildHylian = Player_IsChildWithHylianShield(this);
+    s32 isZTargeting = Player_IsZTargeting(this);
+    s32 isShieldHeld = CHECK_BTN_ALL(sControlInput->cur.button, BTN_R);
 
     if (!(this->stateFlags1 & (PLAYER_STATE1_SHIELDING | PLAYER_STATE1_ON_HORSE | PLAYER_STATE1_IN_CUTSCENE)) &&
         (play->shootingGalleryStatus == 0) && (this->heldItemAction == this->itemAction) &&
-        (this->currentShield != PLAYER_SHIELD_NONE) && !Player_IsChildWithHylianShield(this) &&
-        Player_IsZTargeting(this) && CHECK_BTN_ALL(sControlInput->cur.button, BTN_R)) {
+        (this->currentShield != PLAYER_SHIELD_NONE) && !isChildHylian && isZTargeting && isShieldHeld) {
 
         anim = func_808346C4(play, this);
         frame = Animation_GetLastFrame(anim);
         LinkAnimation_Change(play, &this->upperSkelAnime, anim, 1.0f, frame, frame, ANIMMODE_ONCE, 0.0f);
         Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
-
         return 1;
     } else {
         return 0;
@@ -2774,11 +2835,9 @@ s32 func_80834758(PlayState* play, Player* this) {
 }
 
 s32 func_8083485C(Player* this, PlayState* play) {
-    if (func_80834758(play, this)) {
-        return true;
-    } else {
-        return false;
-    }
+    s32 postureTriggered = func_80834758(play, this);
+
+    return postureTriggered ? true : false;
 }
 
 void func_80834894(Player* this) {
@@ -2821,7 +2880,16 @@ s32 func_8083499C(Player* this, PlayState* play) {
  * This upper body action allows for shielding or changing held items while a sword is in hand.
  */
 s32 Player_UpperAction_Sword(Player* this, PlayState* play) {
-    if (func_80834758(play, this) || func_8083499C(this, play)) {
+    const s32 zIntent = Player_IsZTargeting(this) || CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z);
+    s32 postureTriggered = func_80834758(play, this);
+
+    if ((Player_GetMeleeWeaponHeld(this) != 0) && CHECK_BTN_ALL(sControlInput->press.button, BTN_A) &&
+        CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) && zIntent && Player_CanUseShieldBash(this)) {
+        Player_SetupShieldBash(this, play);
+        return 1;
+    }
+
+    if (postureTriggered || func_8083499C(this, play)) {
         return true;
     } else {
         return false;
@@ -2853,7 +2921,15 @@ s32 Player_UpperAction_ChangeHeldItem(Player* this, PlayState* play) {
 }
 
 s32 func_80834B5C(Player* this, PlayState* play) {
+    const s32 zIntent = Player_IsZTargeting(this) || CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z);
+
     LinkAnimation_Update(play, &this->upperSkelAnime);
+
+    if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) && CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) &&
+        zIntent && Player_CanUseShieldBash(this)) {
+        Player_SetupShieldBash(this, play);
+        return 1;
+    }
 
     if (!CHECK_BTN_ALL(sControlInput->cur.button, BTN_R)) {
         func_80834894(this);
@@ -2977,12 +3053,13 @@ s32 func_80834FBC(Player* this) {
 }
 
 s32 func_8083501C(Player* this, PlayState* play) {
+    s32 postureTriggered = func_80834758(play, this);
+
     if (this->unk_860 >= 0) {
         this->unk_860 = -this->unk_860;
     }
 
-    if ((!Player_HoldsHookshot(this) || func_80834FBC(this)) && !func_80834758(play, this) &&
-        !func_80834F2C(this, play)) {
+    if ((!Player_HoldsHookshot(this) || func_80834FBC(this)) && !postureTriggered && !func_80834F2C(this, play)) {
         return false;
     } else if (this->rideActor != NULL) {
         this->unk_6AD = 2; // OTRTODO: THIS IS A BAD IDEA BUT IT FIXES THE HORSE FIRST PERSON?
@@ -3084,13 +3161,16 @@ s32 func_808351D4(Player* this, PlayState* play) {
 }
 
 s32 func_808353D8(Player* this, PlayState* play) {
+    s32 postureTriggered;
+
     LinkAnimation_Update(play, &this->upperSkelAnime);
 
     if (Player_HoldsHookshot(this) && !func_80834FBC(this)) {
         return true;
     }
 
-    if (!func_80834758(play, this) &&
+    postureTriggered = func_80834758(play, this);
+    if (!postureTriggered &&
         (sUseHeldItem || ((this->unk_860 < 0) && sHeldItemButtonIsHeldDown) || func_80834E44(play))) {
         this->unk_860 = ABS(this->unk_860);
 
@@ -3166,12 +3246,14 @@ void func_80835688(Player* this, PlayState* play) {
 
 s32 Player_UpperAction_CarryActor(Player* this, PlayState* play) {
     Actor* heldActor = this->heldActor;
+    s32 postureTriggered;
 
     if (heldActor == NULL) {
         func_80834644(play, this);
     }
 
-    if (func_80834758(play, this)) {
+    postureTriggered = func_80834758(play, this);
+    if (postureTriggered) {
         return true;
     }
 
@@ -3201,7 +3283,9 @@ void func_808357E8(Player* this, Gfx** dLists) {
 }
 
 s32 func_80835800(Player* this, PlayState* play) {
-    if (func_80834758(play, this)) {
+    s32 postureTriggered = func_80834758(play, this);
+
+    if (postureTriggered) {
         return true;
     }
 
@@ -3284,7 +3368,9 @@ s32 func_808359FC(Player* this, PlayState* play) {
 }
 
 s32 func_80835B60(Player* this, PlayState* play) {
-    if (func_80834758(play, this)) {
+    s32 postureTriggered = func_80834758(play, this);
+
+    if (postureTriggered) {
         return true;
     }
 
@@ -4801,6 +4887,91 @@ s32 func_808382DC(Player* this, PlayState* play) {
 
                 Player_RequestRumble(this, 180, 20, 100, 0);
 
+                if (sp64) {
+                    s32 explosionMatId = 0;
+                    u8 explosionLevel = 0;
+                    Actor* attacker = this->shieldQuad.base.ac;
+                    Vec3f explosionPos = this->actor.world.pos;
+                    if ((this->shieldQuad.info.bumper.hitPos.x != 0) || (this->shieldQuad.info.bumper.hitPos.y != 0) ||
+                        (this->shieldQuad.info.bumper.hitPos.z != 0)) {
+                        explosionPos.x = this->shieldQuad.info.bumper.hitPos.x;
+                        explosionPos.y = this->shieldQuad.info.bumper.hitPos.y;
+                        explosionPos.z = this->shieldQuad.info.bumper.hitPos.z;
+                    } else if (attacker != NULL) {
+                        explosionPos = attacker->world.pos;
+                    }
+                    const bool shouldExplode =
+                        Fuse_ShieldHasExplosion(play, &explosionMatId, NULL, NULL, &explosionLevel) &&
+                        (explosionLevel > 0);
+
+                    if (shouldExplode) {
+                        Fuse_ShieldTriggerExplosion(play, explosionMatId, explosionLevel, &explosionPos);
+                    }
+
+                    if (attacker != NULL && FuseBash_IsEnemyActor(attacker)) {
+                        int shieldMatId = 0;
+                        int shieldDurabilityCur = 0;
+                        int shieldDurabilityMax = 0;
+                        uint8_t stunLevel = 0;
+                        const int32_t equipValue = CUR_EQUIP_VALUE(EQUIP_TYPE_SHIELD);
+                        int shieldItemId = ITEM_NONE;
+
+                        switch (equipValue) {
+                            case EQUIP_VALUE_SHIELD_DEKU:
+                                shieldItemId = ITEM_SHIELD_DEKU;
+                                break;
+                            case EQUIP_VALUE_SHIELD_HYLIAN:
+                                shieldItemId = ITEM_SHIELD_HYLIAN;
+                                break;
+                            case EQUIP_VALUE_SHIELD_MIRROR:
+                                shieldItemId = ITEM_SHIELD_MIRROR;
+                                break;
+                            default:
+                                shieldItemId = ITEM_NONE;
+                                break;
+                        }
+
+                        if (Player_IsChildWithHylianShield(this)) {
+                            if (Fuse_ShieldHasMegaStun(play, &shieldMatId, &shieldDurabilityCur, &shieldDurabilityMax,
+                                                       &stunLevel) &&
+                                stunLevel > 0) {
+                                osSyncPrintf("[FuseDBG] shield_stun_trigger shield=%d attacker=%p attackerId=0x%04X\n",
+                                             equipValue, (void*)attacker, attacker->id);
+                                Fuse_ShieldTriggerMegaStun(play, this, shieldMatId, shieldItemId);
+                            }
+                        } else if (Fuse_ShieldHasStun(play, &shieldMatId, &shieldDurabilityCur, &shieldDurabilityMax,
+                                                      &stunLevel) &&
+                                   stunLevel > 0) {
+                            osSyncPrintf("[FuseDBG] shield_stun_trigger shield=%d attacker=%p attackerId=0x%04X\n",
+                                         equipValue, (void*)attacker, attacker->id);
+                            Fuse_ShieldEnqueuePendingStun(attacker, stunLevel, shieldMatId, shieldItemId);
+                        }
+
+                        uint8_t freezeLevel = 0;
+                        int freezeMatId = 0;
+                        int freezeDurabilityCur = 0;
+                        int freezeDurabilityMax = 0;
+                        if (Fuse_ShieldHasFreeze(play, &freezeMatId, &freezeDurabilityCur, &freezeDurabilityMax,
+                                                 &freezeLevel) &&
+                            freezeLevel > 0 && attacker->freezeTimer == 0) {
+                            osSyncPrintf("[FuseDBG] FreezeApply: src=shield attacker=%p lvl=%u mat=%d\n",
+                                         (void*)attacker, freezeLevel, freezeMatId);
+                            Fuse_ShieldApplyFreeze(play, attacker, freezeLevel);
+                        }
+
+                        uint8_t burnLevel = 0;
+                        int burnMatId = 0;
+                        int burnDurabilityCur = 0;
+                        int burnDurabilityMax = 0;
+                        if (Fuse_ShieldHasBurn(play, &burnMatId, &burnDurabilityCur, &burnDurabilityMax, &burnLevel) &&
+                            burnLevel > 0) {
+                            Fuse_ShieldApplyBurn(play, attacker, burnLevel, burnMatId);
+                        }
+                    }
+
+                    Fuse_ShieldGuardDrain(play);
+                }
+
                 if (!Player_IsChildWithHylianShield(this)) {
                     if (this->invincibilityTimer >= 0) {
                         LinkAnimationHeader* anim;
@@ -4833,8 +5004,20 @@ s32 func_808382DC(Player* this, PlayState* play) {
 
                     if (!(this->stateFlags1 & (PLAYER_STATE1_HANGING_OFF_LEDGE | PLAYER_STATE1_CLIMBING_LEDGE |
                                                PLAYER_STATE1_CLIMBING_LADDER))) {
-                        this->linearVelocity = -18.0f;
-                        this->yaw = this->actor.shape.rot.y;
+                        int fuseMatId = 0;
+                        int fuseDurabilityCur = 0;
+                        int fuseDurabilityMax = 0;
+                        uint8_t fuseLevel = 0;
+                        if (Fuse_ShieldHasNegateKnockback(play, &fuseMatId, &fuseDurabilityCur, &fuseDurabilityMax,
+                                                          &fuseLevel)) {
+                            osSyncPrintf(
+                                "[FuseDBG] ShieldGuard: event=guard_cancel_knockback item=shield mat=%d lvl=%u "
+                                "dura=%d/%d\n",
+                                fuseMatId, fuseLevel, fuseDurabilityCur, fuseDurabilityMax);
+                        } else {
+                            this->linearVelocity = -18.0f;
+                            this->yaw = this->actor.shape.rot.y;
+                        }
                     }
                 }
 
@@ -4854,6 +5037,11 @@ s32 func_808382DC(Player* this, PlayState* play) {
             if (this->cylinder.base.acFlags & AC_HIT) {
                 Actor* ac = this->cylinder.base.ac;
                 s32 sp4C;
+
+                if (ac != NULL && Fuse_IsActorFuseFrozen(ac)) {
+                    osSyncPrintf("[FuseDBG] FreezeBlockPlayerDamage: attacker=%p id=0x%04X\n", (void*)ac, ac->id);
+                    return 0;
+                }
 
                 if (ac->flags & ACTOR_FLAG_SFX_FOR_PLAYER_BODY_HIT) {
                     Player_PlaySfx(this, NA_SE_PL_BODY_HIT);
@@ -6308,6 +6496,177 @@ void Player_SetupRoll(Player* this, PlayState* play) {
     gSaveContext.ship.stats.count[COUNT_ROLLS]++;
 }
 
+static s32 Player_CanUseShieldBash(Player* this) {
+    if ((this->currentShield == PLAYER_SHIELD_NONE) || Player_IsChildWithHylianShield(this)) {
+        return false;
+    }
+
+    if (this->heldItemAction == PLAYER_IA_SWORD_BIGGORON) {
+        return false;
+    }
+
+    return true;
+}
+
+static const char* Player_GetShieldBashReasonLabel(FuseBashKnockbackReason reason) {
+    switch (reason) {
+        case FUSE_BASH_KNOCKBACK_REASON_NON_ENEMY:
+            return "NonEnemy";
+        case FUSE_BASH_KNOCKBACK_REASON_BOSS:
+            return "Boss";
+        case FUSE_BASH_KNOCKBACK_REASON_BLACKLIST:
+            return "Blacklist";
+        case FUSE_BASH_KNOCKBACK_REASON_ALLOWED:
+            return "Allowed";
+        default:
+            return "Unknown";
+    }
+}
+
+static void Player_ShieldBash_UpdateColliderAndHit(Player* this, PlayState* play) {
+    Actor* target;
+    const f32 forwardDist = 22.0f;
+    const s16 radius = 22;
+    const s16 height = 50;
+    const f32 bottomOffsetY = LINK_IS_CHILD ? -4.0f : 4.0f;
+    f32 fx;
+    f32 fz;
+
+    if (!sShieldBashOCInit) {
+        Collider_InitCylinder(play, &sShieldBashOC);
+        Collider_SetCylinder(play, &sShieldBashOC, &this->actor, &sShieldBashOCCylInit);
+        sShieldBashOCInit = 1;
+    }
+
+    if (sShieldBashOC.base.ocFlags1 & OC1_HIT) {
+        target = sShieldBashOC.base.oc;
+        sShieldBashOC.base.ocFlags1 &= ~OC1_HIT;
+        sShieldBashOC.base.oc = NULL;
+        if (!sShieldBashHitOnce && (target != NULL)) {
+            const bool isEnemy = FuseBash_IsEnemyActor(target);
+            const FuseBashKnockbackResult bashResult = FuseBash_EvaluateKnockback(target);
+            ActorDBEntry* actorEntry = ActorDB_Retrieve(target->id);
+            const char* actorName = (actorEntry != NULL) ? actorEntry->name : "Unknown";
+            const char* reasonLabel = Player_GetShieldBashReasonLabel(bashResult.reason);
+
+            osSyncPrintf("[FuseDBG] BashKB: actor=%s id=%d allowed=%d scalar=%.2f reason=%s\n", actorName, target->id,
+                         bashResult.allowed ? 1 : 0, bashResult.scalar, reasonLabel);
+
+            if (isEnemy) {
+                s16 pushYaw = Actor_WorldYawTowardActor(&this->actor, target);
+                const f32 knockback = 5.0f;
+                const f32 knockbackScaled = knockback * bashResult.scalar;
+                int materialId = 0;
+                const s16 bashDamage = Fuse_GetShieldBashDamage(this->currentShield, &materialId, NULL, NULL);
+
+                if (bashResult.allowed) {
+                    target->world.pos.x += Math_SinS(pushYaw) * knockbackScaled;
+                    target->world.pos.z += Math_CosS(pushYaw) * knockbackScaled;
+                    target->speedXZ = knockbackScaled;
+                }
+
+                osSyncPrintf("[FuseDBG] BashHit: shield=%d mat=%d bash=%d victim=%p\n", this->currentShield, materialId,
+                             bashDamage, (void*)target);
+                if (bashDamage > 0) {
+                    target->colChkInfo.damage = bashDamage;
+                    Actor_ApplyDamage(target);
+                }
+
+                Actor_SetColorFilter(target, 0x4000, 0xFF, 0, 8);
+                Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
+                this->av1.actionVar1 |= PLAYER_BASH_HIT;
+                sShieldBashHitOnce = 1;
+                sShieldBashRecoveryOwner = this;
+                sShieldBashRecoveryTimer = 6;
+            }
+        }
+    }
+
+    Collider_UpdateCylinder(&this->actor, &sShieldBashOC);
+
+    fx = Math_SinS(this->actor.shape.rot.y) * forwardDist;
+    fz = Math_CosS(this->actor.shape.rot.y) * forwardDist;
+    sShieldBashOC.dim.radius = radius;
+    sShieldBashOC.dim.height = height;
+    sShieldBashOC.dim.pos.x = this->actor.world.pos.x + fx;
+    sShieldBashOC.dim.pos.z = this->actor.world.pos.z + fz;
+    sShieldBashOC.dim.pos.y = (s16)(this->actor.world.pos.y + bottomOffsetY + (height * 0.5f));
+
+    CollisionCheck_SetOC(play, &play->colChkCtx, &sShieldBashOC.base);
+}
+
+static void Player_SetupShieldBash(Player* this, PlayState* play) {
+    Player_SetupAction(play, this, Player_Action_ShieldBash, 0);
+    Player_SetModelsForHoldingShield(this);
+    LinkAnimation_PlayOnce(play, &this->skelAnime, GET_PLAYER_ANIM(PLAYER_ANIMGROUP_defense, this->modelAnimType));
+    this->av2.actionVar2 = 16;
+    this->av1.actionVar1 = 0;
+    sShieldBashColliderOwner = this;
+    sShieldBashColliderTimer = 10;
+    sShieldBashHitOnce = 0;
+    Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
+}
+
+static void Player_Action_ShieldBash(Player* this, PlayState* play) {
+    s32 animDone = LinkAnimation_Update(play, &this->skelAnime);
+    f32 frame = this->skelAnime.curFrame;
+    s32 bashActive = (frame >= 4.0f) && (frame <= 10.0f);
+
+    if (!(this->av1.actionVar1 & PLAYER_BASH_ENTER_LOGGED)) {
+        osSyncPrintf("[FuseDBG] BashActionEnter\n");
+        Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
+        this->av1.actionVar1 |= PLAYER_BASH_ENTER_LOGGED;
+    }
+
+    if (this->av2.actionVar2 > 0) {
+        this->av2.actionVar2--;
+    }
+
+    Player_DecelerateToZero(this);
+
+    if (frame <= 6.0f) {
+        this->linearVelocity = 3.5f;
+        this->yaw = this->actor.shape.rot.y;
+    }
+
+    if (bashActive) {
+        this->stateFlags1 |= PLAYER_STATE1_SHIELDING;
+        Player_SetModelsForHoldingShield(this);
+    } else {
+        this->stateFlags1 &= ~PLAYER_STATE1_SHIELDING;
+    }
+
+    if (bashActive) {
+        if (!(this->av1.actionVar1 & PLAYER_BASH_AT_LOGGED)) {
+            osSyncPrintf("[FuseDBG] BashATOn: frame=%.1f\n", frame);
+            this->av1.actionVar1 |= PLAYER_BASH_AT_LOGGED;
+        }
+
+        Player_ShieldBash_UpdateColliderAndHit(this, play);
+    }
+
+    if ((this->av2.actionVar2 <= 0) || animDone) {
+        const char* returnState = "neutral";
+
+        this->stateFlags1 &= ~PLAYER_STATE1_SHIELDING;
+
+        if (CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) && Player_ActionHandler_11(this, play)) {
+            returnState = "guard";
+            if (!(this->av1.actionVar1 & PLAYER_BASH_HIT)) {
+                osSyncPrintf("[FuseDBG] BashEnd: hit=0 return=%s\n", returnState);
+            }
+            osSyncPrintf("[FuseDBG] BashActionExit\n");
+            return;
+        }
+
+        if (!(this->av1.actionVar1 & PLAYER_BASH_HIT)) {
+            osSyncPrintf("[FuseDBG] BashEnd: hit=0 return=%s\n", returnState);
+        }
+        osSyncPrintf("[FuseDBG] BashActionExit\n");
+        func_8083C0E8(this, play);
+    }
+}
+
 s32 Player_TryRoll(Player* this, PlayState* play) {
     if ((this->controlStickDirections[this->controlStickDataIndex] == 0) && (sFloorType != 7)) {
         Player_SetupRoll(this, play);
@@ -6337,6 +6696,13 @@ void func_8083BCD0(Player* this, PlayState* play, s32 controlStickDirection) {
 
 s32 Player_ActionHandler_10(Player* this, PlayState* play) {
     s32 controlStickDirection;
+    const s32 zIntent = Player_IsZTargeting(this) || CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z);
+
+    if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) && CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) &&
+        zIntent && Player_CanUseShieldBash(this)) {
+        Player_SetupShieldBash(this, play);
+        return 1;
+    }
 
     if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) &&
         (play->roomCtx.curRoom.behaviorType1 != ROOM_BEHAVIOR_TYPE1_2) && (sFloorType != 7) &&
@@ -6353,6 +6719,12 @@ s32 Player_ActionHandler_10(Player* this, PlayState* play) {
                     }
                 } else {
                     if ((Player_GetMeleeWeaponHeld(this) != 0) && Player_CanUpdateItems(this)) {
+                        if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) &&
+                            CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) && zIntent &&
+                            Player_CanUseShieldBash(this)) {
+                            Player_SetupShieldBash(this, play);
+                            return 1;
+                        }
                         func_8083BA90(play, this, PLAYER_MWA_JUMPSLASH_START, 5.0f, 5.0f);
                     } else {
                         Player_SetupRoll(this, play);
@@ -6464,6 +6836,7 @@ s32 Player_ActionHandler_Roll(Player* this, PlayState* play) {
 s32 Player_ActionHandler_11(Player* this, PlayState* play) {
     LinkAnimationHeader* anim;
     f32 frame;
+    s32 guardEntered = false;
 
     if ((play->shootingGalleryStatus == 0) && (this->currentShield != PLAYER_SHIELD_NONE) &&
         CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) &&
@@ -6501,7 +6874,9 @@ s32 Player_ActionHandler_11(Player* this, PlayState* play) {
             if (Player_IsChildWithHylianShield(this)) {
                 Player_StartAnimMovement(play, this, 4);
             }
-
+            guardEntered = true;
+        }
+        if (guardEntered) {
             Player_PlaySfx(this, NA_SE_IT_SHIELD_POSTURE);
         }
 
@@ -9271,6 +9646,14 @@ void Player_Action_80843188(Player* this, PlayState* play) {
 
     Player_DecelerateToZero(this);
 
+    const s32 zIntent = Player_IsZTargeting(this) || CHECK_BTN_ALL(sControlInput->cur.button, BTN_Z);
+
+    if (CHECK_BTN_ALL(sControlInput->press.button, BTN_A) && CHECK_BTN_ALL(sControlInput->cur.button, BTN_R) &&
+        zIntent && Player_CanUseShieldBash(this)) {
+        Player_SetupShieldBash(this, play);
+        return;
+    }
+
     if (this->av2.actionVar2 != 0) {
         f32 sp54;
         f32 sp50;
@@ -9499,7 +9882,7 @@ void func_80843AE8(PlayState* play, Player* this) {
                     LinkAnimation_Change(play, &this->skelAnime, &gPlayerAnim_link_derth_rebirth, 1.0f, 99.0f,
                                          Animation_GetLastFrame(&gPlayerAnim_link_derth_rebirth), ANIMMODE_ONCE, 0.0f);
                 }
-                gSaveContext.healthAccumulator = 0x140;
+                gSaveContext.healthAccumulator = MAX_HEALTH;
                 this->av2.actionVar2 = -1;
             }
         } else if (gSaveContext.healthAccumulator == 0) {
@@ -12337,6 +12720,21 @@ void Player_UpdateCommon(Player* this, PlayState* play, Input* input) {
         this->actor.colChkInfo.mass = 50;
     }
 
+    if ((sShieldBashColliderOwner == this) && (sShieldBashColliderTimer > 0)) {
+        Player_ShieldBash_UpdateColliderAndHit(this, play);
+        sShieldBashColliderTimer--;
+        if (sShieldBashColliderTimer <= 0) {
+            sShieldBashColliderOwner = NULL;
+        }
+    }
+    if ((sShieldBashRecoveryOwner == this) && (sShieldBashRecoveryTimer > 0)) {
+        sControlInput->press.button &= ~(BTN_A | BTN_B);
+        sShieldBashRecoveryTimer--;
+        if (sShieldBashRecoveryTimer <= 0) {
+            sShieldBashRecoveryOwner = NULL;
+        }
+    }
+
     this->stateFlags3 &= ~PLAYER_STATE3_PAUSE_ACTION_FUNC;
 
     Collider_ResetCylinderAC(play, &this->cylinder.base);
@@ -14581,20 +14979,20 @@ void Player_Action_8084EAC0(Player* this, PlayState* play) {
                     rand = 3;
                 }
 
-                if ((rand < 0) && (gSaveContext.health <= 0x10)) {
+                if ((rand < 0) && (gSaveContext.health <= FULL_HEART_HEALTH)) {
                     rand = 3;
                 }
 
                 if (rand < 0) {
-                    Health_ChangeBy(play, -0x10);
+                    Health_ChangeBy(play, -FULL_HEART_HEALTH);
                 } else {
-                    gSaveContext.healthAccumulator = rand * 0x10;
+                    gSaveContext.healthAccumulator = rand * FULL_HEART_HEALTH;
                 }
             } else {
                 s32 sp28 = D_808549FC[this->itemAction - PLAYER_IA_BOTTLE_POTION_RED];
 
                 if (sp28 & 1) {
-                    gSaveContext.healthAccumulator = 0x140;
+                    gSaveContext.healthAccumulator = MAX_HEALTH;
                 }
 
                 if (sp28 & 2) {
@@ -14738,7 +15136,7 @@ void Player_Action_8084EED8(Player* this, PlayState* play) {
         Player_PlaySfx(this, NA_SE_EV_BOTTLE_CAP_OPEN);
         Player_PlaySfx(this, NA_SE_EV_FIATY_HEAL - SFX_FLAG);
     } else if (LinkAnimation_OnFrame(&this->skelAnime, 47.0f)) {
-        gSaveContext.healthAccumulator = 0x140;
+        gSaveContext.healthAccumulator = MAX_HEALTH;
     }
 }
 
