@@ -1,5 +1,10 @@
 # Fuse Architecture Overview
 
+## Repository path anchors (Shipwright-root)
+- Fuse root: `soh/soh/Enhancements/Fuse/`
+- System registration: `soh/soh/Enhancements/FuseSystem.cpp`
+- Actor overlay touchpoint: `soh/src/overlays/actors/ovl_En_Fuse_Beam/`
+
 ## 1) Scope & Goals
 
 ### What Fuse adds (high-level)

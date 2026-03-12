@@ -1,5 +1,9 @@
 # FuseHooks_Ranged Hook Integration Layer
 
+## Repository path anchors (Shipwright-root)
+- Hook impl/header: `soh/soh/Enhancements/Fuse/Hooks/FuseHooks_Ranged.cpp`, `soh/soh/Enhancements/Fuse/Hooks/FuseHooks_Ranged.h`
+- Key actor overlay touched by Fuse beam behavior: `soh/src/overlays/actors/ovl_En_Fuse_Beam/`
+
 ## 1) Purpose & Scope
 
 `FuseHooks_Ranged.cpp` is the ranged hook bridge for Fuse projectile flows. It handles projectile-time behavior for ranged slots, including bow arrows, slingshot seeds, and hookshot events.

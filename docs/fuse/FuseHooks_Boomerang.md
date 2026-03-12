@@ -1,5 +1,8 @@
 # FuseHooks_Boomerang Hook Integration Layer
 
+## Repository path anchors (Shipwright-root)
+- Hook impl/header: `soh/soh/Enhancements/Fuse/Hooks/FuseHooks_Boomerang.cpp`, `soh/soh/Enhancements/Fuse/Hooks/FuseHooks_Boomerang.h`
+
 ## 1) Purpose & Scope
 
 `FuseHooks_Boomerang.cpp` is the boomerang-specific Fuse integration layer. It wires boomerang hit/surface events into Fuse modifier and durability systems without implementing the core Fuse data model.

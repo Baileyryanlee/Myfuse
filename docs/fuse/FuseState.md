@@ -2,6 +2,9 @@
 
 Related docs: [FuseArchitectureOverview](./FuseArchitectureOverview.md), [FuseCoreSystem](./FuseCoreSystem.md), [FuseMaterials](./FuseMaterials.md).
 
+## Repository path anchors (Shipwright-root)
+- Save/runtime state: `soh/soh/Enhancements/Fuse/FuseState.cpp`, `soh/soh/Enhancements/Fuse/FuseState.h`
+
 ## Purpose / scope
 - `FuseState` is the state-truth + persistence boundary for Fuse slots and material inventory.
 - Runtime reads/writes happen through:

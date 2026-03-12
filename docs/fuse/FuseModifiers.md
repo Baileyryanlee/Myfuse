@@ -2,6 +2,10 @@
 
 Related docs: [FuseArchitectureOverview](./FuseArchitectureOverview.md), [FuseCoreSystem](./FuseCoreSystem.md), [FuseMaterials](./FuseMaterials.md), [FuseHooks_Objects](./FuseHooks_Objects.md), [FuseHooks_Ranged](./FuseHooks_Ranged.md), [FuseHooks_Boomerang](./FuseHooks_Boomerang.md).
 
+## Repository path anchors (Shipwright-root)
+- Modifier execution: `soh/soh/Enhancements/Fuse/FuseModifiers.cpp`, `soh/soh/Enhancements/Fuse/FuseModifiers.h`
+- Related behavior rules: `soh/soh/Enhancements/Fuse/ShieldBashRules.cpp`, `soh/soh/Enhancements/Fuse/ShieldBashRules.h`
+
 ## Purpose / scope
 - `FuseModifiers` defines the modifier ID enum and provides one helper API: `HasModifier`.
 - Execution logic for effects (freeze/burn/explosion/seek/etc.) is **not** in this file; hooks/core query modifiers and execute behavior elsewhere.

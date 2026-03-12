@@ -2,6 +2,9 @@
 
 Related docs: [FuseArchitectureOverview](./FuseArchitectureOverview.md), [FuseCoreSystem](./FuseCoreSystem.md), [FuseModifiers](./FuseModifiers.md), [FuseState](./FuseState.md).
 
+## Repository path anchors (Shipwright-root)
+- Materials table/types: `soh/soh/Enhancements/Fuse/FuseMaterials.cpp`, `soh/soh/Enhancements/Fuse/FuseMaterials.h`
+
 ## Purpose / scope
 - `FuseMaterials` owns the static material registry (`kMaterialDefs`) and lookup functions used by Fuse systems.
 
