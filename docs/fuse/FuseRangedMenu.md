@@ -2,6 +2,9 @@
 
 Related docs: [FuseArchitectureOverview](./FuseArchitectureOverview.md), [FuseHooks_Ranged](./FuseHooks_Ranged.md), [FusePauseMenu](./FusePauseMenu.md), [FuseMaterials](./FuseMaterials.md).
 
+## Repository path anchors (Shipwright-root)
+- Ranged hold menu: `soh/soh/Enhancements/Fuse/RangedFuseMenu.cpp`, `soh/soh/Enhancements/Fuse/RangedFuseMenu.h`
+
 ## Purpose / scope
 - `RangedFuseMenu` is the hold-to-open in-game ranged fuse menu (`Update` + `Draw`).
 - It is distinct from pause modal flow in `FusePauseMenu` docs.

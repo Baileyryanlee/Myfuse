@@ -2,6 +2,11 @@
 
 Related docs: [FuseArchitectureOverview](./FuseArchitectureOverview.md), [FuseCoreSystem](./FuseCoreSystem.md), [FuseHooks_Objects](./FuseHooks_Objects.md), [FuseHooks_Ranged](./FuseHooks_Ranged.md), [FuseHooks_Boomerang](./FuseHooks_Boomerang.md), [FuseState](./FuseState.md), [FuseVisuals](./FuseVisuals.md).
 
+## Repository path anchors (Shipwright-root)
+- Fuse root: `soh/soh/Enhancements/Fuse/`
+- Fuse top-level registration: `soh/soh/Enhancements/FuseSystem.cpp`
+- Beam overlay: `soh/src/overlays/actors/ovl_En_Fuse_Beam/`
+
 ## 1) If you changed Hooks (Objects / Ranged / Boomerang)
 - Verify sword fused hit applies expected effect per material (stun/freeze/burn/explosion/knockback).
 - Hit a torch/web with burn-capable projectile and confirm ignition behavior.

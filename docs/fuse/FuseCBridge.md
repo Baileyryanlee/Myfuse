@@ -2,6 +2,10 @@
 
 Related docs: [FuseArchitectureOverview](./FuseArchitectureOverview.md), [FuseCoreSystem](./FuseCoreSystem.md), [FuseMaterials](./FuseMaterials.md).
 
+## Repository path anchors (Shipwright-root)
+- C bridge header: `soh/soh/Enhancements/Fuse/FuseCBridge.h`
+- Core calls used by the bridge: `soh/soh/Enhancements/Fuse/Fuse.cpp`
+
 ## Purpose
 - `FuseCBridge.h` is the C ABI surface for Fuse calls used from C translation units.
 - Header exports C-compatible material IDs and helper functions, while keeping C++ internals hidden.

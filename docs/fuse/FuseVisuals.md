@@ -2,6 +2,9 @@
 
 Related docs: [FuseArchitectureOverview](./FuseArchitectureOverview.md), [FuseCoreSystem](./FuseCoreSystem.md), [FuseState](./FuseState.md).
 
+## Repository path anchors (Shipwright-root)
+- Visual implementation: `soh/soh/Enhancements/Fuse/Visuals/FuseVisual.cpp`, `soh/soh/Enhancements/Fuse/Visuals/FuseVisual.h`
+
 ## Purpose / scope
 - `FuseVisual` draws fused attachment meshes on player left hand and shield.
 - Current implementation only draws the rock display list (`gSilverRockDL`) from `OBJECT_GAMEPLAY_FIELD_KEEP`.

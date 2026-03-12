@@ -1,5 +1,10 @@
 # Fuse Core System (Fuse.cpp) Implementation Reference
 
+## Repository path anchors (Shipwright-root)
+- Core runtime: `soh/soh/Enhancements/Fuse/Fuse.cpp`
+- Public API/types: `soh/soh/Enhancements/Fuse/Fuse.h`
+- Top-level integration entry: `soh/soh/Enhancements/FuseSystem.cpp`
+
 ## 1) Purpose & Scope
 - This document maps the **core Fuse runtime and state logic** implemented in `soh/soh/Enhancements/Fuse/Fuse.cpp`.
 - Scope includes:

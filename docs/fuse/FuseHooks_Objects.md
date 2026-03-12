@@ -1,5 +1,8 @@
 # FuseHooks_Objects Hook Integration Layer
 
+## Repository path anchors (Shipwright-root)
+- Hook impl/header: `soh/soh/Enhancements/Fuse/Hooks/FuseHooks_Objects.cpp`, `soh/soh/Enhancements/Fuse/Hooks/FuseHooks_Objects.h`
+
 ## 1) Purpose & Scope
 
 `FuseHooks_Objects.cpp` is the **object/actor-facing hook layer** for Fuse sword/hammer behavior. It intercepts player collision/update moments and applies Fuse-side effects (durability drain, modifier-driven explosion/freeze/stun triggers, material drops) while trying to preserve native actor behavior. It is not the core fuse state machine; most game-effect logic is delegated into `Fuse::*` and `Fuse_*` helpers.

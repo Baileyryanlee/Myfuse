@@ -1,5 +1,9 @@
 # Pause Menu Fuse UI (`FusePauseBridge.cpp`)
 
+## Repository path anchors (Shipwright-root)
+- Pause bridge: `soh/soh/Enhancements/Fuse/UI/FusePauseBridge.cpp`, `soh/soh/Enhancements/Fuse/UI/FusePauseBridge.h`
+- Pause Fuse UI window: `soh/soh/Enhancements/Fuse/UI/FuseMenuWindow.cpp`, `soh/soh/Enhancements/Fuse/UI/FuseMenuWindow.h`
+
 This document describes the pause-menu Fuse UI bridge implemented in:
 
 - `soh/soh/Enhancements/Fuse/UI/FusePauseBridge.cpp`
