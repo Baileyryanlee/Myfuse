@@ -36,6 +36,7 @@ extern "C" {
 #include "src/overlays/actors/ovl_En_Tite/z_en_tite.h"
 #include "src/overlays/actors/ovl_En_Zf/z_en_zf.h"
 #include "src/overlays/actors/ovl_En_Arrow/z_en_arrow.h"
+#include "src/overlays/actors/ovl_En_Fuse_Beam/z_en_fuse_beam.h"
 extern "C" PlayState* gPlayState;
 using Fuse::MaterialDebugOverride;
 
@@ -138,6 +139,7 @@ static std::unordered_map<Actor*, bool> sFuseFrozenPinned;
 static std::unordered_map<uintptr_t, Vec3f> sProjPrevPos;
 static std::unordered_map<Actor*, FuseSeekState> sSeekStates;
 static FuseShieldBeamState sShieldBeamState;
+static Actor* sShieldBeamActor = nullptr;
 static int gLastSwordBgExplodeFrame = -999;
 static int gLastSwordActorExplodeFrame = -999999;
 static uintptr_t sCachedBeamosVmSeg06 = 0;
@@ -3948,6 +3950,7 @@ void Fuse::OnLoadGame(int32_t /*fileNum*/) {
     sBurnStates.clear();
     sSeekStates.clear();
     sShieldBeamState = FuseShieldBeamState{};
+    sShieldBeamActor = nullptr;
     sShatterImpulseUntilFrame.clear();
     sShatterImpulseDir.clear();
     sShatterImpulseYaw.clear();
@@ -4584,7 +4587,15 @@ static void TickShieldGuardBeam(PlayState* play) {
     const bool wasActive = sShieldBeamState.active;
     sShieldBeamState.active = false;
 
+    const auto clearShieldBeamActor = []() {
+        if (sShieldBeamActor != nullptr) {
+            Actor_Kill(sShieldBeamActor);
+            sShieldBeamActor = nullptr;
+        }
+    };
+
     if (!play || !Fuse::IsEnabled()) {
+        clearShieldBeamActor();
         return;
     }
 
@@ -4616,6 +4627,7 @@ static void TickShieldGuardBeam(PlayState* play) {
                          reason, frame, guarding ? 1 : 0, static_cast<int>(slot.materialId), slot.durabilityCur,
                          beamLevel);
         }
+        clearShieldBeamActor();
         return;
     }
 
@@ -4645,6 +4657,26 @@ static void TickShieldGuardBeam(PlayState* play) {
     sShieldBeamState.start = beamStart;
     sShieldBeamState.end = beamEnd;
 
+    if (!wasActive || sShieldBeamActor == nullptr || sShieldBeamActor->update == nullptr) {
+        clearShieldBeamActor();
+        sShieldBeamActor = Actor_Spawn(&play->actorCtx, play, ACTOR_EN_FUSE_BEAM, beamStart.x, beamStart.y, beamStart.z,
+                                       0, 0, 0, 0);
+    }
+
+    if (sShieldBeamActor != nullptr) {
+        EnFuseBeam* beam = reinterpret_cast<EnFuseBeam*>(sShieldBeamActor);
+        Vec3f beamDir{ beamEnd.x - beamStart.x, beamEnd.y - beamStart.y, beamEnd.z - beamStart.z };
+        const float beamDistance = Fuse_Vec3fLength(beamDir);
+        const Vec3f normalizedBeamDir = Fuse_Vec3fNormalize(beamDir);
+        const float horizontalDist = sqrtf((normalizedBeamDir.x * normalizedBeamDir.x) +
+                                           (normalizedBeamDir.z * normalizedBeamDir.z));
+
+        beam->beamPos1 = beamStart;
+        beam->beamScale.z = beamDistance;
+        beam->beamRot.y = Math_Atan2S(normalizedBeamDir.x, normalizedBeamDir.z);
+        beam->beamRot.x = (horizontalDist <= 0.0001f) ? 0 : Math_Atan2S(-normalizedBeamDir.y, horizontalDist);
+    }
+
     if (sShieldBeamState.nextDrainFrame < frame) {
         sShieldBeamState.nextDrainFrame = frame + 60;
     }
@@ -4673,6 +4705,7 @@ static void TickShieldGuardBeam(PlayState* play) {
             sShieldBeamState.active = false;
             sShieldBeamState.nextDamageFrame = -1;
             sShieldBeamState.nextDrainFrame = -1;
+            clearShieldBeamActor();
             return;
         }
 
@@ -4713,86 +4746,8 @@ static void TickShieldGuardBeam(PlayState* play) {
 }
 
 static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx**) {
-    if (!play || !Fuse::IsEnabled() || !sShieldBeamState.active) {
-        return;
-    }
-
-    if (!play->state.gfxCtx || !polyOpaDisp || !*polyOpaDisp) {
-        return;
-    }
-
-    Vec3f start = sShieldBeamState.start;
-    Vec3f end = sShieldBeamState.end;
-    const float dist = Math_Vec3f_DistXYZ(&start, &end);
-    if (dist <= 0.001f) {
-        return;
-    }
-
-    Vec3f beamVec{ end.x - start.x, end.y - start.y, end.z - start.z };
-    const Vec3f beamDir = Fuse_Vec3fNormalize(beamVec);
-    if (Fuse_Vec3fLength(beamDir) <= 0.001f) {
-        return;
-    }
-
-    const float widthScale = (play->gameplayFrames < sShieldBeamState.boostUntilFrame) ? kBeamWidthBoosted : kBeamWidthNormal;
-    const float beamHalfWidth = std::clamp(widthScale * 6.0f, 2.0f, 20.0f);
-
-    Vtx* beamVtx = (Vtx*)Graph_Alloc(play->state.gfxCtx, 8 * sizeof(Vtx));
-    if (beamVtx == nullptr) {
-        return;
-    }
-
-    const auto setVtx = [](Vtx& v, float x, float y, float z) {
-        v.v.ob[0] = static_cast<s16>(x);
-        v.v.ob[1] = static_cast<s16>(y);
-        v.v.ob[2] = static_cast<s16>(z);
-        v.v.flag = 0;
-        v.v.tc[0] = 0;
-        v.v.tc[1] = 0;
-        v.v.cn[0] = 96;
-        v.v.cn[1] = 235;
-        v.v.cn[2] = 255;
-        v.v.cn[3] = 255;
-    };
-
-    setVtx(beamVtx[0], -beamHalfWidth, 0.0f, 0.0f);
-    setVtx(beamVtx[1], beamHalfWidth, 0.0f, 0.0f);
-    setVtx(beamVtx[2], beamHalfWidth, 0.0f, dist);
-    setVtx(beamVtx[3], -beamHalfWidth, 0.0f, dist);
-
-    setVtx(beamVtx[4], 0.0f, -beamHalfWidth, 0.0f);
-    setVtx(beamVtx[5], 0.0f, beamHalfWidth, 0.0f);
-    setVtx(beamVtx[6], 0.0f, beamHalfWidth, dist);
-    setVtx(beamVtx[7], 0.0f, -beamHalfWidth, dist);
-
-    Vec3f startMutable = start;
-    Vec3f endMutable = end;
-    const s16 yaw = Math_Vec3f_Yaw(&startMutable, &endMutable);
-    const s16 pitch = Math_Vec3f_Pitch(&startMutable, &endMutable);
-
-    Gfx_SetupDL_25Opa(play->state.gfxCtx);
-    Gfx* p = *polyOpaDisp;
-    gDPPipeSync(p++);
-    gDPSetCombineMode(p++, G_CC_PRIMITIVE, G_CC_PRIMITIVE);
-    gDPSetPrimColor(p++, 0, 0, 96, 235, 255, 255);
-
-    Matrix_Translate(start.x, start.y, start.z, MTXMODE_NEW);
-    Matrix_RotateY(yaw, MTXMODE_APPLY);
-    Matrix_RotateX(pitch, MTXMODE_APPLY);
-    gSPMatrix(p++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
-
-    gSPVertex(p++, (uintptr_t)beamVtx, 8, 0);
-    gSP2Triangles(p++, 0, 1, 2, 0, 0, 2, 3, 0);
-    gSP2Triangles(p++, 4, 5, 6, 0, 4, 6, 7, 0);
-
-    static int sBeamShieldDrawLogFrame = -999999;
-    if ((play->gameplayFrames - sBeamShieldDrawLogFrame) >= 30) {
-        FUSE_LOG_DBG("[FuseDBG] BeamShieldDraw frame=%d dist=%.1f width=%.1f boost=%d\n", play->gameplayFrames, dist,
-                     beamHalfWidth * 2.0f, (play->gameplayFrames < sShieldBeamState.boostUntilFrame) ? 1 : 0);
-        sBeamShieldDrawLogFrame = play->gameplayFrames;
-    }
-
-    *polyOpaDisp = p;
+    (void)play;
+    (void)polyOpaDisp;
 }
 
 extern "C" void Fuse_DrawShieldBeam_Hook(PlayState* play, Gfx** polyOpaDisp, Gfx** polyXluDisp) {
