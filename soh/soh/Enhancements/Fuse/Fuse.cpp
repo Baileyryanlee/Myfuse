@@ -4710,8 +4710,7 @@ static void TickShieldGuardBeam(PlayState* play) {
     static int sBeamShieldYawSrcLogFrame = -999999;
     if (Fuse_LogDbgEnabled() && (frame - sBeamShieldYawSrcLogFrame) >= 30) {
         Fuse::Log("[FuseDBG] BeamShieldYawSrc frame=%d mode=%s bodyYaw=%d shieldYaw=%d selectedYaw=%d fallback=%d\n",
-                  frame, usingShieldYaw ? "shieldMf" : "shape", bodyYaw, shieldRot.y, beamYaw,
-                  usingShieldYaw ? 0 : 1);
+                  frame, usingShieldYaw ? "shieldMf" : "shape", bodyYaw, shieldRot.y, beamYaw, usingShieldYaw ? 0 : 1);
         sBeamShieldYawSrcLogFrame = frame;
     }
 
@@ -4823,7 +4822,7 @@ static void TickShieldGuardBeam(PlayState* play) {
             const float dist = Fuse_Vec3fLength(toVictim);
             if (dist > 1.0f && dist <= kBeamRange) {
                 Vec3f toVictimDir = Fuse_Vec3fNormalize(toVictim);
-                if (Fuse_Vec3fDot(dir, toVictimDir) >= kBeamMinForwardDot) {
+                if (Fuse_Vec3fDot(forward, toVictimDir) >= kBeamMinForwardDot) {
                     const float distanceToLine = Fuse_DistancePointToSegment(target, beamStart, beamEnd);
                     if (distanceToLine <= beamRadius) {
                         const int prevDamage = actor->colChkInfo.damage;
