@@ -221,7 +221,7 @@ static void Fuse_RegisterShieldBeamCVars() {
     CVarRegisterFloat("gFuseBeamShieldChildOffsetY", 8.0f);
     CVarRegisterFloat("gFuseBeamShieldChildOffsetZ", 20.0f);
     CVarRegisterFloat("gFuseBeamShieldScaleX", 0.35f);
-    CVarRegisterInteger("gFuseBeamShieldZTargetPitchDown", 450);
+    CVarRegisterInteger("gFuseBeamShieldZTargetPitchDown", 0);
     CVarRegisterInteger("gFuseBeamShieldDebug", 0);
 }
 
@@ -4702,19 +4702,19 @@ static void TickShieldGuardBeam(PlayState* play) {
     const s16 baseBeamPitch = beamPitch;
     const bool zTargeting = (stateFlags1 & PLAYER_STATE1_Z_TARGETING) != 0;
     const bool guardingAndZTargeting = guarding && zTargeting;
-    const int zTargetPitchDownRaw = CVarGetInteger("gFuseBeamShieldZTargetPitchDown", 450);
+    const int zTargetPitchDownRaw = CVarGetInteger("gFuseBeamShieldZTargetPitchDown", 0);
     const s16 zTargetPitchDown = static_cast<s16>(std::max(0, zTargetPitchDownRaw));
-    const s16 appliedPitchDown = guardingAndZTargeting ? zTargetPitchDown : 0;
-    if (appliedPitchDown != 0) {
-        const int adjustedPitch = static_cast<int>(beamPitch) - static_cast<int>(appliedPitchDown);
+    const s16 zTargetAdjustment = guardingAndZTargeting ? zTargetPitchDown : 0;
+    if (zTargetAdjustment != 0) {
+        const int adjustedPitch = static_cast<int>(beamPitch) + static_cast<int>(zTargetAdjustment);
         beamPitch = static_cast<s16>(std::clamp(adjustedPitch, -0x4000, 0x4000));
     }
 
     static int sBeamShieldZTargetPitchLogFrame = -999999;
     if (Fuse_LogDbgEnabled() && (frame - sBeamShieldZTargetPitchLogFrame) >= 30) {
         Fuse::Log(
-            "[FuseDBG] BeamShieldZTargetPitch frame=%d ztarget=%s basePitch=%d pitchDown=%d finalPitch=%d\n", frame,
-            zTargeting ? "active" : "inactive", baseBeamPitch, appliedPitchDown, beamPitch);
+            "[FuseDBG] BeamShieldZTargetPitch frame=%d ztarget=%s basePitch=%d ztargetAdjust=%d finalPitch=%d\n",
+            frame, zTargeting ? "active" : "inactive", baseBeamPitch, zTargetAdjustment, beamPitch);
         sBeamShieldZTargetPitchLogFrame = frame;
     }
 
