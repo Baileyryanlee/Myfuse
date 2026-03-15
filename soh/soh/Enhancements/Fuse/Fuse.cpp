@@ -244,7 +244,6 @@ static inline float Fuse_Vec3fDot(const Vec3f& a, const Vec3f& b) {
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
-
 static inline Vec3f Fuse_GetArrowEffectiveDir(Actor* proj, float* outSpeed) {
     const s16 yaw = proj->world.rot.y;
     const float sinYaw = Math_SinS(yaw);
@@ -4667,14 +4666,11 @@ static void TickShieldGuardBeam(PlayState* play) {
 
     const bool beamDebugEnabled = CVarGetInteger("gFuseBeamShieldDebug", 0) != 0;
     const bool isAdult = LINK_IS_ADULT;
-    const float offsetX =
-        CVarGetFloat(isAdult ? "gFuseBeamShieldAdultOffsetX" : "gFuseBeamShieldChildOffsetX", 0.0f);
-    const float offsetY =
-        CVarGetFloat(isAdult ? "gFuseBeamShieldAdultOffsetY" : "gFuseBeamShieldChildOffsetY", 0.0f);
-    const float offsetZ =
-        CVarGetFloat(isAdult ? "gFuseBeamShieldAdultOffsetZ" : "gFuseBeamShieldChildOffsetZ", 0.0f);
-    const float beamWidth = std::clamp(CVarGetFloat("gFuseBeamShieldScaleX", 0.35f), kBeamShieldWidthMin,
-                                       kBeamShieldWidthMax);
+    const float offsetX = CVarGetFloat(isAdult ? "gFuseBeamShieldAdultOffsetX" : "gFuseBeamShieldChildOffsetX", 0.0f);
+    const float offsetY = CVarGetFloat(isAdult ? "gFuseBeamShieldAdultOffsetY" : "gFuseBeamShieldChildOffsetY", 0.0f);
+    const float offsetZ = CVarGetFloat(isAdult ? "gFuseBeamShieldAdultOffsetZ" : "gFuseBeamShieldChildOffsetZ", 0.0f);
+    const float beamWidth =
+        std::clamp(CVarGetFloat("gFuseBeamShieldScaleX", 0.35f), kBeamShieldWidthMin, kBeamShieldWidthMax);
 
     Vec3f beamStart = player->actor.focus.pos;
     beamStart.x += (right.x * offsetX) + (up.x * offsetY) + (dir.x * offsetZ);
@@ -4693,8 +4689,8 @@ static void TickShieldGuardBeam(PlayState* play) {
     if (beamDebugEnabled && (frame - sBeamShieldTuningLogFrame) >= 30) {
         Fuse::Log("[FuseDBG] BeamShieldTune frame=%d mode=%s offset=(%.2f,%.2f,%.2f) start=(%.2f,%.2f,%.2f) "
                   "scaleX=%.2f\n",
-                  frame, isAdult ? "adult" : "child", offsetX, offsetY, offsetZ, beamStart.x, beamStart.y,
-                  beamStart.z, beamWidth);
+                  frame, isAdult ? "adult" : "child", offsetX, offsetY, offsetZ, beamStart.x, beamStart.y, beamStart.z,
+                  beamWidth);
         sBeamShieldTuningLogFrame = frame;
     }
 
@@ -4704,8 +4700,8 @@ static void TickShieldGuardBeam(PlayState* play) {
 
     if (!wasActive || sShieldBeamActor == nullptr || sShieldBeamActor->update == nullptr) {
         clearShieldBeamActor();
-        sShieldBeamActor = Actor_Spawn(&play->actorCtx, play, ACTOR_EN_FUSE_BEAM, beamStart.x, beamStart.y, beamStart.z,
-                                       0, 0, 0, 0);
+        sShieldBeamActor =
+            Actor_Spawn(&play->actorCtx, play, ACTOR_UNSET_1AA, beamStart.x, beamStart.y, beamStart.z, 0, 0, 0, 0, 0);
     }
 
     if (sShieldBeamActor != nullptr) {
@@ -4724,8 +4720,8 @@ static void TickShieldGuardBeam(PlayState* play) {
         if (Fuse_LogDbgEnabled() && (frame - sBeamShieldTransformLogFrame) >= 30) {
             Fuse::Log("[FuseDBG] BeamShieldXform frame=%d start=(%.1f,%.1f,%.1f) end=(%.1f,%.1f,%.1f) rot=(%d,%d) "
                       "scale=(%.2f,%.1f)\n",
-                      frame, beamStart.x, beamStart.y, beamStart.z, beamEnd.x, beamEnd.y, beamEnd.z,
-                      beam->beamRot.x, beam->beamRot.y, beam->beamScale.x, beam->beamScale.z);
+                      frame, beamStart.x, beamStart.y, beamStart.z, beamEnd.x, beamEnd.y, beamEnd.z, beam->beamRot.x,
+                      beam->beamRot.y, beam->beamScale.x, beam->beamScale.z);
             sBeamShieldTransformLogFrame = frame;
         }
     }
