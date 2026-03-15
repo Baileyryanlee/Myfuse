@@ -105,8 +105,6 @@ static constexpr s16 kBurnVfxColorFlag = 0x4000;
 static constexpr s16 kBurnVfxIntensity = 200;
 static constexpr s16 kBurnVfxXlu = 0;
 static constexpr s16 kBurnVfxDurationFrames = 30;
-static constexpr float kBeamStartForwardOffset = 28.0f;
-static constexpr float kBeamStartVerticalOffset = 12.0f;
 static constexpr float kBeamRange = 1600.0f;
 static constexpr int kBeamTickIntervalFrames = 15;
 static constexpr int kBeamDamagePerTick = 2;
@@ -115,7 +113,8 @@ static constexpr float kBeamWidthNormal = 1.0f;
 static constexpr float kBeamWidthBoosted = 2.0f;
 static constexpr float kBeamDamageRadiusNormal = 55.0f;
 static constexpr float kBeamDamageRadiusBoosted = 110.0f;
-static constexpr float kBeamShieldTestWidth = 0.6f;
+static constexpr float kBeamShieldWidthMin = 0.10f;
+static constexpr float kBeamShieldWidthMax = 3.00f;
 static constexpr int kShatterImpulseFrames = 5;
 static constexpr float kShatterImpulseStep = 3.5f;
 static constexpr float kShatterImpulseY = 0.0f;
@@ -206,6 +205,23 @@ static void Fuse_RegisterSeekCVars() {
     CVarRegisterInteger("gFuseSeekDebug", 0);
     CVarRegisterInteger("gFuseSeekDisableStop", 0);
     CVarRegisterInteger("gFuseSeekStopGraceTicks", 2);
+}
+
+static void Fuse_RegisterShieldBeamCVars() {
+    static bool registered = false;
+    if (registered) {
+        return;
+    }
+    registered = true;
+
+    CVarRegisterFloat("gFuseBeamShieldAdultOffsetX", 6.0f);
+    CVarRegisterFloat("gFuseBeamShieldAdultOffsetY", 10.0f);
+    CVarRegisterFloat("gFuseBeamShieldAdultOffsetZ", 24.0f);
+    CVarRegisterFloat("gFuseBeamShieldChildOffsetX", 4.0f);
+    CVarRegisterFloat("gFuseBeamShieldChildOffsetY", 8.0f);
+    CVarRegisterFloat("gFuseBeamShieldChildOffsetZ", 20.0f);
+    CVarRegisterFloat("gFuseBeamShieldScaleX", 0.35f);
+    CVarRegisterInteger("gFuseBeamShieldDebug", 0);
 }
 
 static inline float Fuse_Vec3fLength(const Vec3f& value) {
@@ -4586,6 +4602,8 @@ static float Fuse_DistancePointToSegment(const Vec3f& point, const Vec3f& start,
 }
 
 static void TickShieldGuardBeam(PlayState* play) {
+    Fuse_RegisterShieldBeamCVars();
+
     const bool wasActive = sShieldBeamState.active;
     sShieldBeamState.active = false;
 
@@ -4633,19 +4651,35 @@ static void TickShieldGuardBeam(PlayState* play) {
         return;
     }
 
-    Vec3f dir{ Math_SinS(player->actor.shape.rot.y), 0.0f, Math_CosS(player->actor.shape.rot.y) };
+    const s16 yaw = player->actor.shape.rot.y;
+    Vec3f dir{ Math_SinS(yaw), 0.0f, Math_CosS(yaw) };
     dir = Fuse_Vec3fNormalize(dir);
     if (Fuse_Vec3fLength(dir) <= 0.001f) {
         return;
     }
 
+    Vec3f right{ Math_CosS(yaw), 0.0f, -Math_SinS(yaw) };
+    right = Fuse_Vec3fNormalize(right);
+    const Vec3f up{ 0.0f, 1.0f, 0.0f };
+
     const float beamRadius =
         (frame < sShieldBeamState.boostUntilFrame) ? kBeamDamageRadiusBoosted : kBeamDamageRadiusNormal;
 
+    const bool beamDebugEnabled = CVarGetInteger("gFuseBeamShieldDebug", 0) != 0;
+    const bool isAdult = LINK_IS_ADULT;
+    const float offsetX =
+        CVarGetFloat(isAdult ? "gFuseBeamShieldAdultOffsetX" : "gFuseBeamShieldChildOffsetX", 0.0f);
+    const float offsetY =
+        CVarGetFloat(isAdult ? "gFuseBeamShieldAdultOffsetY" : "gFuseBeamShieldChildOffsetY", 0.0f);
+    const float offsetZ =
+        CVarGetFloat(isAdult ? "gFuseBeamShieldAdultOffsetZ" : "gFuseBeamShieldChildOffsetZ", 0.0f);
+    const float beamWidth = std::clamp(CVarGetFloat("gFuseBeamShieldScaleX", 0.35f), kBeamShieldWidthMin,
+                                       kBeamShieldWidthMax);
+
     Vec3f beamStart = player->actor.focus.pos;
-    beamStart.x += dir.x * kBeamStartForwardOffset;
-    beamStart.y += kBeamStartVerticalOffset;
-    beamStart.z += dir.z * kBeamStartForwardOffset;
+    beamStart.x += (right.x * offsetX) + (up.x * offsetY) + (dir.x * offsetZ);
+    beamStart.y += (right.y * offsetX) + (up.y * offsetY) + (dir.y * offsetZ);
+    beamStart.z += (right.z * offsetX) + (up.z * offsetY) + (dir.z * offsetZ);
 
     // TODO: use reliable shield-aim pitch source for Beam once validated in this codebase.
     Vec3f beamEnd{ beamStart.x + (dir.x * kBeamRange), beamStart.y + (dir.y * kBeamRange),
@@ -4653,6 +4687,15 @@ static void TickShieldGuardBeam(PlayState* play) {
 
     if (Fuse_LogDbgEnabled() && (frame % 300) == 0) {
         Fuse::Log("[FuseDBG] BeamShieldAimPitch: using_yaw_only frame=%d actor=%p\n", frame, (void*)player);
+    }
+
+    static int sBeamShieldTuningLogFrame = -999999;
+    if (beamDebugEnabled && (frame - sBeamShieldTuningLogFrame) >= 30) {
+        Fuse::Log("[FuseDBG] BeamShieldTune frame=%d mode=%s offset=(%.2f,%.2f,%.2f) start=(%.2f,%.2f,%.2f) "
+                  "scaleX=%.2f\n",
+                  frame, isAdult ? "adult" : "child", offsetX, offsetY, offsetZ, beamStart.x, beamStart.y,
+                  beamStart.z, beamWidth);
+        sBeamShieldTuningLogFrame = frame;
     }
 
     sShieldBeamState.active = true;
@@ -4670,8 +4713,8 @@ static void TickShieldGuardBeam(PlayState* play) {
         const float beamDistance = Math_Vec3f_DistXYZ(&beamStart, &beamEnd);
 
         beam->beamPos1 = beamStart;
-        beam->beamScale.x = kBeamShieldTestWidth;
-        beam->beamScale.y = kBeamShieldTestWidth;
+        beam->beamScale.x = beamWidth;
+        beam->beamScale.y = beamWidth;
         beam->beamScale.z = beamDistance;
         beam->beamRot.y = Math_Vec3f_Yaw(&beamStart, &beamEnd);
         beam->beamRot.x = Math_Vec3f_Pitch(&beamStart, &beamEnd);
