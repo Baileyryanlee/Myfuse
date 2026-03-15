@@ -221,6 +221,7 @@ static void Fuse_RegisterShieldBeamCVars() {
     CVarRegisterFloat("gFuseBeamShieldChildOffsetY", 8.0f);
     CVarRegisterFloat("gFuseBeamShieldChildOffsetZ", 20.0f);
     CVarRegisterFloat("gFuseBeamShieldScaleX", 0.35f);
+    CVarRegisterInteger("gFuseBeamShieldZTargetPitchOffset", -450);
     CVarRegisterInteger("gFuseBeamShieldDebug", 0);
 }
 
@@ -4696,6 +4697,23 @@ static void TickShieldGuardBeam(PlayState* play) {
     if (std::abs(shieldPitch) <= 0x4000) {
         beamPitch = shieldPitch;
         usingShieldPitch = true;
+    }
+
+    const s16 baseBeamPitch = beamPitch;
+    const bool zTargeting = (stateFlags1 & PLAYER_STATE1_Z_TARGETING) != 0;
+    const bool guardingAndZTargeting = guarding && zTargeting;
+    const s16 zTargetPitchOffset = static_cast<s16>(CVarGetInteger("gFuseBeamShieldZTargetPitchOffset", -450));
+    const s16 appliedPitchOffset = guardingAndZTargeting ? zTargetPitchOffset : 0;
+    if (appliedPitchOffset != 0) {
+        beamPitch = static_cast<s16>(beamPitch + appliedPitchOffset);
+    }
+
+    static int sBeamShieldZTargetPitchLogFrame = -999999;
+    if (Fuse_LogDbgEnabled() && (frame - sBeamShieldZTargetPitchLogFrame) >= 30) {
+        Fuse::Log(
+            "[FuseDBG] BeamShieldZTargetPitch frame=%d ztarget=%s basePitch=%d adjustedPitch=%d appliedOffset=%d\n",
+            frame, zTargeting ? "active" : "inactive", baseBeamPitch, beamPitch, appliedPitchOffset);
+        sBeamShieldZTargetPitchLogFrame = frame;
     }
 
     const float forwardXZ = Math_CosS(beamPitch);
