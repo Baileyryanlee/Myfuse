@@ -4651,9 +4651,9 @@ static void TickShieldGuardBeam(PlayState* play) {
     }
 
     const s16 yaw = player->actor.shape.rot.y;
-    Vec3f dir{ Math_SinS(yaw), 0.0f, Math_CosS(yaw) };
-    dir = Fuse_Vec3fNormalize(dir);
-    if (Fuse_Vec3fLength(dir) <= 0.001f) {
+    Vec3f forward{ Math_SinS(yaw), 0.0f, Math_CosS(yaw) };
+    forward = Fuse_Vec3fNormalize(forward);
+    if (Fuse_Vec3fLength(forward) <= 0.001f) {
         return;
     }
 
@@ -4672,26 +4672,55 @@ static void TickShieldGuardBeam(PlayState* play) {
     const float beamWidth =
         std::clamp(CVarGetFloat("gFuseBeamShieldScaleX", 0.35f), kBeamShieldWidthMin, kBeamShieldWidthMax);
 
-    Vec3f beamStart = player->actor.focus.pos;
-    beamStart.x += (right.x * offsetX) + (up.x * offsetY) + (dir.x * offsetZ);
-    beamStart.y += (right.y * offsetX) + (up.y * offsetY) + (dir.y * offsetZ);
-    beamStart.z += (right.z * offsetX) + (up.z * offsetY) + (dir.z * offsetZ);
+    const Vec3f adultBaseAnchor = player->actor.focus.pos;
+    Vec3f childBaseAnchor = player->actor.focus.pos;
+    childBaseAnchor.y -= 8.0f;
+    const Vec3f baseAnchor = isAdult ? adultBaseAnchor : childBaseAnchor;
 
-    // TODO: use reliable shield-aim pitch source for Beam once validated in this codebase.
-    Vec3f beamEnd{ beamStart.x + (dir.x * kBeamRange), beamStart.y + (dir.y * kBeamRange),
-                   beamStart.z + (dir.z * kBeamRange) };
-
-    if (Fuse_LogDbgEnabled() && (frame % 300) == 0) {
-        Fuse::Log("[FuseDBG] BeamShieldAimPitch: using_yaw_only frame=%d actor=%p\n", frame, (void*)player);
+    bool usingShieldPitch = false;
+    s16 beamPitch = 0;
+    Vec3s shieldRot{};
+    Matrix_MtxFToYXZRotS(&player->shieldMf, &shieldRot, false);
+    const s16 shieldPitch = static_cast<s16>(-shieldRot.x);
+    if (std::abs(shieldPitch) <= 0x4000) {
+        beamPitch = shieldPitch;
+        usingShieldPitch = true;
     }
+
+    const float forwardXZ = Math_CosS(beamPitch);
+    forward.x = Math_SinS(yaw) * forwardXZ;
+    forward.y = -Math_SinS(beamPitch);
+    forward.z = Math_CosS(yaw) * forwardXZ;
+    forward = Fuse_Vec3fNormalize(forward);
+    if (Fuse_Vec3fLength(forward) <= 0.001f) {
+        return;
+    }
+
+    Vec3f beamStart = baseAnchor;
+    beamStart.x += (right.x * offsetX) + (up.x * offsetY) + (forward.x * offsetZ);
+    beamStart.y += (right.y * offsetX) + (up.y * offsetY) + (forward.y * offsetZ);
+    beamStart.z += (right.z * offsetX) + (up.z * offsetY) + (forward.z * offsetZ);
+
+    Vec3f beamEnd{ beamStart.x + (forward.x * kBeamRange), beamStart.y + (forward.y * kBeamRange),
+                   beamStart.z + (forward.z * kBeamRange) };
 
     static int sBeamShieldTuningLogFrame = -999999;
     if (beamDebugEnabled && (frame - sBeamShieldTuningLogFrame) >= 30) {
-        Fuse::Log("[FuseDBG] BeamShieldTune frame=%d mode=%s offset=(%.2f,%.2f,%.2f) start=(%.2f,%.2f,%.2f) "
-                  "scaleX=%.2f\n",
-                  frame, isAdult ? "adult" : "child", offsetX, offsetY, offsetZ, beamStart.x, beamStart.y, beamStart.z,
-                  beamWidth);
+        Fuse::Log("[FuseDBG] BeamShieldTune frame=%d mode=%s base=(%.2f,%.2f,%.2f) offset=(%.2f,%.2f,%.2f) "
+                  "start=(%.2f,%.2f,%.2f) pitchSrc=%s yaw=%d pitch=%d scaleX=%.2f\n",
+                  frame, isAdult ? "adult" : "child", baseAnchor.x, baseAnchor.y, baseAnchor.z, offsetX, offsetY,
+                  offsetZ, beamStart.x, beamStart.y, beamStart.z, usingShieldPitch ? "shieldMf" : "yaw_only", yaw,
+                  beamPitch, beamWidth);
         sBeamShieldTuningLogFrame = frame;
+    }
+
+    static int sBeamShieldAimLogFrame = -999999;
+    if (Fuse_LogDbgEnabled() && (frame - sBeamShieldAimLogFrame) >= 30) {
+        Fuse::Log("[FuseDBG] BeamShieldAim frame=%d mode=%s baseAnchor=(%.1f,%.1f,%.1f) finalStart=(%.1f,%.1f,%.1f) "
+                  "yaw=%d pitch=%d src=%s\n",
+                  frame, isAdult ? "adult" : "child", baseAnchor.x, baseAnchor.y, baseAnchor.z, beamStart.x,
+                  beamStart.y, beamStart.z, yaw, beamPitch, usingShieldPitch ? "shieldMf" : "yaw_only");
+        sBeamShieldAimLogFrame = frame;
     }
 
     sShieldBeamState.active = true;
