@@ -105,7 +105,8 @@ static constexpr s16 kBurnVfxColorFlag = 0x4000;
 static constexpr s16 kBurnVfxIntensity = 200;
 static constexpr s16 kBurnVfxXlu = 0;
 static constexpr s16 kBurnVfxDurationFrames = 30;
-static constexpr float kBeamStartForwardOffset = 20.0f;
+static constexpr float kBeamStartForwardOffset = 28.0f;
+static constexpr float kBeamStartVerticalOffset = 12.0f;
 static constexpr float kBeamRange = 1600.0f;
 static constexpr int kBeamTickIntervalFrames = 15;
 static constexpr int kBeamDamagePerTick = 2;
@@ -114,6 +115,7 @@ static constexpr float kBeamWidthNormal = 1.0f;
 static constexpr float kBeamWidthBoosted = 2.0f;
 static constexpr float kBeamDamageRadiusNormal = 55.0f;
 static constexpr float kBeamDamageRadiusBoosted = 110.0f;
+static constexpr float kBeamShieldTestWidth = 0.6f;
 static constexpr int kShatterImpulseFrames = 5;
 static constexpr float kShatterImpulseStep = 3.5f;
 static constexpr float kShatterImpulseY = 0.0f;
@@ -4642,7 +4644,7 @@ static void TickShieldGuardBeam(PlayState* play) {
 
     Vec3f beamStart = player->actor.focus.pos;
     beamStart.x += dir.x * kBeamStartForwardOffset;
-    beamStart.y += 8.0f;
+    beamStart.y += kBeamStartVerticalOffset;
     beamStart.z += dir.z * kBeamStartForwardOffset;
 
     // TODO: use reliable shield-aim pitch source for Beam once validated in this codebase.
@@ -4665,16 +4667,24 @@ static void TickShieldGuardBeam(PlayState* play) {
 
     if (sShieldBeamActor != nullptr) {
         EnFuseBeam* beam = reinterpret_cast<EnFuseBeam*>(sShieldBeamActor);
-        Vec3f beamDir{ beamEnd.x - beamStart.x, beamEnd.y - beamStart.y, beamEnd.z - beamStart.z };
-        const float beamDistance = Fuse_Vec3fLength(beamDir);
-        const Vec3f normalizedBeamDir = Fuse_Vec3fNormalize(beamDir);
-        const float horizontalDist = sqrtf((normalizedBeamDir.x * normalizedBeamDir.x) +
-                                           (normalizedBeamDir.z * normalizedBeamDir.z));
+        const float beamDistance = Math_Vec3f_DistXYZ(&beamStart, &beamEnd);
 
         beam->beamPos1 = beamStart;
+        beam->beamScale.x = kBeamShieldTestWidth;
+        beam->beamScale.y = kBeamShieldTestWidth;
         beam->beamScale.z = beamDistance;
-        beam->beamRot.y = Math_Atan2S(normalizedBeamDir.x, normalizedBeamDir.z);
-        beam->beamRot.x = (horizontalDist <= 0.0001f) ? 0 : Math_Atan2S(-normalizedBeamDir.y, horizontalDist);
+        beam->beamRot.y = Math_Vec3f_Yaw(&beamStart, &beamEnd);
+        beam->beamRot.x = Math_Vec3f_Pitch(&beamStart, &beamEnd);
+        beam->beamRot.z = 0;
+
+        static int sBeamShieldTransformLogFrame = -999999;
+        if (Fuse_LogDbgEnabled() && (frame - sBeamShieldTransformLogFrame) >= 30) {
+            Fuse::Log("[FuseDBG] BeamShieldXform frame=%d start=(%.1f,%.1f,%.1f) end=(%.1f,%.1f,%.1f) rot=(%d,%d) "
+                      "scale=(%.2f,%.1f)\n",
+                      frame, beamStart.x, beamStart.y, beamStart.z, beamEnd.x, beamEnd.y, beamEnd.z,
+                      beam->beamRot.x, beam->beamRot.y, beam->beamScale.x, beam->beamScale.z);
+            sBeamShieldTransformLogFrame = frame;
+        }
     }
 
     if (sShieldBeamState.nextDrainFrame < frame) {
