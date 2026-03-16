@@ -122,6 +122,7 @@ static constexpr int kShieldBeamBoostDamageMult = 3;
 static constexpr float kShieldBeamBoostWidthMult = 2.0f;
 static constexpr float kBeamShieldWidthMin = 0.10f;
 static constexpr float kBeamShieldWidthMax = 3.00f;
+static constexpr float kShieldBeamChildHylianCrouchBaseBackOffset = 3.0f;
 static constexpr int kShatterImpulseFrames = 5;
 static constexpr float kShatterImpulseStep = 3.5f;
 static constexpr float kShatterImpulseY = 0.0f;
@@ -4816,6 +4817,9 @@ static void TickShieldGuardBeam(PlayState* play) {
                                                                     : (isAdult ? "gFuseBeamShieldAdultOffsetZ"
                                                                                : "gFuseBeamShieldChildOffsetZ"),
                                        0.0f);
+    const float effectiveOffsetZ = useChildHylianCrouchOffsets
+                                       ? (offsetZ - kShieldBeamChildHylianCrouchBaseBackOffset)
+                                       : offsetZ;
     const float crouchLeanOffsetX =
         CVarGetFloat("gFuseBeamShieldChildHylianCrouchLeanOffsetX", 2.0f);
     const float crouchLeanOffsetZ =
@@ -4876,9 +4880,9 @@ static void TickShieldGuardBeam(PlayState* play) {
     const Vec3f startForward = useChildHylianCrouchOffsets ? originForward : forward;
 
     Vec3f beamStart = baseAnchor;
-    beamStart.x += (right.x * offsetX) + (up.x * offsetY) + (startForward.x * offsetZ);
-    beamStart.y += (right.y * offsetX) + (up.y * offsetY) + (startForward.y * offsetZ);
-    beamStart.z += (right.z * offsetX) + (up.z * offsetY) + (startForward.z * offsetZ);
+    beamStart.x += (right.x * offsetX) + (up.x * offsetY) + (startForward.x * effectiveOffsetZ);
+    beamStart.y += (right.y * offsetX) + (up.y * offsetY) + (startForward.y * effectiveOffsetZ);
+    beamStart.z += (right.z * offsetX) + (up.z * offsetY) + (startForward.z * effectiveOffsetZ);
 
     if (useChildHylianCrouchOffsets) {
         const s16 shieldYawDelta = static_cast<s16>(shieldAimYaw - bodyYaw);
@@ -4896,7 +4900,7 @@ static void TickShieldGuardBeam(PlayState* play) {
         Fuse::Log("[FuseDBG] BeamShieldTune frame=%d mode=%s base=(%.2f,%.2f,%.2f) offset=(%.2f,%.2f,%.2f) "
                   "start=(%.2f,%.2f,%.2f) yawSrc=%s pitchSrc=%s yaw=%d pitch=%d scaleX=%.2f\n",
                   frame, isAdult ? "adult" : "child", baseAnchor.x, baseAnchor.y, baseAnchor.z, offsetX, offsetY,
-                  offsetZ, beamStart.x, beamStart.y, beamStart.z, usingShieldYaw ? "shieldMf" : "shape",
+                  effectiveOffsetZ, beamStart.x, beamStart.y, beamStart.z, usingShieldYaw ? "shieldMf" : "shape",
                   usingShieldPitch ? "shieldMf" : "flat", beamYaw, beamPitch, beamWidth);
         sBeamShieldTuningLogFrame = frame;
     }
