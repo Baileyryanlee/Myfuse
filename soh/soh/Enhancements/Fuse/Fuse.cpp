@@ -4873,10 +4873,12 @@ static void TickShieldGuardBeam(PlayState* play) {
         sBeamShieldYawSrcLogFrame = frame;
     }
 
+    const Vec3f startForward = useChildHylianCrouchOffsets ? originForward : forward;
+
     Vec3f beamStart = baseAnchor;
-    beamStart.x += (right.x * offsetX) + (up.x * offsetY) + (forward.x * offsetZ);
-    beamStart.y += (right.y * offsetX) + (up.y * offsetY) + (forward.y * offsetZ);
-    beamStart.z += (right.z * offsetX) + (up.z * offsetY) + (forward.z * offsetZ);
+    beamStart.x += (right.x * offsetX) + (up.x * offsetY) + (startForward.x * offsetZ);
+    beamStart.y += (right.y * offsetX) + (up.y * offsetY) + (startForward.y * offsetZ);
+    beamStart.z += (right.z * offsetX) + (up.z * offsetY) + (startForward.z * offsetZ);
 
     if (useChildHylianCrouchOffsets) {
         const s16 shieldYawDelta = static_cast<s16>(shieldAimYaw - bodyYaw);
