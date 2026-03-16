@@ -4687,7 +4687,7 @@ static void TickShieldGuardBeam(PlayState* play) {
         std::clamp(CVarGetFloat("gFuseBeamShieldScaleX", 0.35f), kBeamShieldWidthMin, kBeamShieldWidthMax);
 
     Vec3f adultBaseAnchor = player->actor.focus.pos;
-    adultBaseAnchor.y -= 6.0f;
+    adultBaseAnchor.y -= 10.0f;
     Vec3f childBaseAnchor = player->actor.focus.pos;
     childBaseAnchor.y -= 8.0f;
     const Vec3f baseAnchor = isAdult ? adultBaseAnchor : childBaseAnchor;
@@ -4713,9 +4713,8 @@ static void TickShieldGuardBeam(PlayState* play) {
 
     static int sBeamShieldZTargetPitchLogFrame = -999999;
     if (Fuse_LogDbgEnabled() && (frame - sBeamShieldZTargetPitchLogFrame) >= 30) {
-        Fuse::Log(
-            "[FuseDBG] BeamShieldZTargetPitch frame=%d ztarget=%s basePitch=%d ztargetAdjust=%d finalPitch=%d\n",
-            frame, zTargeting ? "active" : "inactive", baseBeamPitch, zTargetAdjustment, beamPitch);
+        Fuse::Log("[FuseDBG] BeamShieldZTargetPitch frame=%d ztarget=%s basePitch=%d ztargetAdjust=%d finalPitch=%d\n",
+                  frame, zTargeting ? "active" : "inactive", baseBeamPitch, zTargetAdjustment, beamPitch);
         sBeamShieldZTargetPitchLogFrame = frame;
     }
 
