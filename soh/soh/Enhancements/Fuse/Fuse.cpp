@@ -5157,19 +5157,31 @@ static void TickSwordSwingBeam(PlayState* play) {
     const float offsetZ = CVarGetFloat("gFuseBeamSwordOffsetZ", 12.0f);
 
     const s16 beamYaw = player->actor.shape.rot.y;
-    Vec3f forward{ Math_SinS(beamYaw), 0.0f, Math_CosS(beamYaw) };
-    forward = Fuse_Vec3fNormalize(forward);
+    Vec3f fallbackForward{ Math_SinS(beamYaw), 0.0f, Math_CosS(beamYaw) };
+    fallbackForward = Fuse_Vec3fNormalize(fallbackForward);
 
-    Vec3f beamStart = player->actor.world.pos;
-    beamStart.x += (forward.x * offsetZ) + (Math_CosS(beamYaw) * offsetX);
-    beamStart.y += offsetY;
-    beamStart.z += (forward.z * offsetZ) - (Math_SinS(beamYaw) * offsetX);
+    const Vec3f swordBase = player->meleeWeaponInfo[0].base;
+    const Vec3f swordTip = player->meleeWeaponInfo[0].tip;
+    Vec3f bladeForward{ swordTip.x - swordBase.x, swordTip.y - swordBase.y, swordTip.z - swordBase.z };
+    float bladeLength = 0.0f;
+    bladeForward = Fuse_Vec3fNormalize(bladeForward, &bladeLength);
+    const bool useBladeForward = bladeLength > 0.001f;
+    const Vec3f forward = useBladeForward ? bladeForward : fallbackForward;
+
+    Vec3f right{ Math_CosS(beamYaw), 0.0f, -Math_SinS(beamYaw) };
+    right = Fuse_Vec3fNormalize(right);
+
+    Vec3f beamAnchor = useBladeForward ? swordBase : player->actor.world.pos;
+    Vec3f beamStart{ beamAnchor.x + (right.x * offsetX) + (forward.x * offsetZ),
+                     beamAnchor.y + offsetY,
+                     beamAnchor.z + (right.z * offsetX) + (forward.z * offsetZ) };
     Vec3f beamEnd{ beamStart.x + (forward.x * beamRange), beamStart.y, beamStart.z + (forward.z * beamRange) };
 
     sSwordBeamState.active = true;
     sSwordBeamState.start = beamStart;
     sSwordBeamState.end = beamEnd;
 
+    bool spawnedActor = false;
     if (sSwordBeamActor == nullptr || sSwordBeamActor->update == nullptr) {
         if (sSwordBeamActor != nullptr) {
             Actor_Kill(sSwordBeamActor);
@@ -5177,6 +5189,7 @@ static void TickSwordSwingBeam(PlayState* play) {
         }
         sSwordBeamActor =
             Actor_Spawn(&play->actorCtx, play, ACTOR_UNSET_1AA, beamStart.x, beamStart.y, beamStart.z, 0, 0, 0, 0, 0);
+        spawnedActor = (sSwordBeamActor != nullptr);
     }
 
     if (sSwordBeamActor != nullptr) {
@@ -5190,6 +5203,13 @@ static void TickSwordSwingBeam(PlayState* play) {
         beam->beamRot.y = Math_Vec3f_Yaw(&beamStart, &beamEnd);
         beam->beamRot.x = Math_Vec3f_Pitch(&beamStart, &beamEnd);
         beam->beamRot.z = 0;
+
+        if (spawnedActor) {
+            FUSE_LOG_DBG("[FuseDBG] SwordBeamBegin frame=%d swordItem=%d material=%d spawned=1 start=(%.1f,%.1f,%.1f) "
+                         "end=(%.1f,%.1f,%.1f) bladeFwd=%d\n",
+                         frame, sSwordBeamState.swordItemId, static_cast<int>(slot->materialId), beamStart.x, beamStart.y,
+                         beamStart.z, beamEnd.x, beamEnd.y, beamEnd.z, useBladeForward ? 1 : 0);
+        }
     }
 
     if (sSwordBeamState.nextDamageFrame < frame) {
