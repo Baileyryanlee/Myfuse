@@ -47,6 +47,10 @@ struct FuseExplosionParams {
     int hitFrames = 0;
 };
 
+extern "C" void Fuse_SwordBeamBeginSwing(PlayState* play, Player* player);
+extern "C" void Fuse_SwordBeamEndSwing(PlayState* play, Player* player);
+extern "C" void Fuse_SwordBeamTick(PlayState* play, Player* player);
+
 FuseExplosionParams Fuse_GetExplosionParams(MaterialId mat, int level);
 bool Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfMode selfMode,
                            FuseExplosionParams params, const char* srcLabel);

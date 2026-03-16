@@ -59,6 +59,9 @@ extern void Fuse_ShieldApplyBurn(PlayState* play, Actor* victim, uint8_t level, 
 extern s16 Fuse_GetShieldBashDamage(int shieldItemId, int* outMaterialId, int* outHasBashMod, int* outMaterialAtk);
 extern void Fuse_ShieldBashBeamBoost(PlayState* play);
 extern bool Fuse_IsActorFuseFrozen(Actor* actor);
+extern void Fuse_SwordBeamBeginSwing(PlayState* play, Player* player);
+extern void Fuse_SwordBeamEndSwing(PlayState* play, Player* player);
+extern void Fuse_SwordBeamTick(PlayState* play, Player* player);
 
 // Some player animations are played at this reduced speed, for reasons yet unclear.
 // This is called "adjusted" for now.
@@ -2439,6 +2442,13 @@ void func_80833A20(Player* this, s32 newMeleeWeaponState) {
         if (this->heldItemAction >= PLAYER_IA_SWORD_MASTER && this->heldItemAction <= PLAYER_IA_SWORD_BIGGORON) {
             gSaveContext.ship.stats.count[COUNT_SWORD_SWINGS]++;
         }
+    }
+
+    if ((this->meleeWeaponState == 0) && (newMeleeWeaponState != 0) &&
+        (this->heldItemAction >= PLAYER_IA_SWORD_MASTER) && (this->heldItemAction <= PLAYER_IA_SWORD_BIGGORON)) {
+        Fuse_SwordBeamBeginSwing(gPlayState, this);
+    } else if ((this->meleeWeaponState != 0) && (newMeleeWeaponState == 0)) {
+        Fuse_SwordBeamEndSwing(gPlayState, this);
     }
 
     this->meleeWeaponState = newMeleeWeaponState;
@@ -9547,6 +9557,11 @@ s32 func_80842DF4(PlayState* play, Player* this) {
     Vec3f sp50;
     s32 temp1;
     s32 sp48;
+
+    if ((this->meleeWeaponState > 0) && (this->heldItemAction >= PLAYER_IA_SWORD_MASTER) &&
+        (this->heldItemAction <= PLAYER_IA_SWORD_BIGGORON)) {
+        Fuse_SwordBeamTick(play, this);
+    }
 
     if (this->meleeWeaponState > 0) {
         if (this->meleeWeaponAnimation < PLAYER_MWA_SPIN_ATTACK_1H) {
