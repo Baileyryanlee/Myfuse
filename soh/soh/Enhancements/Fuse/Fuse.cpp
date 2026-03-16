@@ -4999,8 +4999,8 @@ static void TickShieldGuardBeam(PlayState* play) {
                     const float distanceToLine = Fuse_DistancePointToSegment(target, beamStart, beamEnd);
                     if (distanceToLine <= beamRadius) {
                         const int prevDamage = actor->colChkInfo.damage;
-                        const int beamDamage = boosted ? (kBeamDamagePerTick * kShieldBeamBoostDamageMult)
-                                                       : kBeamDamagePerTick;
+                        const int beamDamage =
+                            boosted ? (kBeamDamagePerTick * kShieldBeamBoostDamageMult) : kBeamDamagePerTick;
                         actor->colChkInfo.damage = beamDamage;
                         Actor_ApplyDamage(actor);
                         actor->colChkInfo.damage = prevDamage;
@@ -5013,8 +5013,8 @@ static void TickShieldGuardBeam(PlayState* play) {
         actor = actor->next;
     }
 
-    FUSE_LOG_DBG("[FuseDBG] BeamShieldHitTick frame=%d hits=%d radius=%.1f boosted=%d\n", frame, hitCount,
-                 beamRadius, boosted ? 1 : 0);
+    FUSE_LOG_DBG("[FuseDBG] BeamShieldHitTick frame=%d hits=%d radius=%.1f boosted=%d\n", frame, hitCount, beamRadius,
+                 boosted ? 1 : 0);
     sShieldBeamState.nextDamageFrame = frame + kBeamTickIntervalFrames;
 }
 

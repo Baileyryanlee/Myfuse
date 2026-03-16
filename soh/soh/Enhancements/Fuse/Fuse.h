@@ -48,8 +48,8 @@ struct FuseExplosionParams {
 };
 
 FuseExplosionParams Fuse_GetExplosionParams(MaterialId mat, int level);
-bool Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfMode selfMode, FuseExplosionParams params,
-                           const char* srcLabel);
+bool Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfMode selfMode,
+                           FuseExplosionParams params, const char* srcLabel);
 Vec3f Fuse_AdjustShieldExplosionPos(const Player* player, const Vec3f& impactPos);
 bool Fuse_IsBombableActorId(s16 id);
 bool Fuse_IsExplosionImmuneVictim(const Actor* victim);
@@ -97,8 +97,8 @@ void TickSwordBgExplosions(PlayState* play);
 void TickRangedProjectileSeek(PlayState* play);
 void TickRangedProjectileBombableProximity(PlayState* play);
 void OnShieldBashBeamBoost(PlayState* play);
-    void OnSwordMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage, const Vec3f* impactPos);
-    void OnHammerMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage, const Vec3f* impactPos);
+void OnSwordMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage, const Vec3f* impactPos);
+void OnHammerMeleeHit(PlayState* play, Actor* victim, int baseWeaponDamage, const Vec3f* impactPos);
 void ProcessPendingStuns(PlayState* play);
 void ProcessDeferredSwordFreezes(PlayState* play);
 void ResetSwordFreezeQueue();
