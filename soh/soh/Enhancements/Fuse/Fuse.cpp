@@ -113,6 +113,10 @@ static constexpr float kBeamWidthNormal = 1.0f;
 static constexpr float kBeamWidthBoosted = 2.0f;
 static constexpr float kBeamDamageRadiusNormal = 55.0f;
 static constexpr float kBeamDamageRadiusBoosted = 110.0f;
+static constexpr int kShieldBeamBoostDurationFrames = 30;
+static constexpr int kShieldBeamBoostExtraDrain = 5;
+static constexpr int kShieldBeamBoostDamageMult = 3;
+static constexpr float kShieldBeamBoostWidthMult = 2.0f;
 static constexpr float kBeamShieldWidthMin = 0.10f;
 static constexpr float kBeamShieldWidthMax = 3.00f;
 static constexpr int kShatterImpulseFrames = 5;
@@ -4601,21 +4605,81 @@ static float Fuse_DistancePointToSegment(const Vec3f& point, const Vec3f& start,
     return Math_Vec3f_DistXYZ(&p, &closest);
 }
 
+static void ClearShieldBeamRuntimeState() {
+    sShieldBeamState.active = false;
+    sShieldBeamState.nextDamageFrame = -1;
+    sShieldBeamState.nextDrainFrame = -1;
+    sShieldBeamState.boostUntilFrame = -1;
+
+    if (sShieldBeamActor != nullptr) {
+        Actor_Kill(sShieldBeamActor);
+        sShieldBeamActor = nullptr;
+    }
+}
+
+static bool ShieldBeamBoostEligible(PlayState* play, FuseSlot** outSlot = nullptr) {
+    if (outSlot != nullptr) {
+        *outSlot = nullptr;
+    }
+
+    if (!play || !Fuse::IsEnabled()) {
+        return false;
+    }
+
+    FuseSlot& slot = gFuseSave.GetActiveShieldSlot(play);
+    if (slot.materialId != MaterialId::BeamosHead || slot.durabilityCur <= 0) {
+        return false;
+    }
+
+    const uint8_t beamLevel = Fuse::GetMaterialModifierLevel(slot.materialId, FuseItemType::Shield, ModifierId::Beam);
+    if (beamLevel == 0) {
+        return false;
+    }
+
+    if (!sShieldBeamState.active && (sShieldBeamActor == nullptr || sShieldBeamActor->update == nullptr)) {
+        return false;
+    }
+
+    if (outSlot != nullptr) {
+        *outSlot = &slot;
+    }
+
+    return true;
+}
+
+void Fuse::OnShieldBashBeamBoost(PlayState* play) {
+    FuseSlot* slot = nullptr;
+    if (!ShieldBeamBoostEligible(play, &slot) || slot == nullptr) {
+        return;
+    }
+
+    const int frame = play->gameplayFrames;
+    const int oldDurability = slot->durabilityCur;
+    slot->durabilityCur = std::max(0, slot->durabilityCur - kShieldBeamBoostExtraDrain);
+    sShieldBeamState.boostUntilFrame = frame + kShieldBeamBoostDurationFrames;
+
+    FUSE_LOG_DBG("[FuseDBG] BeamShieldBoost frame=%d mat=%d dura=%d->%d until=%d\n", frame,
+                 static_cast<int>(slot->materialId), oldDurability, slot->durabilityCur,
+                 sShieldBeamState.boostUntilFrame);
+
+    if (slot->durabilityCur <= 0) {
+        slot->ResetToUnfused();
+        ClearShieldBeamRuntimeState();
+    }
+}
+
+extern "C" void Fuse_ShieldBashBeamBoost(PlayState* play) {
+    Fuse::OnShieldBashBeamBoost(play);
+}
+
 static void TickShieldGuardBeam(PlayState* play) {
     Fuse_RegisterShieldBeamCVars();
 
     const bool wasActive = sShieldBeamState.active;
     sShieldBeamState.active = false;
 
-    const auto clearShieldBeamActor = []() {
-        if (sShieldBeamActor != nullptr) {
-            Actor_Kill(sShieldBeamActor);
-            sShieldBeamActor = nullptr;
-        }
-    };
-
     if (!play || !Fuse::IsEnabled()) {
-        clearShieldBeamActor();
+        ClearShieldBeamRuntimeState();
         return;
     }
 
@@ -4647,7 +4711,7 @@ static void TickShieldGuardBeam(PlayState* play) {
                          reason, frame, guarding ? 1 : 0, static_cast<int>(slot.materialId), slot.durabilityCur,
                          beamLevel);
         }
-        clearShieldBeamActor();
+        ClearShieldBeamRuntimeState();
         return;
     }
 
@@ -4683,8 +4747,10 @@ static void TickShieldGuardBeam(PlayState* play) {
     const float offsetX = CVarGetFloat(isAdult ? "gFuseBeamShieldAdultOffsetX" : "gFuseBeamShieldChildOffsetX", 0.0f);
     const float offsetY = CVarGetFloat(isAdult ? "gFuseBeamShieldAdultOffsetY" : "gFuseBeamShieldChildOffsetY", 0.0f);
     const float offsetZ = CVarGetFloat(isAdult ? "gFuseBeamShieldAdultOffsetZ" : "gFuseBeamShieldChildOffsetZ", 0.0f);
-    const float beamWidth =
+    const bool boosted = frame < sShieldBeamState.boostUntilFrame;
+    const float baseBeamWidth =
         std::clamp(CVarGetFloat("gFuseBeamShieldScaleX", 0.35f), kBeamShieldWidthMin, kBeamShieldWidthMax);
+    const float beamWidth = boosted ? (baseBeamWidth * kShieldBeamBoostWidthMult) : baseBeamWidth;
 
     Vec3f adultBaseAnchor = player->actor.focus.pos;
     adultBaseAnchor.y -= 10.0f;
@@ -4767,7 +4833,10 @@ static void TickShieldGuardBeam(PlayState* play) {
     sShieldBeamState.end = beamEnd;
 
     if (!wasActive || sShieldBeamActor == nullptr || sShieldBeamActor->update == nullptr) {
-        clearShieldBeamActor();
+        if (sShieldBeamActor != nullptr) {
+            Actor_Kill(sShieldBeamActor);
+            sShieldBeamActor = nullptr;
+        }
         sShieldBeamActor =
             Actor_Spawn(&play->actorCtx, play, ACTOR_UNSET_1AA, beamStart.x, beamStart.y, beamStart.z, 0, 0, 0, 0, 0);
     }
@@ -4819,10 +4888,7 @@ static void TickShieldGuardBeam(PlayState* play) {
             slot.ResetToUnfused();
             FUSE_LOG_DBG("[FuseDBG] BeamShieldInactive reason=Broken frame=%d guarding=%d mat=%d dura=%d beamLvl=%d\n",
                          frame, guarding ? 1 : 0, static_cast<int>(slot.materialId), slot.durabilityCur, beamLevel);
-            sShieldBeamState.active = false;
-            sShieldBeamState.nextDamageFrame = -1;
-            sShieldBeamState.nextDrainFrame = -1;
-            clearShieldBeamActor();
+            ClearShieldBeamRuntimeState();
             return;
         }
 
@@ -4846,7 +4912,9 @@ static void TickShieldGuardBeam(PlayState* play) {
                     const float distanceToLine = Fuse_DistancePointToSegment(target, beamStart, beamEnd);
                     if (distanceToLine <= beamRadius) {
                         const int prevDamage = actor->colChkInfo.damage;
-                        actor->colChkInfo.damage = kBeamDamagePerTick;
+                        const int beamDamage = boosted ? (kBeamDamagePerTick * kShieldBeamBoostDamageMult)
+                                                       : kBeamDamagePerTick;
+                        actor->colChkInfo.damage = beamDamage;
                         Actor_ApplyDamage(actor);
                         actor->colChkInfo.damage = prevDamage;
                         ++hitCount;
@@ -4858,7 +4926,8 @@ static void TickShieldGuardBeam(PlayState* play) {
         actor = actor->next;
     }
 
-    FUSE_LOG_DBG("[FuseDBG] BeamShieldHitTick frame=%d hits=%d radius=%.1f\n", frame, hitCount, beamRadius);
+    FUSE_LOG_DBG("[FuseDBG] BeamShieldHitTick frame=%d hits=%d radius=%.1f boosted=%d\n", frame, hitCount,
+                 beamRadius, boosted ? 1 : 0);
     sShieldBeamState.nextDamageFrame = frame + kBeamTickIntervalFrames;
 }
 
