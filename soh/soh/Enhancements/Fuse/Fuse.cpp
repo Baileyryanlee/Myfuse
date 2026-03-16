@@ -4686,7 +4686,8 @@ static void TickShieldGuardBeam(PlayState* play) {
     const float beamWidth =
         std::clamp(CVarGetFloat("gFuseBeamShieldScaleX", 0.35f), kBeamShieldWidthMin, kBeamShieldWidthMax);
 
-    const Vec3f adultBaseAnchor = player->actor.focus.pos;
+    Vec3f adultBaseAnchor = player->actor.focus.pos;
+    adultBaseAnchor.y -= 6.0f;
     Vec3f childBaseAnchor = player->actor.focus.pos;
     childBaseAnchor.y -= 8.0f;
     const Vec3f baseAnchor = isAdult ? adultBaseAnchor : childBaseAnchor;
