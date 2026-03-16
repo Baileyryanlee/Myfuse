@@ -57,6 +57,7 @@ extern void Fuse_ShieldTriggerMegaStun(PlayState* play, Player* player, int mate
 extern void Fuse_ShieldApplyFreeze(PlayState* play, Actor* victim, uint8_t level);
 extern void Fuse_ShieldApplyBurn(PlayState* play, Actor* victim, uint8_t level, int materialId);
 extern s16 Fuse_GetShieldBashDamage(int shieldItemId, int* outMaterialId, int* outHasBashMod, int* outMaterialAtk);
+extern void Fuse_ShieldBashBeamBoost(PlayState* play);
 extern bool Fuse_IsActorFuseFrozen(Actor* actor);
 
 // Some player animations are played at this reduced speed, for reasons yet unclear.
@@ -6558,6 +6559,7 @@ static void Player_ShieldBash_UpdateColliderAndHit(Player* this, PlayState* play
                 const f32 knockbackScaled = knockback * bashResult.scalar;
                 int materialId = 0;
                 const s16 bashDamage = Fuse_GetShieldBashDamage(this->currentShield, &materialId, NULL, NULL);
+                Fuse_ShieldBashBeamBoost(play);
 
                 if (bashResult.allowed) {
                     target->world.pos.x += Math_SinS(pushYaw) * knockbackScaled;
