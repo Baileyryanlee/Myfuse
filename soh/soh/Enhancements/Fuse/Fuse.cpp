@@ -77,6 +77,9 @@ struct FuseShieldBeamState {
     int nextDamageFrame = -1;
     int nextDrainFrame = -1;
     int boostUntilFrame = -1;
+    s16 sweepYaw = 0;
+    bool sweepInitialized = false;
+    bool turretModeActive = false;
 };
 
 static FuseSaveData gFuseSave; // persistent-ready (not serialized yet)
@@ -224,6 +227,12 @@ static void Fuse_RegisterShieldBeamCVars() {
     CVarRegisterFloat("gFuseBeamShieldChildOffsetX", 4.0f);
     CVarRegisterFloat("gFuseBeamShieldChildOffsetY", 8.0f);
     CVarRegisterFloat("gFuseBeamShieldChildOffsetZ", 20.0f);
+    CVarRegisterFloat("gFuseBeamShieldChildHylianCrouchOffsetX", 3.5f);
+    CVarRegisterFloat("gFuseBeamShieldChildHylianCrouchOffsetY", 7.0f);
+    CVarRegisterFloat("gFuseBeamShieldChildHylianCrouchOffsetZ", 18.0f);
+    CVarRegisterFloat("gFuseBeamShieldChildHylianCrouchLeanOffsetX", 2.0f);
+    CVarRegisterFloat("gFuseBeamShieldChildHylianCrouchLeanOffsetZ", 2.0f);
+    CVarRegisterFloat("gFuseBeamShieldChildHylianCrouchSweepSpeedDeg", 1.2f);
     CVarRegisterFloat("gFuseBeamShieldScaleX", 0.35f);
     CVarRegisterInteger("gFuseBeamShieldZTargetPitchDown", 0);
     CVarRegisterInteger("gFuseBeamShieldDebug", 0);
@@ -4610,11 +4619,35 @@ static void ClearShieldBeamRuntimeState() {
     sShieldBeamState.nextDamageFrame = -1;
     sShieldBeamState.nextDrainFrame = -1;
     sShieldBeamState.boostUntilFrame = -1;
+    sShieldBeamState.sweepYaw = 0;
+    sShieldBeamState.sweepInitialized = false;
+    sShieldBeamState.turretModeActive = false;
 
     if (sShieldBeamActor != nullptr) {
         Actor_Kill(sShieldBeamActor);
         sShieldBeamActor = nullptr;
     }
+}
+
+static bool Fuse_IsChildHylianShieldCrouchBeamMode(Player* player, PlayState* play, const FuseSlot& slot) {
+    if (!play || !player || !Fuse::IsEnabled()) {
+        return false;
+    }
+
+    if (!LINK_IS_CHILD || !Player_IsChildWithHylianShield(player) || player->currentShield != PLAYER_SHIELD_HYLIAN) {
+        return false;
+    }
+
+    if ((player->stateFlags1 & PLAYER_STATE1_SHIELDING) == 0) {
+        return false;
+    }
+
+    if (slot.materialId != MaterialId::BeamosHead || slot.durabilityCur <= 0) {
+        return false;
+    }
+
+    const uint8_t beamLevel = Fuse::GetMaterialModifierLevel(slot.materialId, FuseItemType::Shield, ModifierId::Beam);
+    return beamLevel > 0;
 }
 
 static bool ShieldBeamBoostEligible(PlayState* play, FuseSlot** outSlot = nullptr) {
@@ -4718,16 +4751,40 @@ static void TickShieldGuardBeam(PlayState* play) {
     const s16 bodyYaw = player->actor.shape.rot.y;
     Vec3s shieldRot{};
     Matrix_MtxFToYXZRotS(&player->shieldMf, &shieldRot, false);
+    const bool childHylianCrouchTurretMode = Fuse_IsChildHylianShieldCrouchBeamMode(player, play, slot);
 
     bool usingShieldYaw = false;
-    s16 beamYaw = bodyYaw;
+    s16 shieldAimYaw = bodyYaw;
     Vec3f shieldForward{ -player->shieldMf.xz, -player->shieldMf.yz, -player->shieldMf.zz };
     shieldForward = Fuse_Vec3fNormalize(shieldForward);
     const float shieldForwardXZ = sqrtf((shieldForward.x * shieldForward.x) + (shieldForward.z * shieldForward.z));
     if (shieldForwardXZ > 0.001f) {
-        beamYaw = Math_Atan2S(shieldForward.z, shieldForward.x);
+        shieldAimYaw = Math_Atan2S(shieldForward.z, shieldForward.x);
         usingShieldYaw = true;
     }
+
+    s16 beamYaw = shieldAimYaw;
+    if (childHylianCrouchTurretMode) {
+        if (!sShieldBeamState.turretModeActive) {
+            FUSE_LOG_DBG("[FuseDBG] BeamTurretEnter frame=%d yaw=%d\n", frame, shieldAimYaw);
+        }
+        if (!sShieldBeamState.sweepInitialized) {
+            sShieldBeamState.sweepYaw = shieldAimYaw;
+            sShieldBeamState.sweepInitialized = true;
+        }
+
+        const float sweepSpeedDeg =
+            CVarGetFloat("gFuseBeamShieldChildHylianCrouchSweepSpeedDeg", 1.2f);
+        const s16 sweepStep = static_cast<s16>(sweepSpeedDeg * (32768.0f / 180.0f));
+        sShieldBeamState.sweepYaw = static_cast<s16>(sShieldBeamState.sweepYaw + sweepStep);
+        beamYaw = sShieldBeamState.sweepYaw;
+    } else if (sShieldBeamState.turretModeActive) {
+        FUSE_LOG_DBG("[FuseDBG] BeamTurretExit frame=%d\n", frame);
+        sShieldBeamState.sweepInitialized = false;
+    }
+    sShieldBeamState.turretModeActive = childHylianCrouchTurretMode;
+
+    const s16 originYaw = childHylianCrouchTurretMode ? bodyYaw : beamYaw;
 
     Vec3f forward{ Math_SinS(beamYaw), 0.0f, Math_CosS(beamYaw) };
     forward = Fuse_Vec3fNormalize(forward);
@@ -4735,18 +4792,34 @@ static void TickShieldGuardBeam(PlayState* play) {
         return;
     }
 
-    Vec3f right{ Math_CosS(beamYaw), 0.0f, -Math_SinS(beamYaw) };
+    Vec3f right{ Math_CosS(originYaw), 0.0f, -Math_SinS(originYaw) };
     right = Fuse_Vec3fNormalize(right);
     const Vec3f up{ 0.0f, 1.0f, 0.0f };
+    Vec3f originForward{ Math_SinS(originYaw), 0.0f, Math_CosS(originYaw) };
+    originForward = Fuse_Vec3fNormalize(originForward);
 
     const float beamRadius =
         (frame < sShieldBeamState.boostUntilFrame) ? kBeamDamageRadiusBoosted : kBeamDamageRadiusNormal;
 
     const bool beamDebugEnabled = CVarGetInteger("gFuseBeamShieldDebug", 0) != 0;
     const bool isAdult = LINK_IS_ADULT;
-    const float offsetX = CVarGetFloat(isAdult ? "gFuseBeamShieldAdultOffsetX" : "gFuseBeamShieldChildOffsetX", 0.0f);
-    const float offsetY = CVarGetFloat(isAdult ? "gFuseBeamShieldAdultOffsetY" : "gFuseBeamShieldChildOffsetY", 0.0f);
-    const float offsetZ = CVarGetFloat(isAdult ? "gFuseBeamShieldAdultOffsetZ" : "gFuseBeamShieldChildOffsetZ", 0.0f);
+    const bool useChildHylianCrouchOffsets = childHylianCrouchTurretMode && !isAdult;
+    const float offsetX = CVarGetFloat(useChildHylianCrouchOffsets ? "gFuseBeamShieldChildHylianCrouchOffsetX"
+                                                                    : (isAdult ? "gFuseBeamShieldAdultOffsetX"
+                                                                               : "gFuseBeamShieldChildOffsetX"),
+                                       0.0f);
+    const float offsetY = CVarGetFloat(useChildHylianCrouchOffsets ? "gFuseBeamShieldChildHylianCrouchOffsetY"
+                                                                    : (isAdult ? "gFuseBeamShieldAdultOffsetY"
+                                                                               : "gFuseBeamShieldChildOffsetY"),
+                                       0.0f);
+    const float offsetZ = CVarGetFloat(useChildHylianCrouchOffsets ? "gFuseBeamShieldChildHylianCrouchOffsetZ"
+                                                                    : (isAdult ? "gFuseBeamShieldAdultOffsetZ"
+                                                                               : "gFuseBeamShieldChildOffsetZ"),
+                                       0.0f);
+    const float crouchLeanOffsetX =
+        CVarGetFloat("gFuseBeamShieldChildHylianCrouchLeanOffsetX", 2.0f);
+    const float crouchLeanOffsetZ =
+        CVarGetFloat("gFuseBeamShieldChildHylianCrouchLeanOffsetZ", 2.0f);
     const bool boosted = frame < sShieldBeamState.boostUntilFrame;
     const float baseBeamWidth =
         std::clamp(CVarGetFloat("gFuseBeamShieldScaleX", 0.35f), kBeamShieldWidthMin, kBeamShieldWidthMax);
@@ -4761,7 +4834,7 @@ static void TickShieldGuardBeam(PlayState* play) {
     bool usingShieldPitch = false;
     s16 beamPitch = 0;
     const s16 shieldPitch = static_cast<s16>(-shieldRot.x);
-    if (std::abs(shieldPitch) <= 0x4000) {
+    if (!childHylianCrouchTurretMode && std::abs(shieldPitch) <= 0x4000) {
         beamPitch = shieldPitch;
         usingShieldPitch = true;
     }
@@ -4771,7 +4844,7 @@ static void TickShieldGuardBeam(PlayState* play) {
     const bool guardingAndZTargeting = guarding && zTargeting;
     const int zTargetPitchDownRaw = CVarGetInteger("gFuseBeamShieldZTargetPitchDown", 0);
     const s16 zTargetPitchDown = static_cast<s16>(std::max(0, zTargetPitchDownRaw));
-    const s16 zTargetAdjustment = guardingAndZTargeting ? zTargetPitchDown : 0;
+    const s16 zTargetAdjustment = (!childHylianCrouchTurretMode && guardingAndZTargeting) ? zTargetPitchDown : 0;
     if (zTargetAdjustment != 0) {
         const int adjustedPitch = static_cast<int>(beamPitch) + static_cast<int>(zTargetAdjustment);
         beamPitch = static_cast<s16>(std::clamp(adjustedPitch, -0x4000, 0x4000));
@@ -4804,6 +4877,14 @@ static void TickShieldGuardBeam(PlayState* play) {
     beamStart.x += (right.x * offsetX) + (up.x * offsetY) + (forward.x * offsetZ);
     beamStart.y += (right.y * offsetX) + (up.y * offsetY) + (forward.y * offsetZ);
     beamStart.z += (right.z * offsetX) + (up.z * offsetY) + (forward.z * offsetZ);
+
+    if (useChildHylianCrouchOffsets) {
+        const s16 shieldYawDelta = static_cast<s16>(shieldAimYaw - bodyYaw);
+        const float leanFactor = std::clamp(static_cast<float>(shieldYawDelta) / 8192.0f, -1.0f, 1.0f);
+        beamStart.x += (right.x * crouchLeanOffsetX * leanFactor) + (originForward.x * crouchLeanOffsetZ * leanFactor);
+        beamStart.y += (right.y * crouchLeanOffsetX * leanFactor) + (originForward.y * crouchLeanOffsetZ * leanFactor);
+        beamStart.z += (right.z * crouchLeanOffsetX * leanFactor) + (originForward.z * crouchLeanOffsetZ * leanFactor);
+    }
 
     Vec3f beamEnd{ beamStart.x + (forward.x * kBeamRange), beamStart.y + (forward.y * kBeamRange),
                    beamStart.z + (forward.z * kBeamRange) };
