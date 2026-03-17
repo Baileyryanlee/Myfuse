@@ -668,6 +668,7 @@ static FuseItemType RangedSlotItemType(RangedFuseSlot slot);
 static int GetMaterialEffectiveBaseDurabilityForItem(MaterialId id, FuseItemType itemType);
 static void ClearSwordBeamRuntimeState();
 static void TickShieldGuardBeam(PlayState* play);
+static void TickSwordBeamPolling(PlayState* play);
 static void TickSwordSwingBeam(PlayState* play);
 static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx**);
 
@@ -4708,6 +4709,18 @@ static bool SwordBeamEligible(PlayState* play, Player* player, SwordFuseSlot** o
     return true;
 }
 
+static bool SwordBeamAttackActive(const Player* player) {
+    if (!player) {
+        return false;
+    }
+
+    if (player->heldItemAction < PLAYER_IA_SWORD_KOKIRI || player->heldItemAction > PLAYER_IA_SWORD_BIGGORON) {
+        return false;
+    }
+
+    return player->meleeWeaponState != 0;
+}
+
 static int SwordBeamBaseDamageFromHeldAction(const Player* player) {
     if (!player) {
         return 0;
@@ -4726,35 +4739,18 @@ static int SwordBeamBaseDamageFromHeldAction(const Player* player) {
 }
 
 extern "C" void Fuse_SwordBeamBeginSwing(PlayState* play, Player* player) {
-    SwordFuseSlot* slot = nullptr;
-    if (!SwordBeamEligible(play, player, &slot) || slot == nullptr) {
-        ClearSwordBeamRuntimeState();
-        return;
-    }
-
-    sSwordBeamState.swingActive = true;
-    sSwordBeamState.active = false;
-    sSwordBeamState.swingConsumedDrain = false;
-    sSwordBeamState.swordItemId = player->heldItemAction;
-    sSwordBeamState.nextTickLogFrame = play->gameplayFrames;
-    sSwordBeamState.hitVictims.clear();
-
-    FUSE_LOG_DBG("[FuseDBG] SwordBeamBegin frame=%d swordItem=%d material=%d dura=%d\n", play->gameplayFrames,
-                 sSwordBeamState.swordItemId, static_cast<int>(slot->materialId), slot->durabilityCur);
-    Fuse::Log("[Fuse] SwordBeam begin armed frame=%d swordItem=%d mat=%d dura=%d\n", play->gameplayFrames,
-              sSwordBeamState.swordItemId, static_cast<int>(slot->materialId), slot->durabilityCur);
+    (void)player;
+    TickSwordBeamPolling(play);
 }
 
 extern "C" void Fuse_SwordBeamEndSwing(PlayState* play, Player* player) {
-    const int frame = play ? play->gameplayFrames : -1;
-    FUSE_LOG_DBG("[FuseDBG] SwordBeamEnd frame=%d swordItem=%d active=%d\n", frame,
-                 player ? player->heldItemAction : ITEM_NONE, sSwordBeamState.active ? 1 : 0);
-    ClearSwordBeamRuntimeState();
+    (void)play;
+    (void)player;
 }
 
 extern "C" void Fuse_SwordBeamTick(PlayState* play, Player* player) {
     (void)player;
-    TickSwordSwingBeam(play);
+    TickSwordBeamPolling(play);
 }
 
 static bool Fuse_IsChildHylianShieldCrouchBeamMode(Player* player, PlayState* play, const FuseSlot& slot) {
@@ -5170,7 +5166,7 @@ static void TickSwordSwingBeam(PlayState* play) {
         FUSE_LOG_DBG("[FuseDBG] SwordBeamDrain frame=%d swordItem=%d material=%d dura=%d->%d\n", frame,
                      sSwordBeamState.swordItemId, static_cast<int>(slot->materialId), oldDurability,
                      slot->durabilityCur);
-        Fuse::Log("[Fuse] SwordBeam drain frame=%d swordItem=%d mat=%d dura=%d->%d cost=%d\n", frame,
+        Fuse::Log("[Fuse] SwordBeam poll drain frame=%d swordItem=%d mat=%d dura=%d->%d cost=%d\n", frame,
                   sSwordBeamState.swordItemId, static_cast<int>(slot->materialId), oldDurability,
                   slot->durabilityCur, kSwordBeamDurabilityDrainPerSwing);
         if (broke || slot->durabilityCur <= 0) {
@@ -5241,8 +5237,8 @@ static void TickSwordSwingBeam(PlayState* play) {
                          beamStart.z, beamEnd.x, beamEnd.y, beamEnd.z, useBladeForward ? 1 : 0);
         }
 
-        if (spawnedActor || firstActiveTick) {
-            Fuse::Log("[Fuse] SwordBeam tick active frame=%d swordItem=%d spawned=%d start=(%.1f,%.1f,%.1f) "
+        if (frame >= sSwordBeamState.nextTickLogFrame || spawnedActor || firstActiveTick) {
+            Fuse::Log("[Fuse] SwordBeam poll active frame=%d swordItem=%d spawned=%d start=(%.1f,%.1f,%.1f) "
                       "end=(%.1f,%.1f,%.1f)\n",
                       frame, sSwordBeamState.swordItemId, spawnedActor ? 1 : 0, beamStart.x, beamStart.y, beamStart.z,
                       beamEnd.x, beamEnd.y, beamEnd.z);
@@ -5287,6 +5283,43 @@ static void TickSwordSwingBeam(PlayState* play) {
     }
 }
 
+static void TickSwordBeamPolling(PlayState* play) {
+    if (!play) {
+        return;
+    }
+
+    Player* player = GET_PLAYER(play);
+    const int frame = play->gameplayFrames;
+    SwordFuseSlot* slot = nullptr;
+    const bool eligible = SwordBeamEligible(play, player, &slot) && slot != nullptr;
+    const bool attackActive = SwordBeamAttackActive(player);
+    const bool pollActive = eligible && attackActive;
+
+    if (!sSwordBeamState.swingActive) {
+        if (!pollActive) {
+            return;
+        }
+
+        sSwordBeamState.swingActive = true;
+        sSwordBeamState.active = false;
+        sSwordBeamState.swingConsumedDrain = false;
+        sSwordBeamState.swordItemId = player->heldItemAction;
+        sSwordBeamState.nextTickLogFrame = frame;
+        sSwordBeamState.hitVictims.clear();
+        Fuse::Log("[Fuse] SwordBeam poll begin frame=%d swordItem=%d mat=%d dura=%d meleeState=%d\n", frame,
+                  sSwordBeamState.swordItemId, static_cast<int>(slot->materialId), slot->durabilityCur,
+                  player ? static_cast<int>(player->meleeWeaponState) : 0);
+    } else if (!pollActive) {
+        Fuse::Log("[Fuse] SwordBeam poll end frame=%d swordItem=%d active=%d eligible=%d attack=%d\n", frame,
+                  sSwordBeamState.swordItemId, sSwordBeamState.active ? 1 : 0, eligible ? 1 : 0,
+                  attackActive ? 1 : 0);
+        ClearSwordBeamRuntimeState();
+        return;
+    }
+
+    TickSwordSwingBeam(play);
+}
+
 static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx**) {
     (void)play;
     (void)polyOpaDisp;
@@ -5310,6 +5343,7 @@ void Fuse::OnGameFrameUpdate(PlayState* play) {
     TickSwordBgExplosions(play);
     TickRangedProjectileSeek(play);
     TickShieldGuardBeam(play);
+    TickSwordBeamPolling(play);
     TickRangedProjectileBombableProximity(play);
 
     if (play != nullptr) {
