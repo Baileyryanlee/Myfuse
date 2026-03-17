@@ -9558,9 +9558,14 @@ s32 func_80842DF4(PlayState* play, Player* this) {
     s32 temp1;
     s32 sp48;
 
-    if ((this->meleeWeaponState > 0) && (this->heldItemAction >= PLAYER_IA_SWORD_MASTER) &&
+    if ((this->meleeWeaponState != 0) && (this->heldItemAction >= PLAYER_IA_SWORD_MASTER) &&
         (this->heldItemAction <= PLAYER_IA_SWORD_BIGGORON)) {
         Fuse_SwordBeamTick(play, this);
+
+        if ((play->gameplayFrames % 10) == 0) {
+            FUSE_LOG_DBG("[FuseDBG] SwordBeamTickHook frame=%d state=%d anim=%d\n", play->gameplayFrames,
+                         this->meleeWeaponState, this->meleeWeaponAnimation);
+        }
     }
 
     if (this->meleeWeaponState > 0) {
