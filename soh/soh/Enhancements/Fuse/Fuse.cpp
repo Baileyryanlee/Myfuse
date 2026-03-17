@@ -86,8 +86,9 @@ struct FuseSwordBeamState {
     bool active = false;
     bool swingActive = false;
     bool swingConsumedDrain = false;
-    int nextDamageFrame = -1;
+    int nextTickLogFrame = -1;
     int swordItemId = ITEM_NONE;
+    std::unordered_set<Actor*> hitVictims;
     Vec3f start{};
     Vec3f end{};
 };
@@ -134,6 +135,7 @@ static constexpr float kBeamShieldWidthMin = 0.10f;
 static constexpr float kBeamShieldWidthMax = 3.00f;
 static constexpr float kShieldBeamChildHylianCrouchBaseBackOffset = 20.0f;
 static constexpr int kSwordBeamDurabilityDrainPerSwing = 4;
+static constexpr int kSwordBeamTickLogIntervalFrames = 10;
 static constexpr int kShatterImpulseFrames = 5;
 static constexpr float kShatterImpulseStep = 3.5f;
 static constexpr float kShatterImpulseY = 0.0f;
@@ -4666,8 +4668,9 @@ static void ClearSwordBeamRuntimeState() {
     sSwordBeamState.active = false;
     sSwordBeamState.swingActive = false;
     sSwordBeamState.swingConsumedDrain = false;
-    sSwordBeamState.nextDamageFrame = -1;
+    sSwordBeamState.nextTickLogFrame = -1;
     sSwordBeamState.swordItemId = ITEM_NONE;
+    sSwordBeamState.hitVictims.clear();
 
     if (sSwordBeamActor != nullptr) {
         Actor_Kill(sSwordBeamActor);
@@ -4705,6 +4708,23 @@ static bool SwordBeamEligible(PlayState* play, Player* player, SwordFuseSlot** o
     return true;
 }
 
+static int SwordBeamBaseDamageFromHeldAction(const Player* player) {
+    if (!player) {
+        return 0;
+    }
+
+    switch (player->heldItemAction) {
+        case PLAYER_IA_SWORD_KOKIRI:
+            return 1;
+        case PLAYER_IA_SWORD_MASTER:
+            return 2;
+        case PLAYER_IA_SWORD_BIGGORON:
+            return 4;
+        default:
+            return 0;
+    }
+}
+
 extern "C" void Fuse_SwordBeamBeginSwing(PlayState* play, Player* player) {
     SwordFuseSlot* slot = nullptr;
     if (!SwordBeamEligible(play, player, &slot) || slot == nullptr) {
@@ -4716,7 +4736,8 @@ extern "C" void Fuse_SwordBeamBeginSwing(PlayState* play, Player* player) {
     sSwordBeamState.active = false;
     sSwordBeamState.swingConsumedDrain = false;
     sSwordBeamState.swordItemId = player->heldItemAction;
-    sSwordBeamState.nextDamageFrame = play->gameplayFrames;
+    sSwordBeamState.nextTickLogFrame = play->gameplayFrames;
+    sSwordBeamState.hitVictims.clear();
 
     FUSE_LOG_DBG("[FuseDBG] SwordBeamBegin frame=%d swordItem=%d material=%d dura=%d\n", play->gameplayFrames,
                  sSwordBeamState.swordItemId, static_cast<int>(slot->materialId), slot->durabilityCur);
@@ -5129,14 +5150,17 @@ static void TickSwordSwingBeam(PlayState* play) {
         return;
     }
 
+    const int frame = play->gameplayFrames;
     Player* player = GET_PLAYER(play);
     SwordFuseSlot* slot = nullptr;
     if (!SwordBeamEligible(play, player, &slot) || slot == nullptr) {
+        if (frame % kSwordBeamTickLogIntervalFrames == 0) {
+            FUSE_LOG_DBG("[FuseDBG] SwordBeamTick frame=%d active=0 reason=NotEligible\n", frame);
+        }
         ClearSwordBeamRuntimeState();
         return;
     }
 
-    const int frame = play->gameplayFrames;
     const int oldDurability = slot->durabilityCur;
     if (!sSwordBeamState.swingConsumedDrain) {
         const bool broke = Fuse::DamageSwordFuseDurability(play, kSwordBeamDurabilityDrainPerSwing, "SwordBeamSwing");
@@ -5212,16 +5236,22 @@ static void TickSwordSwingBeam(PlayState* play) {
         }
     }
 
-    if (sSwordBeamState.nextDamageFrame < frame) {
-        sSwordBeamState.nextDamageFrame = frame;
+    if (frame >= sSwordBeamState.nextTickLogFrame) {
+        FUSE_LOG_DBG("[FuseDBG] SwordBeamTick frame=%d active=1 swing=1 start=(%.1f,%.1f,%.1f) end=(%.1f,%.1f,%.1f)\n",
+                     frame, beamStart.x, beamStart.y, beamStart.z, beamEnd.x, beamEnd.y, beamEnd.z);
+        sSwordBeamState.nextTickLogFrame = frame + kSwordBeamTickLogIntervalFrames;
     }
-    if (frame < sSwordBeamState.nextDamageFrame) {
+
+    const int beamDamage = std::max(0, SwordBeamBaseDamageFromHeldAction(player)) +
+                           std::max(0, Fuse::GetMaterialAttackBonus(slot->materialId));
+    if (beamDamage <= 0) {
         return;
     }
 
     Actor* actor = play->actorCtx.actorLists[ACTORCAT_ENEMY].head;
     while (actor != nullptr) {
-        if (IsActorAliveInPlay(play, actor) && FuseBash_IsEnemyActor(actor)) {
+        if (IsActorAliveInPlay(play, actor) && FuseBash_IsEnemyActor(actor) &&
+            (sSwordBeamState.hitVictims.find(actor) == sSwordBeamState.hitVictims.end())) {
             Vec3f target = actor->focus.pos;
             Vec3f toVictim{ target.x - beamStart.x, target.y - beamStart.y, target.z - beamStart.z };
             const float dist = Fuse_Vec3fLength(toVictim);
@@ -5231,9 +5261,10 @@ static void TickSwordSwingBeam(PlayState* play) {
                     const float distanceToLine = Fuse_DistancePointToSegment(target, beamStart, beamEnd);
                     if (distanceToLine <= kBeamDamageRadiusNormal) {
                         const int prevDamage = actor->colChkInfo.damage;
-                        actor->colChkInfo.damage = kBeamDamagePerTick;
+                        actor->colChkInfo.damage = beamDamage;
                         Actor_ApplyDamage(actor);
                         actor->colChkInfo.damage = prevDamage;
+                        sSwordBeamState.hitVictims.insert(actor);
                     }
                 }
             }
@@ -5241,8 +5272,6 @@ static void TickSwordSwingBeam(PlayState* play) {
 
         actor = actor->next;
     }
-
-    sSwordBeamState.nextDamageFrame = frame + kBeamTickIntervalFrames;
 }
 
 static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx**) {
