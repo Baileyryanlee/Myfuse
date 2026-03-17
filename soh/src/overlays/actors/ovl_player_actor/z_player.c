@@ -4521,6 +4521,8 @@ void func_80837948(PlayState* play, Player* this, s32 arg2) {
     s32 temp;
 
     Player_SetupAction(play, this, Player_Action_808502D0, 0);
+    osSyncPrintf("[FuseDBG] SwordLive Begin frame=%d held=%d anim=%d setupArg=%d\n", play->gameplayFrames,
+                 this->heldItemAction, this->meleeWeaponAnimation, arg2);
     this->unk_844 = 8;
     if (!((arg2 >= PLAYER_MWA_FLIPSLASH_FINISH) && (arg2 <= PLAYER_MWA_JUMPSLASH_FINISH))) {
         func_80832318(this);
@@ -15674,6 +15676,11 @@ static Vec3f D_80854A40 = { 0.0f, 40.0f, 45.0f };
 void Player_Action_808502D0(Player* this, PlayState* play) {
     struct_80854190* sp44 = &D_80854190[this->meleeWeaponAnimation];
 
+    if ((this->heldItemAction >= PLAYER_IA_SWORD_KOKIRI) && (this->heldItemAction <= PLAYER_IA_SWORD_BIGGORON)) {
+        osSyncPrintf("[FuseDBG] SwordLive Tick frame=%d held=%d anim=%d meleeState=%d\n", play->gameplayFrames,
+                     this->heldItemAction, this->meleeWeaponAnimation, this->meleeWeaponState);
+    }
+
     this->stateFlags2 |= PLAYER_STATE2_DISABLE_ROTATION_Z_TARGET;
 
     if (!func_80842DF4(play, this)) {
@@ -15694,6 +15701,8 @@ void Player_Action_808502D0(Player* this, PlayState* play) {
 
         if (LinkAnimation_Update(play, &this->skelAnime)) {
             if (!Player_ActionHandler_7(this, play)) {
+                osSyncPrintf("[FuseDBG] SwordLive End frame=%d held=%d anim=%d meleeState=%d\n", play->gameplayFrames,
+                             this->heldItemAction, this->meleeWeaponAnimation, this->meleeWeaponState);
                 u8 sp43 = this->skelAnime.movementFlags;
                 LinkAnimationHeader* sp3C;
 
