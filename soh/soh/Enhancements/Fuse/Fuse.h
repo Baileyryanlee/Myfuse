@@ -47,6 +47,7 @@ struct FuseExplosionParams {
     int hitFrames = 0;
 };
 
+// Legacy C hook entry points kept for compatibility; sword beam lifecycle is now Fuse-owned polling in OnGameFrameUpdate.
 extern "C" void Fuse_SwordBeamBeginSwing(PlayState* play, Player* player);
 extern "C" void Fuse_SwordBeamEndSwing(PlayState* play, Player* player);
 extern "C" void Fuse_SwordBeamTick(PlayState* play, Player* player);
