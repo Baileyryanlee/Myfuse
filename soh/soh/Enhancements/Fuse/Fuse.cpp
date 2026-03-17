@@ -4687,7 +4687,7 @@ static bool SwordBeamEligible(PlayState* play, Player* player, SwordFuseSlot** o
         return false;
     }
 
-    if (player->heldItemAction < PLAYER_IA_SWORD_MASTER || player->heldItemAction > PLAYER_IA_SWORD_BIGGORON) {
+    if (player->heldItemAction < PLAYER_IA_SWORD_KOKIRI || player->heldItemAction > PLAYER_IA_SWORD_BIGGORON) {
         return false;
     }
 
@@ -4741,6 +4741,8 @@ extern "C" void Fuse_SwordBeamBeginSwing(PlayState* play, Player* player) {
 
     FUSE_LOG_DBG("[FuseDBG] SwordBeamBegin frame=%d swordItem=%d material=%d dura=%d\n", play->gameplayFrames,
                  sSwordBeamState.swordItemId, static_cast<int>(slot->materialId), slot->durabilityCur);
+    Fuse::Log("[Fuse] SwordBeam begin armed frame=%d swordItem=%d mat=%d dura=%d\n", play->gameplayFrames,
+              sSwordBeamState.swordItemId, static_cast<int>(slot->materialId), slot->durabilityCur);
 }
 
 extern "C" void Fuse_SwordBeamEndSwing(PlayState* play, Player* player) {
@@ -5168,6 +5170,9 @@ static void TickSwordSwingBeam(PlayState* play) {
         FUSE_LOG_DBG("[FuseDBG] SwordBeamDrain frame=%d swordItem=%d material=%d dura=%d->%d\n", frame,
                      sSwordBeamState.swordItemId, static_cast<int>(slot->materialId), oldDurability,
                      slot->durabilityCur);
+        Fuse::Log("[Fuse] SwordBeam drain frame=%d swordItem=%d mat=%d dura=%d->%d cost=%d\n", frame,
+                  sSwordBeamState.swordItemId, static_cast<int>(slot->materialId), oldDurability,
+                  slot->durabilityCur, kSwordBeamDurabilityDrainPerSwing);
         if (broke || slot->durabilityCur <= 0) {
             ClearSwordBeamRuntimeState();
             return;
@@ -5201,6 +5206,7 @@ static void TickSwordSwingBeam(PlayState* play) {
                      beamAnchor.z + (right.z * offsetX) + (forward.z * offsetZ) };
     Vec3f beamEnd{ beamStart.x + (forward.x * beamRange), beamStart.y, beamStart.z + (forward.z * beamRange) };
 
+    const bool firstActiveTick = !sSwordBeamState.active;
     sSwordBeamState.active = true;
     sSwordBeamState.start = beamStart;
     sSwordBeamState.end = beamEnd;
@@ -5233,6 +5239,13 @@ static void TickSwordSwingBeam(PlayState* play) {
                          "end=(%.1f,%.1f,%.1f) bladeFwd=%d\n",
                          frame, sSwordBeamState.swordItemId, static_cast<int>(slot->materialId), beamStart.x, beamStart.y,
                          beamStart.z, beamEnd.x, beamEnd.y, beamEnd.z, useBladeForward ? 1 : 0);
+        }
+
+        if (spawnedActor || firstActiveTick) {
+            Fuse::Log("[Fuse] SwordBeam tick active frame=%d swordItem=%d spawned=%d start=(%.1f,%.1f,%.1f) "
+                      "end=(%.1f,%.1f,%.1f)\n",
+                      frame, sSwordBeamState.swordItemId, spawnedActor ? 1 : 0, beamStart.x, beamStart.y, beamStart.z,
+                      beamEnd.x, beamEnd.y, beamEnd.z);
         }
     }
 
