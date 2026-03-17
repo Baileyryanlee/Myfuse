@@ -2446,10 +2446,14 @@ void func_80833A20(Player* this, s32 newMeleeWeaponState) {
 
     if ((this->meleeWeaponState == 0) && (newMeleeWeaponState != 0) &&
         (this->heldItemAction >= PLAYER_IA_SWORD_KOKIRI) && (this->heldItemAction <= PLAYER_IA_SWORD_BIGGORON)) {
+        osSyncPrintf("[FuseDBG] SwordHook BeginSite frame=%d held=%d old=%d new=%d\n", gPlayState->gameplayFrames,
+                     this->heldItemAction, this->meleeWeaponState, newMeleeWeaponState);
         Fuse_SwordBeamBeginSwing(gPlayState, this);
         osSyncPrintf("[Fuse] SwordBeam lifecycle armed frame=%d heldIA=%d\n", gPlayState->gameplayFrames,
                      this->heldItemAction);
     } else if ((this->meleeWeaponState != 0) && (newMeleeWeaponState == 0)) {
+        osSyncPrintf("[FuseDBG] SwordHook EndSite frame=%d held=%d old=%d new=%d\n", gPlayState->gameplayFrames,
+                     this->heldItemAction, this->meleeWeaponState, newMeleeWeaponState);
         Fuse_SwordBeamEndSwing(gPlayState, this);
     }
 
@@ -9560,8 +9564,16 @@ s32 func_80842DF4(PlayState* play, Player* this) {
     s32 temp1;
     s32 sp48;
 
+    if ((this->heldItemAction >= PLAYER_IA_SWORD_KOKIRI) && (this->heldItemAction <= PLAYER_IA_SWORD_BIGGORON) &&
+        ((play->gameplayFrames % 20) == 0)) {
+        osSyncPrintf("[FuseDBG] SwordHook func_80842DF4 alive frame=%d held=%d state=%d anim=%d\n", play->gameplayFrames,
+                     this->heldItemAction, this->meleeWeaponState, this->meleeWeaponAnimation);
+    }
+
     if ((this->meleeWeaponState != 0) && (this->heldItemAction >= PLAYER_IA_SWORD_KOKIRI) &&
         (this->heldItemAction <= PLAYER_IA_SWORD_BIGGORON)) {
+        osSyncPrintf("[FuseDBG] SwordHook TickSite frame=%d held=%d state=%d anim=%d\n", play->gameplayFrames,
+                     this->heldItemAction, this->meleeWeaponState, this->meleeWeaponAnimation);
         Fuse_SwordBeamTick(play, this);
     }
 
