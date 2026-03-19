@@ -136,6 +136,7 @@ static constexpr float kBeamShieldWidthMax = 3.00f;
 static constexpr float kShieldBeamChildHylianCrouchBaseBackOffset = 20.0f;
 static constexpr int kSwordBeamDurabilityDrainPerSwing = 4;
 static constexpr int kSwordBeamTickLogIntervalFrames = 10;
+static constexpr int kFuseDbgLogIntervalFrames = 20;
 static constexpr int kShatterImpulseFrames = 5;
 static constexpr float kShatterImpulseStep = 3.5f;
 static constexpr float kShatterImpulseY = 0.0f;
@@ -5290,10 +5291,21 @@ static void TickSwordBeamPolling(PlayState* play) {
 
     Player* player = GET_PLAYER(play);
     const int frame = play->gameplayFrames;
+    const bool logThisFrame = (frame % kFuseDbgLogIntervalFrames) == 0;
+    if (logThisFrame) {
+        osSyncPrintf("[FuseDBG] SwordPollEnter frame=%d play=%p\n", frame, static_cast<void*>(play));
+    }
     SwordFuseSlot* slot = nullptr;
     const bool eligible = SwordBeamEligible(play, player, &slot) && slot != nullptr;
     const bool attackActive = SwordBeamAttackActive(player);
     const bool pollActive = eligible && attackActive;
+    if (logThisFrame) {
+        osSyncPrintf("[FuseDBG] SwordPollState frame=%d eligible=%d attack=%d active=%d held=%d meleeState=%d swingActive=%d\n",
+                     frame, eligible ? 1 : 0, attackActive ? 1 : 0, pollActive ? 1 : 0,
+                     player ? static_cast<int>(player->heldItemAction) : -1,
+                     player ? static_cast<int>(player->meleeWeaponState) : -1,
+                     sSwordBeamState.swingActive ? 1 : 0);
+    }
 
     if (!sSwordBeamState.swingActive) {
         if (!pollActive) {
@@ -5335,6 +5347,12 @@ void Fuse::OnGameFrameUpdate(PlayState* play) {
         CVarSetInteger("gFuse.DebugEnemyHpOverride.Reset", 0);
     }
 
+    const int frame = play != nullptr ? play->gameplayFrames : -1;
+    const bool logThisFrame = play != nullptr && (frame % kFuseDbgLogIntervalFrames) == 0;
+    if (logThisFrame) {
+        osSyncPrintf("[FuseDBG] FuseFrameUpdate frame=%d play=%p\n", frame, static_cast<void*>(play));
+    }
+
     TickFuseFrozenTimers(play);
     TickStatusEffects(play);
     TickShatterImpulse(play);
@@ -5343,6 +5361,9 @@ void Fuse::OnGameFrameUpdate(PlayState* play) {
     TickSwordBgExplosions(play);
     TickRangedProjectileSeek(play);
     TickShieldGuardBeam(play);
+    if (logThisFrame) {
+        osSyncPrintf("[FuseDBG] SwordPollCall frame=%d\n", frame);
+    }
     TickSwordBeamPolling(play);
     TickRangedProjectileBombableProximity(play);
 
