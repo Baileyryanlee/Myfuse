@@ -4729,6 +4729,24 @@ extern "C" void Fuse_SwordBeamQuadActiveBegin(PlayState* play, Player* player) {
     BeginSwordBeamSwing(play, player);
 }
 
+// Legacy z_player.c bridge symbols are kept as intentional no-ops for linkage
+// compatibility only. Sword beam lifecycle ownership now lives exclusively in
+// z_player_lib.c via the authoritative quad-publication hooks above.
+extern "C" void Fuse_SwordBeamBeginSwing(PlayState* play, Player* player) {
+    (void)play;
+    (void)player;
+}
+
+extern "C" void Fuse_SwordBeamTick(PlayState* play, Player* player) {
+    (void)play;
+    (void)player;
+}
+
+extern "C" void Fuse_SwordBeamEndSwing(PlayState* play, Player* player) {
+    (void)play;
+    (void)player;
+}
+
 extern "C" void Fuse_SwordBeamQuadActiveEnd(PlayState* play, Player* player) {
     (void)player;
     EndSwordBeamSwing(play);
