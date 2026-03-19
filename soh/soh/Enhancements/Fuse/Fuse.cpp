@@ -137,6 +137,17 @@ static constexpr float kShieldBeamChildHylianCrouchBaseBackOffset = 20.0f;
 static constexpr int kSwordBeamDurabilityDrainPerSwing = 4;
 static constexpr int kSwordBeamTickLogIntervalFrames = 10;
 static constexpr int kFuseDbgLogIntervalFrames = 20;
+// TEMP DIAGNOSTIC: remove after confirming the live sword-beam poll path.
+static constexpr bool kFuseSwordPollVisibleDiagEnabled = true;
+static constexpr int kFuseSwordPollFrameProbeInterval = 60;
+static constexpr int kFuseSwordPollHeldProbeInterval = 12;
+static constexpr s16 kFuseSwordPollFrameProbeColorFlag = 0x4000;
+static constexpr s16 kFuseSwordPollHeldProbeColorFlag = 0x8000;
+static constexpr s16 kFuseSwordPollProbeColorIntensity = 255;
+static constexpr float kFuseSwordPollHeldProbeForwardOffset = 70.0f;
+static constexpr float kFuseSwordPollHeldProbeHeightOffset = 28.0f;
+static constexpr float kFuseSwordPollHeldProbeLength = 140.0f;
+static constexpr float kFuseSwordPollHeldProbeWidth = 2.35f;
 static constexpr int kShatterImpulseFrames = 5;
 static constexpr float kShatterImpulseStep = 3.5f;
 static constexpr float kShatterImpulseY = 0.0f;
@@ -670,6 +681,7 @@ static int GetMaterialEffectiveBaseDurabilityForItem(MaterialId id, FuseItemType
 static void ClearSwordBeamRuntimeState();
 static void TickShieldGuardBeam(PlayState* play);
 static void TickSwordBeamPolling(PlayState* play);
+static void UpdateSwordPollVisibleDiagnosticBeam(PlayState* play, Player* player, bool pollReached);
 static void TickSwordSwingBeam(PlayState* play);
 static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx**);
 
@@ -4680,6 +4692,75 @@ static void ClearSwordBeamRuntimeState() {
     }
 }
 
+static void UpdateSwordPollVisibleDiagnosticBeam(PlayState* play, Player* player, bool pollReached) {
+    if (!kFuseSwordPollVisibleDiagEnabled || !play || !player) {
+        return;
+    }
+
+    const int heldItemAction = player->heldItemAction;
+    const bool holdingSword =
+        heldItemAction >= PLAYER_IA_SWORD_KOKIRI && heldItemAction <= PLAYER_IA_SWORD_BIGGORON;
+    if (!holdingSword) {
+        if (sSwordBeamActor != nullptr && !sSwordBeamState.swingActive) {
+            Actor_Kill(sSwordBeamActor);
+            sSwordBeamActor = nullptr;
+        }
+        return;
+    }
+
+    const int frame = play->gameplayFrames;
+    const bool showProbe = pollReached && ((frame % kFuseSwordPollHeldProbeInterval) == 0);
+    if (!showProbe) {
+        if (sSwordBeamActor != nullptr && !sSwordBeamState.swingActive) {
+            Actor_Kill(sSwordBeamActor);
+            sSwordBeamActor = nullptr;
+        }
+        return;
+    }
+
+    const s16 beamYaw = player->actor.shape.rot.y;
+    Vec3f forward{ Math_SinS(beamYaw), 0.0f, Math_CosS(beamYaw) };
+    forward = Fuse_Vec3fNormalize(forward);
+    if (Fuse_Vec3fLength(forward) <= 0.001f) {
+        return;
+    }
+
+    if (sSwordBeamState.swingActive) {
+        return;
+    }
+
+    Vec3f beamStart = player->actor.world.pos;
+    beamStart.x += forward.x * kFuseSwordPollHeldProbeForwardOffset;
+    beamStart.y += kFuseSwordPollHeldProbeHeightOffset;
+    beamStart.z += forward.z * kFuseSwordPollHeldProbeForwardOffset;
+    Vec3f beamEnd{ beamStart.x + (forward.x * kFuseSwordPollHeldProbeLength), beamStart.y,
+                   beamStart.z + (forward.z * kFuseSwordPollHeldProbeLength) };
+
+    if (sSwordBeamActor == nullptr || sSwordBeamActor->update == nullptr) {
+        if (sSwordBeamActor != nullptr) {
+            Actor_Kill(sSwordBeamActor);
+            sSwordBeamActor = nullptr;
+        }
+        sSwordBeamActor =
+            Actor_Spawn(&play->actorCtx, play, ACTOR_UNSET_1AA, beamStart.x, beamStart.y, beamStart.z, 0, 0, 0, 0, 0);
+    }
+
+    if (sSwordBeamActor != nullptr) {
+        EnFuseBeam* beam = reinterpret_cast<EnFuseBeam*>(sSwordBeamActor);
+        const float beamDistance = Math_Vec3f_DistXYZ(&beamStart, &beamEnd);
+
+        beam->beamPos1 = beamStart;
+        beam->beamScale.x = kFuseSwordPollHeldProbeWidth;
+        beam->beamScale.y = kFuseSwordPollHeldProbeWidth;
+        beam->beamScale.z = beamDistance;
+        beam->beamRot.y = Math_Vec3f_Yaw(&beamStart, &beamEnd);
+        beam->beamRot.x = Math_Vec3f_Pitch(&beamStart, &beamEnd);
+        beam->beamRot.z = 0;
+    }
+
+    Actor_SetColorFilter(&player->actor, kFuseSwordPollHeldProbeColorFlag, kFuseSwordPollProbeColorIntensity, 0, 1);
+}
+
 static bool SwordBeamEligible(PlayState* play, Player* player, SwordFuseSlot** outSlot = nullptr) {
     if (outSlot != nullptr) {
         *outSlot = nullptr;
@@ -5299,6 +5380,10 @@ static void TickSwordBeamPolling(PlayState* play) {
     const bool eligible = SwordBeamEligible(play, player, &slot) && slot != nullptr;
     const bool attackActive = SwordBeamAttackActive(player);
     const bool pollActive = eligible && attackActive;
+    const bool holdingSword = player != nullptr &&
+                              player->heldItemAction >= PLAYER_IA_SWORD_KOKIRI &&
+                              player->heldItemAction <= PLAYER_IA_SWORD_BIGGORON;
+    UpdateSwordPollVisibleDiagnosticBeam(play, player, holdingSword);
     if (logThisFrame) {
         osSyncPrintf("[FuseDBG] SwordPollState frame=%d eligible=%d attack=%d active=%d held=%d meleeState=%d swingActive=%d\n",
                      frame, eligible ? 1 : 0, attackActive ? 1 : 0, pollActive ? 1 : 0,
@@ -5351,6 +5436,15 @@ void Fuse::OnGameFrameUpdate(PlayState* play) {
     const bool logThisFrame = play != nullptr && (frame % kFuseDbgLogIntervalFrames) == 0;
     if (logThisFrame) {
         osSyncPrintf("[FuseDBG] FuseFrameUpdate frame=%d play=%p\n", frame, static_cast<void*>(play));
+    }
+
+    if (kFuseSwordPollVisibleDiagEnabled && play != nullptr && Fuse::IsEnabled()) {
+        Player* player = GET_PLAYER(play);
+        if (player != nullptr && (frame % kFuseSwordPollFrameProbeInterval) == 0) {
+            // TEMP DIAGNOSTIC: 1-frame red flash proves the global Fuse frame hook is running in the live build.
+            Actor_SetColorFilter(&player->actor, kFuseSwordPollFrameProbeColorFlag,
+                                 kFuseSwordPollProbeColorIntensity, 0, 1);
+        }
     }
 
     TickFuseFrozenTimers(play);
