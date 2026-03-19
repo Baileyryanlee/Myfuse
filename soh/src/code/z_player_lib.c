@@ -15,6 +15,9 @@
 
 extern float Fuse_GetSwordRangeUpScale(int32_t* outLevel);
 extern void Fuse_LogSwordRangeUp(int level, float scale);
+extern void Fuse_SwordBeamQuadActiveBegin(PlayState* play, Player* player);
+extern void Fuse_SwordBeamQuadActiveTick(PlayState* play, Player* player);
+extern void Fuse_SwordBeamQuadActiveEnd(PlayState* play, Player* player);
 extern void FuseVisual_DrawLeftHandAttachments(PlayState* play, Player* player);
 extern void FuseVisual_DrawShieldAttachments(PlayState* play, Player* player);
 
@@ -1563,6 +1566,7 @@ Vec3f D_801260A4[3] = {
 
 void func_800906D4(PlayState* play, Player* this, Vec3f* newTipPos) {
     static s32 sSwordRangeUpWasActive = 0;
+    static s32 sFuseSwordBeamQuadWasActive = 0;
     Vec3f newBasePos[3];
     int32_t rangeUpLevel = 0;
     float rangeUpScale = 1.0f;
@@ -1599,10 +1603,25 @@ void func_800906D4(PlayState* play, Player* this, Vec3f* newTipPos) {
                               &this->meleeWeaponInfo[0].base);
     }
 
-    if ((this->meleeWeaponState > 0) &&
-        ((this->meleeWeaponAnimation < 0x18) || (this->stateFlags2 & PLAYER_STATE2_SPIN_ATTACKING))) {
-        func_80090480(play, &this->meleeWeaponQuads[0], &this->meleeWeaponInfo[1], &newTipPos[1], &newBasePos[1]);
-        func_80090480(play, &this->meleeWeaponQuads[1], &this->meleeWeaponInfo[2], &newTipPos[2], &newBasePos[2]);
+    {
+        const s32 swordQuadActive =
+            (this->heldItemAction >= PLAYER_IA_SWORD_KOKIRI) && (this->heldItemAction <= PLAYER_IA_SWORD_BIGGORON) &&
+            (this->meleeWeaponState > 0) &&
+            ((this->meleeWeaponAnimation < 0x18) || (this->stateFlags2 & PLAYER_STATE2_SPIN_ATTACKING));
+
+        if (swordQuadActive && !sFuseSwordBeamQuadWasActive) {
+            Fuse_SwordBeamQuadActiveBegin(play, this);
+        }
+
+        if (swordQuadActive) {
+            func_80090480(play, &this->meleeWeaponQuads[0], &this->meleeWeaponInfo[1], &newTipPos[1], &newBasePos[1]);
+            func_80090480(play, &this->meleeWeaponQuads[1], &this->meleeWeaponInfo[2], &newTipPos[2], &newBasePos[2]);
+            Fuse_SwordBeamQuadActiveTick(play, this);
+        } else if (sFuseSwordBeamQuadWasActive) {
+            Fuse_SwordBeamQuadActiveEnd(play, this);
+        }
+
+        sFuseSwordBeamQuadWasActive = swordQuadActive;
     }
 }
 

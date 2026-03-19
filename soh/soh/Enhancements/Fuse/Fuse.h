@@ -47,10 +47,10 @@ struct FuseExplosionParams {
     int hitFrames = 0;
 };
 
-// Legacy C hook entry points kept for compatibility; sword beam lifecycle is now Fuse-owned polling in OnGameFrameUpdate.
-extern "C" void Fuse_SwordBeamBeginSwing(PlayState* play, Player* player);
-extern "C" void Fuse_SwordBeamEndSwing(PlayState* play, Player* player);
-extern "C" void Fuse_SwordBeamTick(PlayState* play, Player* player);
+// Narrow C bridge used by z_player_lib.c to mirror the real vanilla sword-quad AT publication window.
+extern "C" void Fuse_SwordBeamQuadActiveBegin(PlayState* play, Player* player);
+extern "C" void Fuse_SwordBeamQuadActiveTick(PlayState* play, Player* player);
+extern "C" void Fuse_SwordBeamQuadActiveEnd(PlayState* play, Player* player);
 
 FuseExplosionParams Fuse_GetExplosionParams(MaterialId mat, int level);
 bool Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfMode selfMode,
