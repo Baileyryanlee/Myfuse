@@ -35,6 +35,13 @@ uintptr_t Fuse_GetCachedBeamosVmSeg06(void);
 
 int Fuse_GetCachedBeamosVmSeg06Frame(void);
 
+void Fuse_SwordBeamBeginSwing(PlayState* play, Player* player);
+void Fuse_SwordBeamTick(PlayState* play, Player* player);
+void Fuse_SwordBeamEndSwing(PlayState* play, Player* player);
+void Fuse_SwordBeamQuadActiveBegin(PlayState* play, Player* player, s32 q0, s32 q1);
+void Fuse_SwordBeamQuadActiveTick(PlayState* play, Player* player, s32 q0, s32 q1);
+void Fuse_SwordBeamQuadActiveEnd(PlayState* play, Player* player, s32 q0, s32 q1);
+
 
 #ifdef __cplusplus
 }

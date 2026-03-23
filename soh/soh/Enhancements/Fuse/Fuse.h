@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "z64.h"
+#include "soh/Enhancements/Fuse/FuseCBridge.h"
 #include "soh/Enhancements/Fuse/FuseMaterials.h"
 #include "soh/Enhancements/Fuse/FuseModifiers.h"
 #include "soh/Enhancements/Fuse/FuseState.h"
@@ -46,11 +47,6 @@ struct FuseExplosionParams {
     uint32_t dmgFlags = 0;
     int hitFrames = 0;
 };
-
-// Narrow C bridge used by z_player_lib.c to mirror the real vanilla sword-quad AT publication window.
-extern "C" void Fuse_SwordBeamQuadActiveBegin(PlayState* play, Player* player);
-extern "C" void Fuse_SwordBeamQuadActiveTick(PlayState* play, Player* player);
-extern "C" void Fuse_SwordBeamQuadActiveEnd(PlayState* play, Player* player);
 
 FuseExplosionParams Fuse_GetExplosionParams(MaterialId mat, int level);
 bool Fuse_TriggerExplosion(PlayState* play, const Vec3f& pos, FuseExplosionSelfMode selfMode,

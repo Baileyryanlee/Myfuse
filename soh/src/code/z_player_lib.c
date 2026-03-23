@@ -10,6 +10,7 @@
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
 #include "soh/Enhancements/randomizer/draw.h"
 #include "soh/ResourceManagerHelpers.h"
+#include "soh/Enhancements/Fuse/FuseCBridge.h"
 
 #include <stdlib.h>
 
@@ -17,9 +18,6 @@ extern float Fuse_GetSwordRangeUpScale(int32_t* outLevel);
 extern void Fuse_LogSwordRangeUp(int level, float scale);
 extern s32 Fuse_SwordBeamEligibleDebug(PlayState* play, Player* player);
 extern void Fuse_LogSwordBeamBridge(const char* phase, PlayState* play, Player* player, s32 q0, s32 q1, s32 eligible);
-extern void Fuse_SwordBeamQuadActiveBegin(PlayState* play, Player* player, s32 q0, s32 q1);
-extern void Fuse_SwordBeamQuadActiveTick(PlayState* play, Player* player, s32 q0, s32 q1);
-extern void Fuse_SwordBeamQuadActiveEnd(PlayState* play, Player* player, s32 q0, s32 q1);
 extern void FuseVisual_DrawLeftHandAttachments(PlayState* play, Player* player);
 extern void FuseVisual_DrawShieldAttachments(PlayState* play, Player* player);
 

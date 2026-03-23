@@ -1,4 +1,5 @@
 #include "Fuse.h"
+#include "FuseCBridge.h"
 #include "FuseMaterials.h"
 #include "FuseState.h"
 #include "soh/Enhancements/Fuse/Hooks/FuseHooks_Objects.h"
