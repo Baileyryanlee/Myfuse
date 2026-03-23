@@ -4680,9 +4680,66 @@ static void ClearSwordBeamRuntimeState() {
     }
 }
 
+static const char* FuseItemTypeToString(FuseItemType itemType) {
+    switch (itemType) {
+        case FuseItemType::Sword:
+            return "Sword";
+        case FuseItemType::Shield:
+            return "Shield";
+        case FuseItemType::Boomerang:
+            return "Boomerang";
+        case FuseItemType::Hammer:
+            return "Hammer";
+        case FuseItemType::Arrows:
+            return "Arrows";
+        case FuseItemType::Slingshot:
+            return "Slingshot";
+        case FuseItemType::Hookshot:
+            return "Hookshot";
+        default:
+            return "Unknown";
+    }
+}
+
+static const char* ModifierIdToString(ModifierId id) {
+    switch (id) {
+        case ModifierId::Hammerize:
+            return "Hammerize";
+        case ModifierId::Stun:
+            return "Stun";
+        case ModifierId::MegaStun:
+            return "MegaStun";
+        case ModifierId::Freeze:
+            return "Freeze";
+        case ModifierId::Knockback:
+            return "Knockback";
+        case ModifierId::PoundUp:
+            return "PoundUp";
+        case ModifierId::NegateKnockback:
+            return "NegateKnockback";
+        case ModifierId::RangeUp:
+            return "RangeUp";
+        case ModifierId::WideRange:
+            return "WideRange";
+        case ModifierId::Explosion:
+            return "Explosion";
+        case ModifierId::Seek:
+            return "Seek";
+        case ModifierId::BashAttack:
+            return "BashAttack";
+        case ModifierId::Burn:
+            return "Burn";
+        case ModifierId::Beam:
+            return "Beam";
+        default:
+            return "Unknown";
+    }
+}
+
 static void LogSwordBeamEligibleDiag(const char* reason, PlayState* play, Player* player,
-                                         const SwordFuseSlot* slot = nullptr, int beamLevel = -1,
-                                         bool modifierLookupWasSword = true) {
+                                     const SwordFuseSlot* slot = nullptr, int beamLevel = -1,
+                                     FuseItemType modifierItemType = FuseItemType::Sword,
+                                     ModifierId modifierId = ModifierId::Beam) {
     static int sLastFrame = -1;
     static int sLastHeldItemAction = std::numeric_limits<int>::min();
     static int sLastHeldItemId = std::numeric_limits<int>::min();
@@ -4692,6 +4749,8 @@ static void LogSwordBeamEligibleDiag(const char* reason, PlayState* play, Player
     static int sLastDurabilityCur = std::numeric_limits<int>::min();
     static int sLastDurabilityMax = std::numeric_limits<int>::min();
     static int sLastBeamLevel = std::numeric_limits<int>::min();
+    static int sLastModifierItemType = std::numeric_limits<int>::min();
+    static int sLastModifierId = std::numeric_limits<int>::min();
     static uintptr_t sLastSlotAddr = 0;
     static std::string sLastReason;
 
@@ -4703,11 +4762,16 @@ static void LogSwordBeamEligibleDiag(const char* reason, PlayState* play, Player
     const int materialId = slot != nullptr ? static_cast<int>(slot->materialId) : static_cast<int>(MaterialId::None);
     const int durabilityCur = slot != nullptr ? slot->durabilityCur : -1;
     const int durabilityMax = slot != nullptr ? slot->durabilityMax : -1;
+    const int modifierItemTypeValue = static_cast<int>(modifierItemType);
+    const int modifierIdValue = static_cast<int>(modifierId);
     const uintptr_t slotAddr = reinterpret_cast<uintptr_t>(slot);
+    const MaterialDef* materialDef = slot != nullptr ? Fuse::GetMaterialDef(slot->materialId) : nullptr;
+    const char* materialName = materialDef != nullptr && materialDef->name != nullptr ? materialDef->name : "Unknown";
 
     if (frame == sLastFrame && heldItemAction == sLastHeldItemAction && heldItemId == sLastHeldItemId &&
         currentSwordItemId == sLastCurrentSwordItemId && bButtonItem == sLastBButtonItem && materialId == sLastMaterialId &&
         durabilityCur == sLastDurabilityCur && durabilityMax == sLastDurabilityMax && beamLevel == sLastBeamLevel &&
+        modifierItemTypeValue == sLastModifierItemType && modifierIdValue == sLastModifierId &&
         slotAddr == sLastSlotAddr && sLastReason == reason) {
         return;
     }
@@ -4721,14 +4785,17 @@ static void LogSwordBeamEligibleDiag(const char* reason, PlayState* play, Player
     sLastDurabilityCur = durabilityCur;
     sLastDurabilityMax = durabilityMax;
     sLastBeamLevel = beamLevel;
+    sLastModifierItemType = modifierItemTypeValue;
+    sLastModifierId = modifierIdValue;
     sLastSlotAddr = slotAddr;
     sLastReason = reason != nullptr ? reason : "unknown";
 
-    FUSE_LOG_DBG("[FuseDBG] SwordBeamEligible %s frame=%d play=%p player=%p fuseEnabled=%d heldItemAction=%d heldItemId=%d currentSwordItemId=%d bButtonItem=%d slot=%p slotMaterial=%d dura=%d/%d beamLevel=%d modifierItemType=Sword lookupWasSword=%d\n",
+    FUSE_LOG_DBG("[FuseDBG] SwordBeamEligible reason=%s frame=%d play=%p player=%p fuseEnabled=%d heldItemAction=%d heldItemId=%d currentSwordItemId=%d bButtonItem=%d slot=%p slotMaterial=%d materialName=%s dura=%d/%d beamLevel=%d modifierItemType=%s modifierItemTypeValue=%d modifierName=%s modifierId=%d expectedBeamosHead=%d\n",
                  reason != nullptr ? reason : "unknown", frame, static_cast<void*>(play), static_cast<void*>(player),
                  Fuse::IsEnabled() ? 1 : 0, heldItemAction, heldItemId, currentSwordItemId, bButtonItem,
-                 static_cast<const void*>(slot), materialId, durabilityCur, durabilityMax, beamLevel,
-                 modifierLookupWasSword ? 1 : 0);
+                 static_cast<const void*>(slot), materialId, materialName, durabilityCur, durabilityMax, beamLevel,
+                 FuseItemTypeToString(modifierItemType), modifierItemTypeValue, ModifierIdToString(modifierId),
+                 modifierIdValue, static_cast<int>(MaterialId::BeamosHead));
 }
 
 static bool SwordBeamEligible(PlayState* play, Player* player, SwordFuseSlot** outSlot = nullptr) {
@@ -4737,33 +4804,36 @@ static bool SwordBeamEligible(PlayState* play, Player* player, SwordFuseSlot** o
     }
 
     if (!play || !player || !Fuse::IsEnabled()) {
-        LogSwordBeamEligibleDiag("reject=gate(play/player/fuse)", play, player, nullptr, -1, true);
+        LogSwordBeamEligibleDiag("FuseDisabledOrNull", play, player);
         return false;
     }
 
     if (player->heldItemAction < PLAYER_IA_SWORD_KOKIRI || player->heldItemAction > PLAYER_IA_SWORD_BIGGORON) {
-        LogSwordBeamEligibleDiag("reject=heldItemAction_not_sword", play, player, nullptr, -1, true);
+        LogSwordBeamEligibleDiag("HeldItemNotSword", play, player);
         return false;
     }
 
     SwordFuseSlot& slot = gFuseSave.GetActiveSwordSlot(play);
     if (slot.materialId != MaterialId::BeamosHead) {
-        LogSwordBeamEligibleDiag("reject=slot_material_not_beamos", play, player, &slot, -1, true);
+        LogSwordBeamEligibleDiag("MaterialMismatch", play, player, &slot);
         return false;
     }
 
     if (slot.durabilityCur <= 0) {
-        LogSwordBeamEligibleDiag("reject=durability_empty", play, player, &slot, -1, true);
+        LogSwordBeamEligibleDiag("NoDurability", play, player, &slot);
         return false;
     }
 
-    const uint8_t beamLevel = Fuse::GetMaterialModifierLevel(slot.materialId, FuseItemType::Sword, ModifierId::Beam);
+    constexpr FuseItemType kSwordBeamModifierItemType = FuseItemType::Sword;
+    const uint8_t beamLevel = Fuse::GetMaterialModifierLevel(slot.materialId, kSwordBeamModifierItemType, ModifierId::Beam);
     if (beamLevel == 0) {
-        LogSwordBeamEligibleDiag("reject=beam_modifier_zero", play, player, &slot, beamLevel, true);
+        LogSwordBeamEligibleDiag("BeamModifierMissing", play, player, &slot, beamLevel, kSwordBeamModifierItemType,
+                                 ModifierId::Beam);
         return false;
     }
 
-    LogSwordBeamEligibleDiag("pass", play, player, &slot, beamLevel, true);
+    LogSwordBeamEligibleDiag("EligibleTrue", play, player, &slot, beamLevel, kSwordBeamModifierItemType,
+                             ModifierId::Beam);
 
     if (outSlot != nullptr) {
         *outSlot = &slot;
