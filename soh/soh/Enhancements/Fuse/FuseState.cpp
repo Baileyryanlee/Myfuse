@@ -11,8 +11,11 @@
 
 extern "C" {
 #include "z64.h"
+#include "macros.h"
 #include "variables.h"
 }
+
+#define GET_PLAYER(play) ((Player*)(play)->actorCtx.actorLists[ACTORCAT_PLAYER].head)
 
 namespace {
 
