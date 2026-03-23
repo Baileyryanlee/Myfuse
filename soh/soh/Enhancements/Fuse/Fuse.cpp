@@ -667,9 +667,10 @@ static FuseItemType RangedSlotItemType(RangedFuseSlot slot);
 static int GetMaterialEffectiveBaseDurabilityForItem(MaterialId id, FuseItemType itemType);
 static void ClearSwordBeamRuntimeState();
 static void TickShieldGuardBeam(PlayState* play);
-static void BeginSwordBeamSwing(PlayState* play, Player* player);
-static void TickSwordSwingBeam(PlayState* play, Player* player);
-static void EndSwordBeamSwing(PlayState* play);
+static void BeginSwordBeamSwing(PlayState* play, Player* player, int32_t q0, int32_t q1);
+static void TickSwordSwingBeam(PlayState* play, Player* player, int32_t q0, int32_t q1);
+static void EndSwordBeamSwing(PlayState* play, Player* player, int32_t q0, int32_t q1);
+static void LogSwordBeamDbg(const char* phase, PlayState* play, Player* player, int32_t q0, int32_t q1, bool eligible);
 static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx**);
 
 void TickBurnTimers(PlayState* play);
@@ -4708,6 +4709,16 @@ static bool SwordBeamEligible(PlayState* play, Player* player, SwordFuseSlot** o
     return true;
 }
 
+extern "C" int32_t Fuse_SwordBeamEligibleDebug(PlayState* play, Player* player) {
+    SwordFuseSlot* slot = nullptr;
+    return SwordBeamEligible(play, player, &slot) && slot != nullptr;
+}
+
+extern "C" void Fuse_LogSwordBeamBridge(const char* phase, PlayState* play, Player* player, int32_t q0, int32_t q1,
+                                         int32_t eligible) {
+    LogSwordBeamDbg(phase, play, player, q0, q1, eligible != 0);
+}
+
 static int SwordBeamBaseDamageFromHeldAction(const Player* player) {
     if (!player) {
         return 0;
@@ -4725,8 +4736,23 @@ static int SwordBeamBaseDamageFromHeldAction(const Player* player) {
     }
 }
 
-extern "C" void Fuse_SwordBeamQuadActiveBegin(PlayState* play, Player* player) {
-    BeginSwordBeamSwing(play, player);
+static void LogSwordBeamDbg(const char* phase, PlayState* play, Player* player, int32_t q0, int32_t q1, bool eligible) {
+    const int frame = play != nullptr ? play->gameplayFrames : -1;
+    const int heldItemAction = player != nullptr ? player->heldItemAction : -1;
+    const int meleeWeaponState = player != nullptr ? player->meleeWeaponState : -1;
+    const int meleeWeaponAnimation = player != nullptr ? player->meleeWeaponAnimation : -1;
+
+    osSyncPrintf("[FuseDBG] %s frame=%d q0=%d q1=%d heldItemAction=%d meleeWeaponState=%d meleeWeaponAnimation=%d eligible=%d\n",
+                 phase, frame, q0, q1, heldItemAction, meleeWeaponState, meleeWeaponAnimation, eligible ? 1 : 0);
+    Fuse::Log("[FuseDBG] %s frame=%d q0=%d q1=%d heldItemAction=%d meleeWeaponState=%d meleeWeaponAnimation=%d eligible=%d\n",
+              phase, frame, q0, q1, heldItemAction, meleeWeaponState, meleeWeaponAnimation, eligible ? 1 : 0);
+}
+
+extern "C" void Fuse_SwordBeamQuadActiveBegin(PlayState* play, Player* player, int32_t q0, int32_t q1) {
+    SwordFuseSlot* slot = nullptr;
+    const bool eligible = SwordBeamEligible(play, player, &slot) && slot != nullptr;
+    LogSwordBeamDbg("QuadActiveBegin", play, player, q0, q1, eligible);
+    BeginSwordBeamSwing(play, player, q0, q1);
 }
 
 // Legacy z_player.c bridge symbols are kept as intentional no-ops for linkage
@@ -4747,13 +4773,18 @@ extern "C" void Fuse_SwordBeamEndSwing(PlayState* play, Player* player) {
     (void)player;
 }
 
-extern "C" void Fuse_SwordBeamQuadActiveEnd(PlayState* play, Player* player) {
-    (void)player;
-    EndSwordBeamSwing(play);
+extern "C" void Fuse_SwordBeamQuadActiveEnd(PlayState* play, Player* player, int32_t q0, int32_t q1) {
+    SwordFuseSlot* slot = nullptr;
+    const bool eligible = SwordBeamEligible(play, player, &slot) && slot != nullptr;
+    LogSwordBeamDbg("QuadActiveEnd", play, player, q0, q1, eligible);
+    EndSwordBeamSwing(play, player, q0, q1);
 }
 
-extern "C" void Fuse_SwordBeamQuadActiveTick(PlayState* play, Player* player) {
-    TickSwordSwingBeam(play, player);
+extern "C" void Fuse_SwordBeamQuadActiveTick(PlayState* play, Player* player, int32_t q0, int32_t q1) {
+    SwordFuseSlot* slot = nullptr;
+    const bool eligible = SwordBeamEligible(play, player, &slot) && slot != nullptr;
+    LogSwordBeamDbg("QuadActiveTick", play, player, q0, q1, eligible);
+    TickSwordSwingBeam(play, player, q0, q1);
 }
 
 static bool Fuse_IsChildHylianShieldCrouchBeamMode(Player* player, PlayState* play, const FuseSlot& slot) {
@@ -5144,7 +5175,7 @@ static void TickShieldGuardBeam(PlayState* play) {
     sShieldBeamState.nextDamageFrame = frame + kBeamTickIntervalFrames;
 }
 
-static void TickSwordSwingBeam(PlayState* play, Player* player) {
+static void TickSwordSwingBeam(PlayState* play, Player* player, int32_t q0, int32_t q1) {
     Fuse_RegisterSwordBeamCVars();
 
     if (!play || !player || !sSwordBeamState.swingActive) {
@@ -5153,7 +5184,9 @@ static void TickSwordSwingBeam(PlayState* play, Player* player) {
 
     const int frame = play->gameplayFrames;
     SwordFuseSlot* slot = nullptr;
-    if (!SwordBeamEligible(play, player, &slot) || slot == nullptr) {
+    const bool eligible = SwordBeamEligible(play, player, &slot) && slot != nullptr;
+    LogSwordBeamDbg("TickSwordSwingBeam", play, player, q0, q1, eligible);
+    if (!eligible) {
         ClearSwordBeamRuntimeState();
         return;
     }
@@ -5226,6 +5259,7 @@ static void TickSwordSwingBeam(PlayState* play, Player* player) {
         beam->beamRot.z = 0;
 
         if (spawnedActor) {
+            LogSwordBeamDbg("SwordBeamActorSpawn", play, player, q0, q1, eligible);
             Fuse::Log("[Fuse] SwordBeam actor spawn frame=%d swordItem=%d start=(%.1f,%.1f,%.1f) end=(%.1f,%.1f,%.1f)\n",
                       frame, sSwordBeamState.swordItemId, beamStart.x, beamStart.y, beamStart.z, beamEnd.x, beamEnd.y,
                       beamEnd.z);
@@ -5264,13 +5298,15 @@ static void TickSwordSwingBeam(PlayState* play, Player* player) {
     }
 }
 
-static void BeginSwordBeamSwing(PlayState* play, Player* player) {
+static void BeginSwordBeamSwing(PlayState* play, Player* player, int32_t q0, int32_t q1) {
     if (!play || !player || sSwordBeamState.swingActive) {
         return;
     }
 
     SwordFuseSlot* slot = nullptr;
-    if (!SwordBeamEligible(play, player, &slot) || slot == nullptr) {
+    const bool eligible = SwordBeamEligible(play, player, &slot) && slot != nullptr;
+    LogSwordBeamDbg("BeginSwordBeamSwing", play, player, q0, q1, eligible);
+    if (!eligible) {
         return;
     }
 
@@ -5284,7 +5320,11 @@ static void BeginSwordBeamSwing(PlayState* play, Player* player) {
               sSwordBeamState.swordItemId, static_cast<int>(slot->materialId), slot->durabilityCur);
 }
 
-static void EndSwordBeamSwing(PlayState* play) {
+static void EndSwordBeamSwing(PlayState* play, Player* player, int32_t q0, int32_t q1) {
+    SwordFuseSlot* slot = nullptr;
+    const bool eligible = SwordBeamEligible(play, player, &slot) && slot != nullptr;
+    LogSwordBeamDbg("EndSwordBeamSwing", play, player, q0, q1, eligible);
+
     if (!sSwordBeamState.swingActive) {
         return;
     }

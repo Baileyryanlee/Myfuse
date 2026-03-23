@@ -15,9 +15,11 @@
 
 extern float Fuse_GetSwordRangeUpScale(int32_t* outLevel);
 extern void Fuse_LogSwordRangeUp(int level, float scale);
-extern void Fuse_SwordBeamQuadActiveBegin(PlayState* play, Player* player);
-extern void Fuse_SwordBeamQuadActiveTick(PlayState* play, Player* player);
-extern void Fuse_SwordBeamQuadActiveEnd(PlayState* play, Player* player);
+extern s32 Fuse_SwordBeamEligibleDebug(PlayState* play, Player* player);
+extern void Fuse_LogSwordBeamBridge(const char* phase, PlayState* play, Player* player, s32 q0, s32 q1, s32 eligible);
+extern void Fuse_SwordBeamQuadActiveBegin(PlayState* play, Player* player, s32 q0, s32 q1);
+extern void Fuse_SwordBeamQuadActiveTick(PlayState* play, Player* player, s32 q0, s32 q1);
+extern void Fuse_SwordBeamQuadActiveEnd(PlayState* play, Player* player, s32 q0, s32 q1);
 extern void FuseVisual_DrawLeftHandAttachments(PlayState* play, Player* player);
 extern void FuseVisual_DrawShieldAttachments(PlayState* play, Player* player);
 
@@ -1604,33 +1606,31 @@ void func_800906D4(PlayState* play, Player* this, Vec3f* newTipPos) {
     }
 
     {
-        s32 didPublishSwordQuadsThisFrame = 0;
+        s32 q0 = func_80090480(play, &this->meleeWeaponQuads[0], &this->meleeWeaponInfo[1], &newTipPos[1], &newBasePos[1]);
+        s32 q1 = func_80090480(play, &this->meleeWeaponQuads[1], &this->meleeWeaponInfo[2], &newTipPos[2], &newBasePos[2]);
+        s32 didPublishSwordQuadsThisFrame = (q0 != 0) || (q1 != 0);
+        s32 swordBeamEligible = Fuse_SwordBeamEligibleDebug(play, this);
 
-        if ((this->meleeWeaponState > 0) &&
-            ((this->meleeWeaponAnimation < 0x18) || (this->stateFlags2 & PLAYER_STATE2_SPIN_ATTACKING))) {
-            didPublishSwordQuadsThisFrame = 1;
+        if (didPublishSwordQuadsThisFrame && !sFuseSwordBeamQuadWasActive) {
+            osSyncPrintf("[FuseDBG] BridgeBegin frame=%d q0=%d q1=%d heldItemAction=%d meleeWeaponState=%d meleeWeaponAnimation=%d eligible=%d\n",
+                         play->gameplayFrames, q0, q1, this->heldItemAction, this->meleeWeaponState,
+                         this->meleeWeaponAnimation, swordBeamEligible);
+            Fuse_LogSwordBeamBridge("BridgeBegin", play, this, q0, q1, swordBeamEligible);
+            Fuse_SwordBeamQuadActiveBegin(play, this, q0, q1);
+        }
 
-            if (!sFuseSwordBeamQuadWasActive) {
-                osSyncPrintf("[FuseDBG] Begin frame=%d heldItemAction=%d meleeWeaponState=%d meleeWeaponAnimation=%d\n",
-                             play->gameplayFrames, this->heldItemAction, this->meleeWeaponState,
-                             this->meleeWeaponAnimation);
-                Fuse_SwordBeamQuadActiveBegin(play, this);
-            }
-
-            func_80090480(play, &this->meleeWeaponQuads[0], &this->meleeWeaponInfo[1], &newTipPos[1], &newBasePos[1]);
-            func_80090480(play, &this->meleeWeaponQuads[1], &this->meleeWeaponInfo[2], &newTipPos[2], &newBasePos[2]);
-
-            if ((play->gameplayFrames % 10) == 0) {
-                osSyncPrintf("[FuseDBG] Tick frame=%d heldItemAction=%d meleeWeaponState=%d meleeWeaponAnimation=%d\n",
-                             play->gameplayFrames, this->heldItemAction, this->meleeWeaponState,
-                             this->meleeWeaponAnimation);
-            }
-            Fuse_SwordBeamQuadActiveTick(play, this);
+        if (didPublishSwordQuadsThisFrame) {
+            osSyncPrintf("[FuseDBG] BridgeTick frame=%d q0=%d q1=%d heldItemAction=%d meleeWeaponState=%d meleeWeaponAnimation=%d eligible=%d\n",
+                         play->gameplayFrames, q0, q1, this->heldItemAction, this->meleeWeaponState,
+                         this->meleeWeaponAnimation, swordBeamEligible);
+            Fuse_LogSwordBeamBridge("BridgeTick", play, this, q0, q1, swordBeamEligible);
+            Fuse_SwordBeamQuadActiveTick(play, this, q0, q1);
         } else if (sFuseSwordBeamQuadWasActive) {
-            osSyncPrintf("[FuseDBG] End frame=%d heldItemAction=%d meleeWeaponState=%d meleeWeaponAnimation=%d\n",
-                         play->gameplayFrames, this->heldItemAction, this->meleeWeaponState,
-                         this->meleeWeaponAnimation);
-            Fuse_SwordBeamQuadActiveEnd(play, this);
+            osSyncPrintf("[FuseDBG] BridgeEnd frame=%d q0=%d q1=%d heldItemAction=%d meleeWeaponState=%d meleeWeaponAnimation=%d eligible=%d\n",
+                         play->gameplayFrames, q0, q1, this->heldItemAction, this->meleeWeaponState,
+                         this->meleeWeaponAnimation, swordBeamEligible);
+            Fuse_LogSwordBeamBridge("BridgeEnd", play, this, q0, q1, swordBeamEligible);
+            Fuse_SwordBeamQuadActiveEnd(play, this, q0, q1);
         }
 
         sFuseSwordBeamQuadWasActive = didPublishSwordQuadsThisFrame;
