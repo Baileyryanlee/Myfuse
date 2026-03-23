@@ -4898,7 +4898,7 @@ static void LogSwordBeamDbg(const char* phase, PlayState* play, Player* player, 
 extern "C" void Fuse_SwordBeamQuadActiveBegin(PlayState* play, Player* player, int32_t q0, int32_t q1) {
     SwordFuseSlot* slot = nullptr;
     const bool eligible = SwordBeamEligible(play, player, &slot) && slot != nullptr;
-    LogSwordBeamDbg("QuadActiveBegin", play, player, q0, q1, eligible);
+    LogSwordBeamDbg("Fuse_SwordBeamQuadActiveBegin", play, player, q0, q1, eligible);
     BeginSwordBeamSwing(play, player, q0, q1);
 }
 
@@ -4923,14 +4923,14 @@ extern "C" void Fuse_SwordBeamEndSwing(PlayState* play, Player* player) {
 extern "C" void Fuse_SwordBeamQuadActiveEnd(PlayState* play, Player* player, int32_t q0, int32_t q1) {
     SwordFuseSlot* slot = nullptr;
     const bool eligible = SwordBeamEligible(play, player, &slot) && slot != nullptr;
-    LogSwordBeamDbg("QuadActiveEnd", play, player, q0, q1, eligible);
+    LogSwordBeamDbg("Fuse_SwordBeamQuadActiveEnd", play, player, q0, q1, eligible);
     EndSwordBeamSwing(play, player, q0, q1);
 }
 
 extern "C" void Fuse_SwordBeamQuadActiveTick(PlayState* play, Player* player, int32_t q0, int32_t q1) {
     SwordFuseSlot* slot = nullptr;
     const bool eligible = SwordBeamEligible(play, player, &slot) && slot != nullptr;
-    LogSwordBeamDbg("QuadActiveTick", play, player, q0, q1, eligible);
+    LogSwordBeamDbg("Fuse_SwordBeamQuadActiveTick", play, player, q0, q1, eligible);
     TickSwordSwingBeam(play, player, q0, q1);
 }
 
@@ -5471,15 +5471,49 @@ static void EndSwordBeamSwing(PlayState* play, Player* player, int32_t q0, int32
     SwordFuseSlot* slot = nullptr;
     const bool eligible = SwordBeamEligible(play, player, &slot) && slot != nullptr;
     LogSwordBeamDbg("EndSwordBeamSwing", play, player, q0, q1, eligible);
-
-    if (!sSwordBeamState.swingActive) {
-        return;
-    }
-
     const int frame = play != nullptr ? play->gameplayFrames : -1;
+    const bool hadSwingActive = sSwordBeamState.swingActive;
+    const bool hadActor = sSwordBeamActor != nullptr;
+    Actor* beamActor = sSwordBeamActor;
+    const int actorId = beamActor != nullptr ? beamActor->id : -1;
+    const bool actorHadUpdate = beamActor != nullptr && beamActor->update != nullptr;
+    const bool actorHadDraw = beamActor != nullptr && beamActor->draw != nullptr;
+    const bool hadActiveState = sSwordBeamState.active;
+    const bool hadConsumedDrain = sSwordBeamState.swingConsumedDrain;
+    const int hitVictimCountBefore = static_cast<int>(sSwordBeamState.hitVictims.size());
+
     Fuse::Log("[Fuse] SwordBeam swing end frame=%d swordItem=%d active=%d\n", frame, sSwordBeamState.swordItemId,
               sSwordBeamState.active ? 1 : 0);
-    ClearSwordBeamRuntimeState();
+
+    bool actorKillCalled = false;
+    if (beamActor != nullptr) {
+        Actor_Kill(beamActor);
+        actorKillCalled = true;
+        sSwordBeamActor = nullptr;
+    }
+
+    sSwordBeamState.active = false;
+    sSwordBeamState.swingActive = false;
+    sSwordBeamState.swingConsumedDrain = false;
+    sSwordBeamState.swordItemId = ITEM_NONE;
+    sSwordBeamState.hitVictims.clear();
+
+    const bool pointerCleared = sSwordBeamActor == nullptr;
+    const bool runtimeReset = !sSwordBeamState.active && !sSwordBeamState.swingActive &&
+                              (sSwordBeamState.swordItemId == ITEM_NONE);
+    const bool hitVictimsCleared = sSwordBeamState.hitVictims.empty();
+    const bool swingConsumedDrainReset = !sSwordBeamState.swingConsumedDrain;
+
+    osSyncPrintf("[FuseDBG] EndSwordBeamSwingCleanup frame=%d hadSwingActive=%d hadActor=%d actor=%p actorId=%d actorUpdate=%d actorDraw=%d actorKillCalled=%d pointerCleared=%d runtimeReset=%d hitVictimsCleared=%d hitVictimCountBefore=%d swingConsumedDrainBefore=%d swingConsumedDrainReset=%d activeBefore=%d eligible=%d\n",
+                 frame, hadSwingActive ? 1 : 0, hadActor ? 1 : 0, static_cast<void*>(beamActor), actorId,
+                 actorHadUpdate ? 1 : 0, actorHadDraw ? 1 : 0, actorKillCalled ? 1 : 0, pointerCleared ? 1 : 0,
+                 runtimeReset ? 1 : 0, hitVictimsCleared ? 1 : 0, hitVictimCountBefore, hadConsumedDrain ? 1 : 0,
+                 swingConsumedDrainReset ? 1 : 0, hadActiveState ? 1 : 0, eligible ? 1 : 0);
+    Fuse::Log("[FuseDBG] EndSwordBeamSwingCleanup frame=%d hadSwingActive=%d hadActor=%d actor=%p actorId=%d actorUpdate=%d actorDraw=%d actorKillCalled=%d pointerCleared=%d runtimeReset=%d hitVictimsCleared=%d hitVictimCountBefore=%d swingConsumedDrainBefore=%d swingConsumedDrainReset=%d activeBefore=%d eligible=%d\n",
+              frame, hadSwingActive ? 1 : 0, hadActor ? 1 : 0, static_cast<void*>(beamActor), actorId,
+              actorHadUpdate ? 1 : 0, actorHadDraw ? 1 : 0, actorKillCalled ? 1 : 0, pointerCleared ? 1 : 0,
+              runtimeReset ? 1 : 0, hitVictimsCleared ? 1 : 0, hitVictimCountBefore, hadConsumedDrain ? 1 : 0,
+              swingConsumedDrainReset ? 1 : 0, hadActiveState ? 1 : 0, eligible ? 1 : 0);
 }
 
 static void Fuse_DrawShieldBeam(PlayState* play, Gfx** polyOpaDisp, Gfx**) {
