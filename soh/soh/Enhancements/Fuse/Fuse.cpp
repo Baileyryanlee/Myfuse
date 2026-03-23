@@ -2430,8 +2430,8 @@ extern "C" bool Fuse_ShieldHasMegaStun(PlayState* play, int* outMaterialId, int*
                                   outLevel);
 }
 
-extern "C" bool Fuse_ShieldHasExplosion(PlayState* play, s32* outMaterialId, s32* outDurabilityCur,
-                                        s32* outDurabilityMax, u8* outLevel) {
+extern "C" s32 Fuse_ShieldHasExplosion(PlayState* play, s32* outMaterialId, s32* outDurabilityCur,
+                                       s32* outDurabilityMax, u8* outLevel) {
     if (outMaterialId) {
         *outMaterialId = static_cast<int>(MaterialId::None);
     }
@@ -2446,12 +2446,12 @@ extern "C" bool Fuse_ShieldHasExplosion(PlayState* play, s32* outMaterialId, s32
     }
 
     if (!play) {
-        return false;
+        return 0;
     }
 
     const FuseSlot& slot = gFuseSave.GetActiveShieldSlot(play);
     if (slot.materialId == MaterialId::None || slot.durabilityCur <= 0) {
-        return false;
+        return 0;
     }
 
     if (outMaterialId) {
@@ -2466,14 +2466,14 @@ extern "C" bool Fuse_ShieldHasExplosion(PlayState* play, s32* outMaterialId, s32
 
     const uint8_t level = Fuse::GetMaterialModifierLevel(slot.materialId, FuseItemType::Shield, ModifierId::Explosion);
     if (level == 0) {
-        return false;
+        return 0;
     }
 
     if (outLevel) {
         *outLevel = level;
     }
 
-    return true;
+    return 1;
 }
 
 extern "C" void Fuse_ShieldTriggerExplosion(PlayState* play, s32 shieldMaterialId, u8 level, const Vec3f* pos) {
