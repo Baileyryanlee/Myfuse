@@ -205,9 +205,47 @@ const SwordFuseSlot& FuseSaveData::GetSwordSlot(SwordSlotKey key) const {
 SwordFuseSlot& FuseSaveData::GetActiveSwordSlot([[maybe_unused]] const PlayState* play) {
     const int32_t equipValue = (static_cast<int32_t>(gSaveContext.equips.equipment & gEquipMasks[EQUIP_TYPE_SWORD]) >>
                                 gEquipShifts[EQUIP_TYPE_SWORD]);
-    const SwordSlotKey key =
-        IsSwordEquipValue(equipValue) ? SwordSlotKeyFromEquipValue(equipValue) : SwordSlotKey::Kokiri;
-    return this->swordSlots[static_cast<size_t>(key)];
+    const bool hasSwordEquipValue = IsSwordEquipValue(equipValue);
+    const SwordSlotKey key = hasSwordEquipValue ? SwordSlotKeyFromEquipValue(equipValue) : SwordSlotKey::Kokiri;
+    SwordFuseSlot& slot = this->swordSlots[static_cast<size_t>(key)];
+
+    static int sLastFrame = -1;
+    static int sLastEquipValue = std::numeric_limits<int>::min();
+    static int sLastButtonItem = std::numeric_limits<int>::min();
+    static int sLastHeldItemAction = std::numeric_limits<int>::min();
+    static int sLastHeldItemId = std::numeric_limits<int>::min();
+    static int sLastCurrentSwordItemId = std::numeric_limits<int>::min();
+    static uintptr_t sLastSlotAddr = 0;
+    static SwordSlotKey sLastKey = SwordSlotKey::Kokiri;
+
+    const Player* player = play != nullptr ? GET_PLAYER(play) : nullptr;
+    const int frame = play != nullptr ? play->gameplayFrames : -1;
+    const int heldItemAction = player != nullptr ? player->heldItemAction : ITEM_NONE;
+    const int heldItemId = player != nullptr ? player->heldItemId : ITEM_NONE;
+    const int buttonItem = gSaveContext.equips.buttonItems[0];
+    const int currentSwordItemId = player != nullptr ? player->currentSwordItemId : ITEM_NONE;
+    const uintptr_t slotAddr = reinterpret_cast<uintptr_t>(&slot);
+
+    if (frame != sLastFrame || equipValue != sLastEquipValue || buttonItem != sLastButtonItem ||
+        heldItemAction != sLastHeldItemAction || heldItemId != sLastHeldItemId ||
+        currentSwordItemId != sLastCurrentSwordItemId || slotAddr != sLastSlotAddr ||
+        key != sLastKey) {
+        sLastFrame = frame;
+        sLastEquipValue = equipValue;
+        sLastButtonItem = buttonItem;
+        sLastHeldItemAction = heldItemAction;
+        sLastHeldItemId = heldItemId;
+        sLastCurrentSwordItemId = currentSwordItemId;
+        sLastSlotAddr = slotAddr;
+        sLastKey = key;
+
+        Fuse::Log("[FuseDBG] ActiveSwordSlotResolve frame=%d equipValue=%d hasSwordEquip=%d buttonItem0=%d heldItemAction=%d heldItemId=%d currentSwordItemId=%d source=save_equipment slot=%s slotPtr=%p material=%d dura=%d/%d\n",
+                  frame, equipValue, hasSwordEquipValue ? 1 : 0, buttonItem, heldItemAction, heldItemId,
+                  currentSwordItemId, SwordSlotName(key), static_cast<void*>(&slot), static_cast<int>(slot.materialId), slot.durabilityCur,
+                  slot.durabilityMax);
+    }
+
+    return slot;
 }
 
 FuseSlot& FuseSaveData::GetShieldSlot(ShieldSlotKey key) {
