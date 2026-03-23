@@ -2857,8 +2857,8 @@ static bool Fuse_ModifierAppliesForItem(ModifierId id, FuseItemType itemType) {
                    itemType == FuseItemType::Arrows || itemType == FuseItemType::Slingshot ||
                    itemType == FuseItemType::Hookshot;
         case ModifierId::Beam:
-            return itemType == FuseItemType::Shield || itemType == FuseItemType::Arrows ||
-                   itemType == FuseItemType::Slingshot;
+            return itemType == FuseItemType::Sword || itemType == FuseItemType::Shield ||
+                   itemType == FuseItemType::Arrows || itemType == FuseItemType::Slingshot;
         default:
             return true;
     }
@@ -4751,6 +4751,8 @@ static void LogSwordBeamEligibleDiag(const char* reason, PlayState* play, Player
     static int sLastBeamLevel = std::numeric_limits<int>::min();
     static int sLastModifierItemType = std::numeric_limits<int>::min();
     static int sLastModifierId = std::numeric_limits<int>::min();
+    static int sLastHasMaterialDef = std::numeric_limits<int>::min();
+    static int sLastHasBeamInDef = std::numeric_limits<int>::min();
     static uintptr_t sLastSlotAddr = 0;
     static std::string sLastReason;
 
@@ -4767,11 +4769,19 @@ static void LogSwordBeamEligibleDiag(const char* reason, PlayState* play, Player
     const uintptr_t slotAddr = reinterpret_cast<uintptr_t>(slot);
     const MaterialDef* materialDef = slot != nullptr ? Fuse::GetMaterialDef(slot->materialId) : nullptr;
     const char* materialName = materialDef != nullptr && materialDef->name != nullptr ? materialDef->name : "Unknown";
+    const int hasMaterialDef = materialDef != nullptr ? 1 : 0;
+    uint8_t beamInDefLevel = 0;
+    const bool hasBeamInDef = materialDef != nullptr &&
+                              HasModifier(materialDef->modifiers, materialDef->modifierCount, ModifierId::Beam,
+                                          &beamInDefLevel) &&
+                              beamInDefLevel > 0;
+    const int hasBeamInDefValue = hasBeamInDef ? 1 : 0;
 
     if (frame == sLastFrame && heldItemAction == sLastHeldItemAction && heldItemId == sLastHeldItemId &&
         currentSwordItemId == sLastCurrentSwordItemId && bButtonItem == sLastBButtonItem && materialId == sLastMaterialId &&
         durabilityCur == sLastDurabilityCur && durabilityMax == sLastDurabilityMax && beamLevel == sLastBeamLevel &&
         modifierItemTypeValue == sLastModifierItemType && modifierIdValue == sLastModifierId &&
+        hasMaterialDef == sLastHasMaterialDef && hasBeamInDefValue == sLastHasBeamInDef &&
         slotAddr == sLastSlotAddr && sLastReason == reason) {
         return;
     }
@@ -4787,15 +4797,19 @@ static void LogSwordBeamEligibleDiag(const char* reason, PlayState* play, Player
     sLastBeamLevel = beamLevel;
     sLastModifierItemType = modifierItemTypeValue;
     sLastModifierId = modifierIdValue;
+    sLastHasMaterialDef = hasMaterialDef;
+    sLastHasBeamInDef = hasBeamInDefValue;
     sLastSlotAddr = slotAddr;
     sLastReason = reason != nullptr ? reason : "unknown";
 
-    FUSE_LOG_DBG("[FuseDBG] SwordBeamEligible reason=%s frame=%d play=%p player=%p fuseEnabled=%d heldItemAction=%d heldItemId=%d currentSwordItemId=%d bButtonItem=%d slot=%p slotMaterial=%d materialName=%s dura=%d/%d beamLevel=%d modifierItemType=%s modifierItemTypeValue=%d modifierName=%s modifierId=%d expectedBeamosHead=%d\n",
+    FUSE_LOG_DBG("[FuseDBG] SwordBeamEligible reason=%s frame=%d play=%p player=%p fuseEnabled=%d heldItemAction=%d heldItemId=%d currentSwordItemId=%d bButtonItem=%d slot=%p beamosHeadId=%d beamModifierId=%d slotMaterial=%d materialDefValid=%d materialName=%s materialHasBeam=%d dura=%d/%d beamLevel=%d modifierItemType=%s modifierItemTypeValue=%d modifierName=%s modifierId=%d expectedBeamosHead=%d\n",
                  reason != nullptr ? reason : "unknown", frame, static_cast<void*>(play), static_cast<void*>(player),
                  Fuse::IsEnabled() ? 1 : 0, heldItemAction, heldItemId, currentSwordItemId, bButtonItem,
-                 static_cast<const void*>(slot), materialId, materialName, durabilityCur, durabilityMax, beamLevel,
-                 FuseItemTypeToString(modifierItemType), modifierItemTypeValue, ModifierIdToString(modifierId),
-                 modifierIdValue, static_cast<int>(MaterialId::BeamosHead));
+                 static_cast<const void*>(slot), static_cast<int>(MaterialId::BeamosHead),
+                 static_cast<int>(ModifierId::Beam), materialId, hasMaterialDef, materialName, hasBeamInDefValue,
+                 durabilityCur, durabilityMax, beamLevel, FuseItemTypeToString(modifierItemType),
+                 modifierItemTypeValue, ModifierIdToString(modifierId), modifierIdValue,
+                 static_cast<int>(MaterialId::BeamosHead));
 }
 
 static bool SwordBeamEligible(PlayState* play, Player* player, SwordFuseSlot** outSlot = nullptr) {
