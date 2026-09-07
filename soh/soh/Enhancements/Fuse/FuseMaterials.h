@@ -1,0 +1,33 @@
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+
+#include "soh/Enhancements/Fuse/FuseModifiers.h"
+
+enum class MaterialId : uint16_t {
+    None = 0,
+    Rock = 1,
+    DekuNut = 2,
+    FrozenShard = 3,
+    Stick = 4,
+    Bomb = 5,
+    KeeseEye = 6,
+    FireJelly = 7,
+    FireKeeseEye = 8,
+    BeamosHead = 9,
+};
+
+struct MaterialDef {
+    MaterialId id;
+    const char* name;
+    int16_t attackBonus;
+    uint16_t baseMaxDurability;
+    const ModifierSpec* modifiers;
+    size_t modifierCount;
+};
+
+namespace FuseMaterials {
+const MaterialDef* GetMaterialDef(MaterialId id);
+const MaterialDef* GetMaterialDefs(size_t* count);
+}

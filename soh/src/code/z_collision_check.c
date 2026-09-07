@@ -2,6 +2,7 @@
 #include "vt.h"
 #include "overlays/effects/ovl_Effect_Ss_HitMark/z_eff_ss_hitmark.h"
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
+#include "soh/Enhancements/Fuse/Hooks/FuseHooks_Objects.h"
 #include <assert.h>
 
 typedef s32 (*ColChkResetFunc)(PlayState*, Collider*);
@@ -1726,6 +1727,9 @@ s32 CollisionCheck_SetATvsAC(PlayState* play, Collider* at, ColliderInfo* atInfo
     if (ac->acFlags & AC_HARD && at->actor != NULL && ac->actor != NULL) {
         CollisionCheck_SetBounce(at, ac);
     }
+
+    FuseHooks_OnSwordATCollision(play, at, atInfo, ac, acInfo);
+
     if (!(acInfo->bumperFlags & BUMP_NO_AT_INFO)) {
         at->atFlags |= AT_HIT;
         at->at = ac->actor;

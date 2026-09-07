@@ -2,6 +2,7 @@
 #include "objects/object_link_boy/object_link_boy.h"
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
+#include "soh/Enhancements/Fuse/Hooks/FuseHooks_Ranged.h"
 
 #define FLAGS (ACTOR_FLAG_UPDATE_CULLING_DISABLED | ACTOR_FLAG_DRAW_CULLING_DISABLED)
 
@@ -72,6 +73,7 @@ void ArmsHook_Init(Actor* thisx, PlayState* play) {
     Collider_SetQuad(play, &this->collider, &this->actor, &sQuadInit);
     ArmsHook_SetupAction(this, ArmsHook_Wait);
     this->unk_1E8 = this->actor.world.pos;
+    this->fuseHitApplied = 0;
 }
 
 void ArmsHook_Destroy(Actor* thisx, PlayState* play) {
@@ -90,6 +92,7 @@ void ArmsHook_Wait(ArmsHook* this, PlayState* play) {
         s32 length = ((player->heldItemAction == PLAYER_IA_HOOKSHOT) ? 13 : 26) *
                      CVarGetFloat(CVAR_CHEAT("HookshotReachMultiplier"), 1.0f);
 
+        FuseHooks_OnHookshotShotStarted(play);
         ArmsHook_SetupAction(this, ArmsHook_Shoot);
         Actor_SetProjectileSpeed(&this->actor, 20.0f);
         this->actor.parent = &GET_PLAYER(play)->actor;
@@ -165,12 +168,33 @@ void ArmsHook_Shoot(ArmsHook* this, PlayState* play) {
 
     if ((this->actor.parent == NULL) || (!Player_HoldsHookshot(player))) {
         ArmsHook_DetachHookFromActor(this);
+        FuseHooks_OnHookshotKilled(play);
         Actor_Kill(&this->actor);
         return;
     }
 
     Actor_PlaySfx_Flagged2(&player->actor, NA_SE_IT_HOOKSHOT_CHAIN - SFX_FLAG);
     ArmsHook_CheckForCancel(this);
+
+    // Fuse: hookshot "impact" should not depend on elemType/category; let Fuse_OnRangedHitActor filter.
+    if ((this->timer != 0) && (this->collider.base.atFlags & AT_HIT) && !this->fuseHitApplied) {
+        touchedActor = this->collider.base.at;
+        if (touchedActor != NULL) {
+            Vec3f impactPos;
+            Vec3f* impactPosPtr = NULL;
+            if (this->collider.info.atHitInfo != NULL) {
+                impactPos.x = this->collider.info.atHitInfo->bumper.hitPos.x;
+                impactPos.y = this->collider.info.atHitInfo->bumper.hitPos.y;
+                impactPos.z = this->collider.info.atHitInfo->bumper.hitPos.z;
+                impactPosPtr = &impactPos;
+            } else {
+                impactPos = this->actor.world.pos;
+                impactPosPtr = &impactPos;
+            }
+            this->fuseHitApplied = 1;
+            FuseHooks_OnHookshotEnemyHit(play, touchedActor, impactPosPtr);
+        }
+    }
 
     if ((this->timer != 0) && (this->collider.base.atFlags & AT_HIT) &&
         (this->collider.info.atHitInfo->elemType != ELEMTYPE_UNK4)) {
@@ -247,6 +271,7 @@ void ArmsHook_Shoot(ArmsHook* this, PlayState* play) {
             ArmsHook_DetachHookFromActor(this);
             if (phi_f16 == 0.0f) {
                 ArmsHook_SetupAction(this, ArmsHook_Wait);
+                FuseHooks_OnHookshotRetracted(play);
                 if (ArmsHook_AttachToPlayer(this, player)) {
                     Math_Vec3f_Diff(&this->actor.world.pos, &player->actor.world.pos, &player->actor.velocity);
                     player->actor.velocity.y -= 20.0f;
@@ -271,10 +296,15 @@ void ArmsHook_Shoot(ArmsHook* this, PlayState* play) {
             sp5C = COLPOLY_GET_NORMAL(poly->normal.x);
             sp58 = COLPOLY_GET_NORMAL(poly->normal.z);
             Math_Vec3f_Copy(&this->actor.world.pos, &sp78);
+            if (!this->fuseHitApplied) {
+                this->fuseHitApplied = 1;
+                FuseHooks_OnHookshotSurfaceHit(play, &sp78);
+            }
             this->actor.world.pos.x += 10.0f * sp5C;
             this->actor.world.pos.z += 10.0f * sp58;
             this->timer = 0;
             if (SurfaceType_IsHookshotSurface(&play->colCtx, poly, bgId)) {
+                FuseHooks_OnHookshotLatched(play);
                 if (bgId != BGCHECK_SCENE) {
                     dynaPolyActor = DynaPoly_GetActor(&play->colCtx, bgId);
                     if (dynaPolyActor != NULL) {

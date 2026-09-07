@@ -10,8 +10,16 @@
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
 #include "soh/Enhancements/randomizer/draw.h"
 #include "soh/ResourceManagerHelpers.h"
+#include "soh/Enhancements/Fuse/FuseCBridge.h"
 
 #include <stdlib.h>
+
+extern float Fuse_GetSwordRangeUpScale(int32_t* outLevel);
+extern void Fuse_LogSwordRangeUp(int level, float scale);
+extern s32 Fuse_SwordBeamEligibleDebug(PlayState* play, Player* player);
+extern void Fuse_LogSwordBeamBridge(const char* phase, PlayState* play, Player* player, s32 q0, s32 q1, s32 eligible);
+extern void FuseVisual_DrawLeftHandAttachments(PlayState* play, Player* player);
+extern void FuseVisual_DrawShieldAttachments(PlayState* play, Player* player);
 
 typedef struct {
     /* 0x00 */ u8 flag;
@@ -1568,11 +1576,37 @@ Vec3f D_801260A4[3] = {
 };
 
 void func_800906D4(PlayState* play, Player* this, Vec3f* newTipPos) {
+    static s32 sSwordRangeUpWasActive = 0;
+    static s32 sFuseSwordBeamQuadWasActive = 0;
     Vec3f newBasePos[3];
+    int32_t rangeUpLevel = 0;
+    float rangeUpScale = 1.0f;
 
     Matrix_MultVec3f(&D_801260A4[0], &newBasePos[0]);
     Matrix_MultVec3f(&D_801260A4[1], &newBasePos[1]);
     Matrix_MultVec3f(&D_801260A4[2], &newBasePos[2]);
+
+    if (this->itemAction != PLAYER_IA_DEKU_STICK) {
+        rangeUpScale = Fuse_GetSwordRangeUpScale(&rangeUpLevel);
+        if (rangeUpScale > 1.0f) {
+            Vec3f dir;
+
+            Math_Vec3f_Diff(&newTipPos[1], &newBasePos[1], &dir);
+            newTipPos[1].x = newBasePos[1].x + (dir.x * rangeUpScale);
+            newTipPos[1].y = newBasePos[1].y + (dir.y * rangeUpScale);
+            newTipPos[1].z = newBasePos[1].z + (dir.z * rangeUpScale);
+
+            Math_Vec3f_Diff(&newTipPos[2], &newBasePos[2], &dir);
+            newTipPos[2].x = newBasePos[2].x + (dir.x * rangeUpScale);
+            newTipPos[2].y = newBasePos[2].y + (dir.y * rangeUpScale);
+            newTipPos[2].z = newBasePos[2].z + (dir.z * rangeUpScale);
+        }
+    }
+
+    if ((rangeUpLevel > 0) && (this->meleeWeaponState != 0) && !sSwordRangeUpWasActive) {
+        Fuse_LogSwordRangeUp(rangeUpLevel, rangeUpScale);
+    }
+    sSwordRangeUpWasActive = (this->meleeWeaponState != 0);
 
     if (func_80090480(play, NULL, &this->meleeWeaponInfo[0], &newTipPos[0], &newBasePos[0]) &&
         !(this->stateFlags1 & PLAYER_STATE1_SHIELDING) &&
@@ -1581,11 +1615,25 @@ void func_800906D4(PlayState* play, Player* this, Vec3f* newTipPos) {
                               &this->meleeWeaponInfo[0].base);
     }
 
-    if ((this->meleeWeaponState > 0) &&
-        ((this->meleeWeaponAnimation < 0x18) || (this->stateFlags2 & PLAYER_STATE2_SPIN_ATTACKING))) {
-        func_80090480(play, &this->meleeWeaponQuads[0], &this->meleeWeaponInfo[1], &newTipPos[1], &newBasePos[1]);
-        func_80090480(play, &this->meleeWeaponQuads[1], &this->meleeWeaponInfo[2], &newTipPos[2], &newBasePos[2]);
+    // Preserve the vanilla attack gate; moving sword geometry alone is not an attack.
+    s32 swordAttackActive = this->meleeWeaponState > 0 &&
+        (this->meleeWeaponAnimation < 0x18 || (this->stateFlags2 & PLAYER_STATE2_SPIN_ATTACKING));
+    s32 q0 = 0;
+    s32 q1 = 0;
+    if (swordAttackActive) {
+        q0 = func_80090480(play, &this->meleeWeaponQuads[0], &this->meleeWeaponInfo[1], &newTipPos[1], &newBasePos[1]);
+        q1 = func_80090480(play, &this->meleeWeaponQuads[1], &this->meleeWeaponInfo[2], &newTipPos[2], &newBasePos[2]);
     }
+
+    if (swordAttackActive && !sFuseSwordBeamQuadWasActive) {
+        Fuse_SwordBeamQuadActiveBegin(play, this, q0, q1);
+    }
+    if (swordAttackActive) {
+        Fuse_SwordBeamQuadActiveTick(play, this, q0, q1);
+    } else if (sFuseSwordBeamQuadWasActive) {
+        Fuse_SwordBeamQuadActiveEnd(play, this, q0, q1);
+    }
+    sFuseSwordBeamQuadWasActive = swordAttackActive;
 }
 
 void Player_DrawGetItemIceTrap(PlayState* play, Player* this, Vec3f* refPos, s32 drawIdPlusOne, f32 height) {
@@ -1874,11 +1922,14 @@ void Player_PostLimbDrawGameplay(PlayState* play, s32 limbIndex, Gfx** dList, Ve
                 Matrix_MtxFToYXZRotS(&this->mf_9E0, &this->unk_3BC, 0);
             }
         }
+
+        FuseVisual_DrawLeftHandAttachments(play, this);
     } else if (limbIndex == PLAYER_LIMB_R_HAND) {
         Actor* heldActor = this->heldActor;
 
         if (this->rightHandType == PLAYER_MODELTYPE_RH_FF) {
             Matrix_Get(&this->shieldMf);
+            FuseVisual_DrawShieldAttachments(play, this);
         } else if ((this->rightHandType == PLAYER_MODELTYPE_RH_BOW_SLINGSHOT) ||
                    (this->rightHandType == PLAYER_MODELTYPE_RH_BOW_SLINGSHOT_2)) {
             s32 stringModelToUse = gSaveContext.linkAge;

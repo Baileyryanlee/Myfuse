@@ -275,6 +275,12 @@ typedef struct ShipSaveContextData {
     ShipQuestSaveContextData quest;
     u8 maskMemory;
     u8 filenameLanguage;
+    // Fuse (equipped sword only for MVP)
+    s16 fuseSwordMaterialId; // -1 = none
+    s16 fuseSwordCurDur;
+    s16 fuseSwordMaxDur;
+    u16 fuseSwordCurrentDurability;
+    bool fuseSwordCurDurabilityPresent;
     //TODO: Move non-rando specific flags to a new sohInf and move the remaining randomizerInf to ShipRandomizerSaveContextData
     u16 randomizerInf[(RAND_INF_MAX + 15) / 16];
     u8 resetToSpawn;

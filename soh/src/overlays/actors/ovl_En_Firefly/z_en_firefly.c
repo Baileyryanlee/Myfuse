@@ -7,6 +7,7 @@
 #include "z_en_firefly.h"
 #include "objects/object_firefly/object_firefly.h"
 #include "overlays/actors/ovl_Obj_Syokudai/z_obj_syokudai.h"
+#include "soh/Enhancements/Fuse/FuseCBridge.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
 
 #define FLAGS \
@@ -448,6 +449,10 @@ void EnFirefly_Die(EnFirefly* this, PlayState* play) {
     Math_StepToF(&this->actor.scale.x, 0.0f, 0.00034f);
     this->actor.scale.y = this->actor.scale.z = this->actor.scale.x;
     if (this->timer == 0) {
+        if (this->auraType == KEESE_AURA_NONE && Rand_ZeroOne() < 0.5f) {
+            Fuse_AddMaterialById(FUSE_MATERIAL_KEESE_EYE, 1);
+            Sfx_PlaySfxCentered(NA_SE_SY_GET_ITEM);
+        }
         Item_DropCollectibleRandom(play, &this->actor, &this->actor.world.pos, 0xE0);
         Actor_Kill(&this->actor);
     }

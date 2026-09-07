@@ -9,6 +9,8 @@
 #include "overlays/actors/ovl_En_Bom/z_en_bom.h"
 #include "objects/gameplay_keep/gameplay_keep.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
+#include "soh/ResourceManagerHelpers.h"
+#include "soh/Enhancements/Fuse/FuseCBridge.h"
 
 #define FLAGS (ACTOR_FLAG_ATTENTION_ENABLED | ACTOR_FLAG_UPDATE_CULLING_DISABLED)
 
@@ -122,6 +124,8 @@ static Vec3f D_80B2EB64 = { 500.0f, 0.0f, 0.0f };
 static Vec3f D_80B2EB70 = { -500.0f, 0.0f, 0.0f };
 
 static Vec3f D_80B2EB7C = { 0.4f, 0.4f, 0.4f };
+
+static s32 sFuseVmDbgLastFrame = -999999;
 
 static void* D_80B2EB88[] = {
     gEffEnemyDeathFlame1Tex, gEffEnemyDeathFlame2Tex,  gEffEnemyDeathFlame3Tex, gEffEnemyDeathFlame4Tex,
@@ -521,6 +525,23 @@ void EnVm_Draw(Actor* thisx, PlayState* play2) {
     EnVm* this = (EnVm*)thisx;
     PlayState* play = play2;
     Vec3f actorPos;
+    s16 objBankIndex = this->actor.objBankIndex;
+
+    if (gSegments[6] != 0) {
+        Fuse_SetCachedBeamosVmSeg06((uintptr_t)gSegments[6], play->gameplayFrames);
+    }
+
+    if ((objBankIndex >= 0) && (objBankIndex < ARRAY_COUNT(play->objectCtx.status))) {
+        ObjectStatus* objectStatus = &play->objectCtx.status[objBankIndex];
+
+        if ((play->gameplayFrames - sFuseVmDbgLastFrame) >= 5) {
+            Fuse_DebugPrintf("[FuseDBG] EnVmDrawObj actor=%p slot=%d id=0x%04X loaded=%d seg06=%p boundSeg06=%p\n",
+                             (void*)this, objBankIndex, objectStatus->id,
+                             Object_IsLoaded(&play->objectCtx, objBankIndex), objectStatus->segment,
+                             (void*)gSegments[6]);
+            sFuseVmDbgLastFrame = play->gameplayFrames;
+        }
+    }
 
     OPEN_DISPS(play->state.gfxCtx);
 
@@ -549,6 +570,10 @@ void EnVm_Draw(Actor* thisx, PlayState* play2) {
     Matrix_RotateZYX(this->beamRot.x, this->beamRot.y, this->beamRot.z, MTXMODE_APPLY);
     Matrix_Scale(this->beamScale.x * 0.1f, this->beamScale.x * 0.1f, this->beamScale.z * 0.0015f, MTXMODE_APPLY);
     gSPMatrix(POLY_OPA_DISP++, MATRIX_NEWMTX(play->state.gfxCtx), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
+    if ((play->gameplayFrames - sFuseVmDbgLastFrame) >= 5) {
+        Fuse_DebugPrintf("[FuseDBG] EnVmLaserDraw actor=%p boundSeg06=%p\n", (void*)this, (void*)gSegments[6]);
+        sFuseVmDbgLastFrame = play->gameplayFrames;
+    }
     gSPDisplayList(POLY_OPA_DISP++, gBeamosLaserDL);
 
     CLOSE_DISPS(play->state.gfxCtx);

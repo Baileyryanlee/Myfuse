@@ -64,6 +64,7 @@ void SohInputEditorWindow::InitElement() {
     addButtonName(BTN_DDOWN, "D-pad down");
     addButtonName(BTN_DLEFT, "D-pad left");
     addButtonName(BTN_DRIGHT, "D-pad right");
+    addButtonName(BTN_CUSTOM_FUSE_MENU, "Fuse Menu");
     addButtonName(0, "None");
 }
 
@@ -1372,6 +1373,10 @@ void SohInputEditorWindow::DrawOcarinaControlPanel() {
     if (!CVarGetInteger(CVAR_SETTING("CustomOcarina.Enabled"), 0)) {
         ImGui::EndDisabled();
     }
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::BulletText("Fuse Controls");
+    DrawButtonLine("Fuse Menu", 0, BTN_CUSTOM_FUSE_MENU);
 }
 
 void SohInputEditorWindow::DrawCameraControlPanel() {

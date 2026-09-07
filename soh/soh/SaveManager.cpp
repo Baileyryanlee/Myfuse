@@ -10,6 +10,7 @@
 #include "soh/Enhancements/randomizer/settings.h"
 #include "ResourceManagerHelpers.h"
 #include "soh/SohGui/SohGui.hpp"
+#include "soh/Enhancements/Fuse/FuseState.h"
 
 extern "C" {
 #include "z64.h"
@@ -28,6 +29,10 @@ extern "C" {
 
 extern "C" SaveContext gSaveContext;
 using namespace std::string_literals;
+static void ResetFuseSaveContextData() {
+    FusePersistence::WriteSwordStateToContext(FusePersistence::ClearedSwordState());
+}
+
 
 void SaveManager::WriteSaveFile(const std::filesystem::path& savePath, const uintptr_t addr, void* dramAddr,
                                 const size_t size) {
@@ -912,6 +917,7 @@ void SaveManager::InitFileNormal() {
     gSaveContext.ship.pendingSaleMod = MOD_NONE;
     gSaveContext.ship.pendingIceTrapCount = 0;
     gSaveContext.ship.maskMemory = PLAYER_MASK_NONE;
+    ResetFuseSaveContextData();
 
     // Init with normal quest unless only an MQ rom is provided
     gSaveContext.ship.quest.id = OTRGlobals::Instance->HasOriginal() ? QUEST_NORMAL : QUEST_MASTER;
@@ -1094,6 +1100,7 @@ void SaveManager::InitFileMaxed() {
     gSaveContext.isDoubleDefenseAcquired = 1;
     gSaveContext.bgsFlag = 1;
     gSaveContext.ocarinaGameRoundNum = 0;
+    ResetFuseSaveContextData();
     for (int button = 0; button < ARRAY_COUNT(gSaveContext.childEquips.buttonItems); button++) {
         gSaveContext.childEquips.buttonItems[button] = ITEM_NONE;
     }

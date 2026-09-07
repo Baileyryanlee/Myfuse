@@ -14,6 +14,7 @@
 #include "soh/Enhancements/game-interactor/GameInteractor.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
 #include "soh/Enhancements/nametag.h"
+#include "soh/Enhancements/Fuse/FuseCBridge.h"
 
 #include "soh/ActorDB.h"
 #include "soh/OTRGlobals.h"
@@ -1234,7 +1235,19 @@ void Actor_SetScale(Actor* actor, f32 scale) {
 }
 
 void Actor_SetObjectDependency(PlayState* play, Actor* actor) {
-    gSegments[6] = VIRTUAL_TO_PHYSICAL(play->objectCtx.status[actor->objBankIndex].segment);
+    void* segmentSrc = play->objectCtx.status[actor->objBankIndex].segment;
+    uintptr_t boundSeg06 = VIRTUAL_TO_PHYSICAL(segmentSrc);
+
+    gSegments[6] = boundSeg06;
+
+    if ((actor != NULL) && (actor->id == ACTOR_EN_VM)) {
+        static s32 sFuseActorObjDepLogFrame = -999999;
+        if ((play->gameplayFrames - sFuseActorObjDepLogFrame) >= 5) {
+            Fuse_DebugPrintf("[FuseDBG] ActorObjDep actor=%p id=0x%04X slot=%d src=%p srcType=objectCtx.status.segment boundSeg06=%p\n",
+                             (void*)actor, actor->id, actor->objBankIndex, segmentSrc, (void*)boundSeg06);
+            sFuseActorObjDepLogFrame = play->gameplayFrames;
+        }
+    }
 }
 
 void Actor_Init(Actor* actor, PlayState* play) {

@@ -187,6 +187,7 @@ void EnItem00_SetupAction(EnItem00* this, EnItem00ActionFunc actionFunc);
 void func_8001E5C8(EnItem00* this, PlayState* play);
 void Item_DropCollectibleRandom(PlayState* play, Actor* fromActor, Vec3f* spawnPos, s16 params);
 void EffectBlureShip_ChangeType(EffectBlure* this, int type);
+Actor* EnArrow_TriggerDekuNutEffect(PlayState* play, const Vec3f* pos);
 void EffectBlure_AddVertex(EffectBlure* this, Vec3f* p1, Vec3f* p2);
 void EffectBlure_AddSpace(EffectBlure* this);
 void EffectBlure_Init1(void* thisx, void* initParamsx);

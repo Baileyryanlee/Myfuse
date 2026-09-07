@@ -16,8 +16,10 @@
 
 #include <libultraship/bridge/resourcebridge.h>
 #include "soh/frame_interpolation.h"
+#include "soh/Enhancements/game-interactor/GameInteractor.h"
 #include "soh/Enhancements/cosmetics/cosmeticsTypes.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
+#include "soh/Enhancements/Fuse/UI/FusePauseBridge.h"
 #include "soh/OTRGlobals.h"
 #include "soh/ResourceManagerHelpers.h"
 #include "soh/SaveManager.h"
@@ -2394,6 +2396,10 @@ void KaleidoScope_DrawInfoPanel(PlayState* play) {
                                                     D_8082ADE8[gSaveContext.language], 16, 4);
                 }
             } else if (pauseCtx->pageIndex == PAUSE_EQUIP) {
+                if (FusePause_IsModalOpen()) {
+                    return;
+                }
+
                 pauseCtx->infoPanelVtx[16].v.ob[0] = pauseCtx->infoPanelVtx[18].v.ob[0] = WREG(64 + languageOffset);
 
                 pauseCtx->infoPanelVtx[17].v.ob[0] = pauseCtx->infoPanelVtx[19].v.ob[0] =
@@ -3529,6 +3535,11 @@ void KaleidoScope_Draw(PlayState* play) {
 
         if (!((pauseCtx->state >= 8) && (pauseCtx->state <= 0x11))) {
             KaleidoScope_DrawInfoPanel(play);
+
+            if (pauseCtx->state == 6) {
+                FusePause_DrawPrompt(play, &POLY_OPA_DISP, &POLY_XLU_DISP);
+                FusePause_DrawModal(play, &POLY_OPA_DISP, &POLY_XLU_DISP);
+            }
         }
     }
 
@@ -3851,6 +3862,10 @@ void KaleidoScope_Update(PlayState* play) {
 
     if ((R_PAUSE_MENU_MODE >= 3) && (((pauseCtx->state >= 4) && (pauseCtx->state <= 7)) ||
                                      ((pauseCtx->state >= 0xA) && (pauseCtx->state <= 0x12)))) {
+
+        if (pauseCtx->state == 6) {
+            FusePause_UpdateModal(play);
+        }
 
         if ((!pauseCtx->unk_1E4 || (pauseCtx->unk_1E4 == 8)) && (pauseCtx->state == 6)) {
             pauseCtx->stickRelX = input->rel.stick_x;
