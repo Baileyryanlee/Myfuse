@@ -7,6 +7,15 @@ This page is a developer-focused entry point to the Fuse documentation set in `d
 
 ## Documentation Map
 
+### Current Handoff
+- [Materials Modifiers and Effects Handoff](./SoH_Fuse_Materials_Modifiers_Handoff.md) - Source-reviewed reference updated September 7, 2026, including stable IDs, historical design differences, current menus, Beamos behavior and validation limits.
+- [Word handoff](./SoH_Fuse_Materials_Modifiers_Handoff.docx) - Revised supplied document, with review comments at major corrections.
+- [Migration to SoH 9.2.3](./MIGRATION_9_2_3.md) - Baseline and compatibility decisions.
+- [UI layout tuning](./FuseUILayout.md) - Pause/projectile layout controls and persistence.
+- [Beamos tuning](./BeamosShieldTuning.md) - Sword, shield and projectile tuning and regression cases.
+
+The updated handoff distinguishes current source from historical design intent. Older subsystem notes below may retain superseded values; verify against the current code before implementing changes.
+
 ### Architecture
 - [FuseArchitectureOverview.md](./FuseArchitectureOverview.md) - High-level architecture and subsystem boundaries.
 - [FuseCoreSystem.md](./FuseCoreSystem.md) - Core runtime flow and Fuse behavior handling.
